@@ -110,12 +110,13 @@ Pacing:
   constants: there is no flag that can lower them.
 
   Document requests have no published limit and are served uncached straight from
-  the origin, so their interval is learned rather than fixed. It starts at 1.2s,
-  divides by 1.5 after every 20 consecutive successes, and doubles on any 429 or
-  5xx, holding the safer interval for 10 minutes before probing again. The only
-  pacing flag is --document-floor: how far that descent may go. 200ms is the
-  considerate default rather than a limit — set it lower and the learner will
-  pursue it until the service pushes back. Learning starts over on every run.
+  the origin, so their interval is learned rather than fixed. It starts at the
+  floor and stays there while the service is happy: any 429 or 5xx doubles the
+  interval and holds it for 10 minutes, after which 20 consecutive successes step
+  it back down. The only pacing flag is --document-floor: the interval to start at
+  and the fastest one to return to. 200ms is the considerate default rather than a
+  limit — set it lower and the learner will pursue it until the service pushes
+  back. Learning starts over on every run.
 
 Data layout:
   <data-dir>/xml/<kind>/<year>/<id>.xml   canonical documents (the archive)

@@ -73,7 +73,7 @@ flowchart LR
     S["status / rebuild"]
   end
   subgraph PACE["internal/limiter — process-global, self-learning"]
-    B["harvest 12s PINNED<br/>document 1.2s → floor 200ms (settable)<br/>sitemap 2s, may double"]
+    B["harvest 12s PINNED<br/>document at floor 200ms (settable)<br/>sitemap 2s, may double"]
   end
   C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>reports outcome → learner<br/>one request per call · Retry-After → bucket delay"]
   H --> RI["retsininformation.dk"]
@@ -131,19 +131,22 @@ constant too, because it was measured rather than guessed.
 
 **Adaptive — everything unpublished.** There is no published limit for document
 requests, so guessing one is the wrong move: too fast risks an IP-wide Cloudflare
-block, too slow wastes the bootstrap. Instead the learner measures the site and finds
-its own ceiling — a TCP-AIMD style controller:
+block, too slow wastes the bootstrap. Instead the learner measures the site and holds
+the fastest pace it can sustain — a TCP-AIMD style controller that starts optimistic
+and lets the service correct it:
 
 | Event | Action |
 |---|---|
-| 20 consecutive successes (`limiter.Window`) | shorten the interval by ÷1.5 (`limiter.StepDown`) |
-| any `429`/`5xx` | **double** the interval immediately, then hold it for a 10 min cooldown before probing faster again |
-| any transport failure | neither faster nor slower, but it breaks the success streak, so learning only happens on clean windows |
-| interval | clamped to `[--document-floor, limiter.MaxInterval]`, starting at `limiter.StartInterval` (1.2 s) |
+| startup | begin at `--document-floor` and stay there while the service is happy |
+| 20 consecutive successes (`limiter.Window`) after a throttle | shorten the interval by ÷1.5 (`limiter.StepDown`), working back towards the floor |
+| any `429`/`5xx` | **double** the interval immediately, then hold it for a 10 min cooldown before stepping back down |
+| any transport failure | neither faster nor slower, but it breaks the success streak, so recovery only happens on clean windows |
+| interval | clamped to `[--document-floor, limiter.MaxInterval]` |
 
-Only the **floor** is a flag. Every other number above is a constant, because every
-measured run behaved the same way: five step-downs from 1.2 s down to the floor, and
-nothing to react to. More knobs would only be more ways to misconfigure a crawl.
+Only the **floor** is a flag. It is both the interval a run starts at and the fastest
+one the learner returns to, which is why everything else above is a constant: every
+measured run behaved the same way, with nothing to react to. More knobs would only be
+more ways to misconfigure a crawl.
 
 The floor is a default, not a limit. 200 ms is what a considerate pace looks like for
 requests served uncached straight from the origin, but lowering it is honoured rather
@@ -153,9 +156,10 @@ learner answers by doubling the interval on its own.
 Learning restarts each run — deliberate, because the site's capacity changes and a
 persisted fast interval would begin the next run already presumptuous.
 
-Measured against production: at the 200 ms floor the learner tightened
-**1200 → 800 → 533 → 355 → 237 → 200 ms** (five step-downs) and sustained
-4.1 requests/s over the first ~2,100 documents with zero throttles.
+Measured against production: the 200 ms floor sustained **4.1 documents/s over the
+first ~2,100 documents with zero throttles**, which is why the learner starts there
+instead of crawling down to it. If that guess is ever wrong, the cost is one doubled
+interval — the learner finds the safe pace by being corrected, not by probing upward.
 
 ## Anti-blocking measures
 

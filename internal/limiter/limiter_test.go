@@ -216,11 +216,34 @@ func TestStatesSnapshot(t *testing.T) {
 }
 
 // Defaults must protect against nonsense configuration.
+func TestColdBucketStartsAtTheFloor(t *testing.T) {
+	// The production shape: no Start, so the learner opens at the pace it believes
+	// is safe rather than crawling up to it.
+	l := New(map[string]Spec{
+		BucketDocument: {Floor: 200 * time.Millisecond, Max: MaxInterval},
+	})
+	cur, ok := l.Current(BucketDocument)
+	if !ok {
+		t.Fatal("bucket missing")
+	}
+	if cur != 200*time.Millisecond {
+		t.Errorf("cold interval = %s, want the 200ms floor", cur)
+	}
+
+	// Recovery still works: one throttle backs off.
+	l.Feedback(BucketDocument, OutcomeThrottled)
+	if cur, _ := l.Current(BucketDocument); cur != 400*time.Millisecond {
+		t.Fatalf("after throttle: interval = %s, want 400ms", cur)
+	}
+}
+
 func TestNewNormalizesSaneSpecs(t *testing.T) {
 	l := NewTuned(map[string]Spec{
 		// Floor above start, and max below start: both must be clamped, not
 		// inverted, or the limiter would pace backwards.
-		BucketDocument: {Start: 0, Floor: time.Hour, Max: 0},
+		BucketDocument: {Start: time.Second, Floor: time.Hour, Max: 0},
+		// Neither floor nor start: it must not default to no gap at all.
+		BucketSitemap: {},
 	}, 0, 0, 0)
 	cur, ok := l.Current(BucketDocument)
 	if !ok {
@@ -231,6 +254,9 @@ func TestNewNormalizesSaneSpecs(t *testing.T) {
 	}
 	if cur > time.Hour {
 		t.Errorf("interval = %s, want clamped start", cur)
+	}
+	if cur, _ := l.Current(BucketSitemap); cur <= 0 {
+		t.Errorf("unset bucket paces at %s, want a positive interval", cur)
 	}
 }
 

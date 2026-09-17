@@ -9,8 +9,9 @@
 //     obligation, not an observation.
 //   - Adaptive buckets self-tune. retsininformation.dk sends no Retry-After and no
 //     rate-limit header on 429 (measured), so the only way to discover a safe
-//     document interval is to probe. Adaptive buckets start conservative and step
-//     down towards a floor only after a whole window of requests succeeds.
+//     document interval is to probe. Adaptive buckets start at their floor -- the
+//     pace believed safe is the pace used -- double on pushback, and step back
+//     down once a whole window succeeds again.
 //
 // A process-global limiter is used so the published 10s limit is a structural
 // property rather than something each caller has to remember.
@@ -51,10 +52,12 @@ const (
 
 // Spec configures one bucket.
 type Spec struct {
-	// Start is the initial minimum interval.
+	// Start is the interval a cold bucket begins with. Zero means start at the
+	// floor, which is what production uses; tests set a higher value to exercise
+	// the step-down path on millisecond scales.
 	Start time.Duration
-	// Floor is the smallest interval an adaptive bucket may reach. Ignored by
-	// pinned buckets.
+	// Floor is the fastest interval an adaptive bucket may use, and the one it
+	// starts at unless Start says otherwise. Ignored by pinned buckets.
 	Floor time.Duration
 	// Max caps growth after throttling, so one bad patch cannot park a multi-day
 	// crawl for hours.
@@ -86,19 +89,17 @@ type Limiter struct {
 }
 
 // Pacing constants for the adaptive learner. Only the floor is user-settable:
-// these shape how the learner behaves, and every measured run reached the floor
-// with them, so they are observations rather than options.
+// these shape how the learner behaves, so they are observations rather than
+// options.
 const (
-	// StartInterval is where a cold adaptive bucket begins. It is deliberately
-	// slow: the safe pace is unknown at startup and must be earned.
-	StartInterval = 1200 * time.Millisecond
 	// MaxInterval caps growth after throttling, so one bad patch cannot park a
 	// multi-day crawl for hours.
 	MaxInterval = 5 * time.Minute
-	// Window is consecutive successful requests required to probe faster.
+	// Window is consecutive successful requests required to step back down
+	// towards the floor after a throttle.
 	Window = 20
-	// StepDown is the factor each probe-faster step divides by. Measured
-	// behaviour: 1.2s settles at the 200ms floor in five steps.
+	// StepDown is the factor each recovery step divides by. Measured behaviour:
+	// after a throttle at the floor, 400ms returns to 200ms in two steps.
 	StepDown = 1.5
 	// Cooldown suppresses probing for this long after a throttle.
 	Cooldown = 10 * time.Minute
@@ -106,6 +107,11 @@ const (
 	// Longer guidance is logged and clamped so one header cannot stall a crawl.
 	MaxDelay = time.Hour
 )
+
+// defaultFloor is used only when a caller supplies neither a floor nor a start.
+// A zero interval would mean firing requests with no gap at all, which is not a
+// pacing configuration anyone means.
+const defaultFloor = time.Second
 
 // New builds a limiter with the production pacing constants.
 func New(specs map[string]Spec) *Limiter {
@@ -129,8 +135,13 @@ func NewTuned(specs map[string]Spec, stepDown float64, window int, cooldown time
 		cooldown: cooldown,
 	}
 	for name, spec := range specs {
+		if spec.Floor <= 0 {
+			spec.Floor = defaultFloor
+		}
 		if spec.Start <= 0 {
-			spec.Start = time.Second
+			// Start at the floor: the assumed-safe pace is the target pace, and
+			// the learner's job is to back off when that turns out to be wrong.
+			spec.Start = spec.Floor
 		}
 		if spec.Max < spec.Start {
 			spec.Max = spec.Start
@@ -194,7 +205,9 @@ func (l *Limiter) Delay(name string, d time.Duration) time.Duration {
 	return d
 }
 
-// Feedback reports how a request finished and adapts the bucket.
+// Feedback reports how a request finished and adapts the bucket. Throttled
+// requests double the interval; a clean window after the cooldown divides it by
+// StepDown, working back towards the floor. Pinned buckets ignore feedback.
 func (l *Limiter) Feedback(name string, out Outcome) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -63,12 +63,10 @@ func newApp(cfg config.Config) (*app, *limiter.Limiter, error) {
 			Pinned: true,
 		},
 		limiter.BucketDocument: {
-			Start: limiter.StartInterval,
 			Floor: cfg.DocumentFloor,
 			Max:   limiter.MaxInterval,
 		},
 		limiter.BucketSitemap: {
-			Start: config.SitemapInterval,
 			Floor: config.SitemapInterval,
 			Max:   config.SitemapInterval * 8,
 		},
