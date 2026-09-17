@@ -197,6 +197,7 @@ exactly what a run will do. Run `retsin --help` for the full list. The important
 --log-level info         debug, info, warn, error
 --progress auto          live bar: auto (terminals only), always, or never
 --limit / --batch N      on fetch: trial size and Badger commit batch
+--kind KINDS             on fetch: restrict to ELI series, e.g. retsinfo or lta,ltb
 ```
 
 Everything else about pacing is either a published obligation (12 s harvest), a
@@ -258,16 +259,33 @@ documents are never re-requested.
 
 **Measured bootstrap:** the learner reaches the 200 ms floor within ~1,000 documents and
 held **4.1 requests/s** there with zero throttles, so 201,580 resources is roughly
-**14 hours** of unattended crawling. Documents average 35.5 KB, which puts the archive
-near **7 GB** — not the 22 GB an early estimate assumed from the larger JSON
-representation. Daily updates afterwards are ~1 harvest call plus a few hundred
-documents.
+**14 hours** of unattended crawling. Daily updates afterwards are ~1 harvest call plus a
+few hundred documents.
+
+Archive size is **not** settled. Per-document averages differ by series by a factor of
+forty — `fob` runs 43.7 KB, `ft` 1.0 KB — and the two largest series (`lta` with 63,284
+rows, `retsinfo` with 82,654) were still unfetched when that was measured, so the honest
+band is **3–8 GB**. Sample them with `--kind` below instead of trusting an
+extrapolation.
 
 To crawl faster, lower `--document-floor`: the tool honours it and leaves the judgement
 to the site. Those requests are served uncached straight from the origin, and the terms
 ask users not to burden the interface — which is why 200 ms is the default, not why it
 would be a wall. The learner only reaches the floor if the site proves it can take it.
-`fetch --limit N` caps a test run and `--batch N` sizes the pending window.
+
+### Narrowing a run
+
+Pending resources are visited in ELI URL order, so a series that sorts late stays out of
+reach until everything before it is done. `--kind` selects by ELI kind, which is the axis
+the sitemap itself groups on:
+
+```
+retsin fetch --kind retsinfo --limit 50    # sample one series
+retsin fetch --kind lta,ltb --kind ltc     # several at once: comma-separated or repeated
+```
+
+`--limit N` caps the run; `--batch N` sizes the pending window. The bar's total honours
+the filter, and a kind with nothing pending warns rather than finishing silently.
 
 ## Recovery
 

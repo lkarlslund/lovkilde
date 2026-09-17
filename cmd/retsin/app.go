@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -146,6 +147,7 @@ changes are gone and only a sitemap inventory pass can repair the gap.`,
 
 func fetchCmd(open openFunc) *cobra.Command {
 	var limit, batch int
+	var kinds []string
 	cmd := &cobra.Command{
 		Use:   "fetch",
 		Short: "Download canonical ELI XML for anything not on disk",
@@ -153,7 +155,12 @@ func fetchCmd(open openFunc) *cobra.Command {
 
 Requests are paced by the adaptive document bucket. Resources already on disk are
 closed without any request at all, so a multi-day crawl can be interrupted at any
-point and a second full pass after completion costs nothing.`,
+point and a second full pass after completion costs nothing.
+
+Pending resources are visited in URL order, so --kind is how a single series is
+sampled or repaired without crawling everything that sorts before it:
+
+  retsin fetch --kind retsinfo --limit 50`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, lim, err := open(cmd)
@@ -161,18 +168,28 @@ point and a second full pass after completion costs nothing.`,
 				return err
 			}
 			defer a.Close()
+			kinds = cleanKinds(kinds)
 			return runWith(a, lim, func(ctx context.Context) error {
 				// Count first, then build the bar: it needs its denominator at
 				// construction, and a run with nothing pending gets no bar at all.
-				pending, err := a.crawl.PendingCount(ctx, limit)
+				pending, err := a.crawl.PendingCount(ctx, limit, kinds)
 				if err != nil {
 					return err
+				}
+				if len(kinds) > 0 {
+					// A kind that matches nothing is a typo, and silence would
+					// look like a crawl that had nothing to do.
+					if pending == 0 {
+						slog.Warn("no pending resources match --kind", "kinds", strings.Join(kinds, ","))
+					} else {
+						slog.Info("fetch filtered by kind", "kinds", strings.Join(kinds, ","), "pending", pending)
+					}
 				}
 				bar := newFetchBar(lim, progressModeValue, pending)
 				defer bar.Finish()
 				var barWarned bool
 				return a.crawl.Fetch(ctx, crawl.FetchOptions{
-					Limit: limit, Batch: batch,
+					Limit: limit, Batch: batch, Kinds: kinds,
 					OnProgress: func(st crawl.FetchStats) {
 						if err := bar.Set(st.Attempted); err != nil && !barWarned {
 							// Once is enough: a bar that cannot render is not
@@ -192,7 +209,25 @@ point and a second full pass after completion costs nothing.`,
 	}
 	cmd.Flags().IntVar(&limit, "limit", 0, "stop after N items (useful for a trial run)")
 	cmd.Flags().IntVar(&batch, "batch", 200, "pending rows to process per batch")
+	cmd.Flags().StringSliceVar(&kinds, "kind", nil, "only fetch these ELI kinds, e.g. retsinfo or lta,ltb (repeatable)")
 	return cmd
+}
+
+// cleanKinds normalises --kind values: trimmed, lower-cased, de-duplicated, empty
+// entries dropped. The comparison is exact against the kind parsed from the ELI
+// URL, so shell history should not be able to miss by case or a stray space.
+func cleanKinds(in []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range in {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // newFetchBar builds the live progress line for a fetch run, honouring

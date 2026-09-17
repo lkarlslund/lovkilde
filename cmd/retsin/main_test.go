@@ -186,8 +186,9 @@ func TestRealCommandTree(t *testing.T) {
 	}
 }
 
-// fetch must expose --limit and --batch; --limit is the safety valve for trial runs.
-func TestFetchHasLimitAndBatchFlags(t *testing.T) {
+// fetch must expose --limit, --batch and --kind: --limit is the safety valve for
+// trial runs and --kind is how one series is sampled out of URL order.
+func TestFetchHasLimitBatchAndKindFlags(t *testing.T) {
 	root := newRootCmd()
 	var fetch *cobra.Command
 	for _, c := range root.Commands() {
@@ -198,7 +199,7 @@ func TestFetchHasLimitAndBatchFlags(t *testing.T) {
 	if fetch == nil {
 		t.Fatal("fetch command missing")
 	}
-	for _, name := range []string{"limit", "batch"} {
+	for _, name := range []string{"limit", "batch", "kind"} {
 		if fetch.Flags().Lookup(name) == nil {
 			t.Errorf("fetch is missing --%s", name)
 		}
@@ -271,5 +272,18 @@ func TestFetchBarPaints(t *testing.T) {
 	}
 	if !strings.Contains(out, "fetch @") {
 		t.Errorf("pacing label missing from the bar: %q", out)
+	}
+}
+
+// Kind matching against the store is exact, so what --kind collects has to be
+// normalised first: shell history should not miss by case or a stray space, and
+// repeated flags must not ask for the same kind twice.
+func TestCleanKinds(t *testing.T) {
+	got := cleanKinds([]string{" RETSINFO ", "retsinfo", "", "lta"})
+	if len(got) != 2 || got[0] != "retsinfo" || got[1] != "lta" {
+		t.Errorf("cleanKinds = %q, want [retsinfo lta]", got)
+	}
+	if len(cleanKinds(nil)) != 0 || len(cleanKinds([]string{" ", ""})) != 0 {
+		t.Error("empty input must clean to nothing")
 	}
 }

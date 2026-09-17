@@ -181,7 +181,58 @@ func (s *Store) GetInventory(ctx context.Context, eliURL string) (Inventory, boo
 // once limit have been collected. Failed records are only offered while their
 // attempt count is below maxAttempts, so a permanently broken URL cannot spin
 // forever and consume the polite request budget.
-func (s *Store) PendingInventory(ctx context.Context, limit, maxAttempts int) ([]Inventory, error) {
+// PendingInventory returns up to limit resources still needing a fetch. kinds
+// PendingByKind counts resources still needing a fetch, grouped by ELI kind. It
+// exists because --kind filtering changes the denominator a progress bar needs
+// before the run starts, and the state totals cannot answer "how many of these
+// are retsinfo". Retryable failures are included to match PendingInventory's
+// selection; the attempt bound is not, so the count errs slightly high.
+func (s *Store) PendingByKind(ctx context.Context) (map[string]int64, error) {
+	counts := map[string]int64{}
+	err := s.db.View(func(tx *badger.Txn) error {
+		ops := badger.DefaultIteratorOptions
+		ops.PrefetchValues = false
+		ops.Prefix = []byte(prefixInventory)
+		it := tx.NewIterator(ops)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			v, err := it.Item().ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			f := strings.Split(string(v), "\t")
+			if len(f) < 3 {
+				continue
+			}
+			switch f[2] {
+			case string(StatePending), string(StateFailed), "":
+			default:
+				continue
+			}
+			counts[f[1]]++
+		}
+		return nil
+	})
+	return counts, err
+}
+
+// PendingInventory returns up to limit resources still needing a fetch. kinds
+// restricts the result to specific ELI kinds ("retsinfo", "lta", ...); empty
+// means every kind. Matching uses the Kind recorded from the sitemap URL, so no
+// second index is required. A filtered call still walks the keyspace from the
+// start -- a few tens of milliseconds over the whole catalogue, which is noise
+// next to the paced requests it feeds.
+func (s *Store) PendingInventory(ctx context.Context, limit, maxAttempts int, kinds []string) ([]Inventory, error) {
+	var want map[string]bool
+	if len(kinds) > 0 {
+		want = make(map[string]bool, len(kinds))
+		for _, k := range kinds {
+			want[k] = true
+		}
+	}
 	var out []Inventory
 	err := s.db.View(func(tx *badger.Txn) error {
 		// Bigger value threshold keeps small records inline in the LSM, making
@@ -213,6 +264,9 @@ func (s *Store) PendingInventory(ctx context.Context, limit, maxAttempts int) ([
 					continue
 				}
 			default:
+				continue
+			}
+			if want != nil && !want[in.Kind] {
 				continue
 			}
 			out = append(out, in)

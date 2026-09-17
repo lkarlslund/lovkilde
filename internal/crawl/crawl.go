@@ -164,6 +164,10 @@ func (c *Crawler) Harvest(ctx context.Context) error {
 type FetchOptions struct {
 	// Limit caps how many resources this call attempts; 0 means run until done.
 	Limit int
+	// Kinds restricts the pass to specific ELI kinds ("retsinfo", "lta", ...);
+	// empty means every kind. It exists so a kind can be sampled or repaired
+	// without first crawling everything that sorts before it.
+	Kinds []string
 	// Batch is how many pending rows to load at a time. Small batches keep
 	// memory flat and make progress checkpoints frequent.
 	Batch int
@@ -187,19 +191,34 @@ type FetchStats struct {
 	Total int64
 }
 
-// PendingCount reports how many resources a fetch pass would take on, applying
-// the same --limit clamp the loop does. The CLI needs this *before* starting: a
-// progress bar must be built with its denominator already in place, so the count
-// is exposed rather than reported mid-run.
+// PendingCount reports how many resources a fetch pass would take on, honouring
+// the same --kind and --limit narrowing the loop does. The CLI needs this
+// *before* starting: a progress bar must be built with its denominator already in
+// place, so the count is exposed rather than reported mid-run.
 //
 // It counts pending and retryable-failed rows without re-checking their attempt
 // counts, which errs slightly high and only affects the bar's percentage.
-func (c *Crawler) PendingCount(ctx context.Context, limit int) (int64, error) {
-	counts, _, err := c.store.CountByState(ctx)
+func (c *Crawler) PendingCount(ctx context.Context, limit int, kinds []string) (int64, error) {
+	byKind, err := c.store.PendingByKind(ctx)
 	if err != nil {
 		return 0, err
 	}
-	total := counts[store.StatePending] + counts[store.StateFailed]
+	wanted := make(map[string]bool, len(kinds))
+	for _, k := range kinds {
+		wanted[k] = true
+	}
+	var total int64
+	if len(wanted) == 0 {
+		for _, n := range byKind {
+			total += n
+		}
+	} else {
+		for k, n := range byKind {
+			if wanted[k] {
+				total += n
+			}
+		}
+	}
 	if limit > 0 && int64(limit) < total {
 		total = int64(limit)
 	}
@@ -226,7 +245,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 	// the bar can show a percentage from the first document. It counts pending
 	// and retryable-failed rows without re-checking their attempt counts, which
 	// is an estimate that errs slightly high and only affects the percentage.
-	totalPending, err := c.PendingCount(ctx, opt.Limit)
+	totalPending, err := c.PendingCount(ctx, opt.Limit, opt.Kinds)
 	if err != nil {
 		return err
 	}
@@ -256,7 +275,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 			}
 		}
 
-		pending, err := c.store.PendingInventory(ctx, want, opt.MaxAttempts)
+		pending, err := c.store.PendingInventory(ctx, want, opt.MaxAttempts, opt.Kinds)
 		if err != nil {
 			return err
 		}

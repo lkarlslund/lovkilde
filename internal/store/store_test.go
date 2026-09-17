@@ -54,7 +54,7 @@ func TestPendingSkipsExhaustedAndFetched(t *testing.T) {
 	if err := s.PutInventoryBatch(ctx, rows); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.PendingInventory(ctx, 100, 5)
+	got, err := s.PendingInventory(ctx, 100, 5, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,12 +68,61 @@ func TestPendingSkipsExhaustedAndFetched(t *testing.T) {
 	}
 
 	// A limit must be honoured so batches stay small and memory flat.
-	limited, err := s.PendingInventory(ctx, 1, 5)
+	limited, err := s.PendingInventory(ctx, 1, 5, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(limited) != 1 {
 		t.Errorf("limit not honoured: got %d rows", len(limited))
+	}
+}
+
+func TestPendingByKind(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	rows := []Inventory{
+		{ELIURL: "https://x/eli/ft/1", State: StatePending, Kind: "ft"},
+		{ELIURL: "https://x/eli/retsinfo/1", State: StatePending, Kind: "retsinfo"},
+		{ELIURL: "https://x/eli/retsinfo/2", State: StateFailed, Attempts: 1, Kind: "retsinfo"},
+		{ELIURL: "https://x/eli/lta/1", State: StateFetched, Kind: "lta", SHA256: "aa"},
+		{ELIURL: "https://x/eli/lta/2", State: StateGone, Kind: "lta"},
+	}
+	if err := s.PutInventoryBatch(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+
+	// One kind only, and retryable failures count while fetched/gone do not.
+	only, err := s.PendingInventory(ctx, 100, 5, []string{"retsinfo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(only) != 2 {
+		t.Fatalf("filtered pending = %d rows, want 2: %+v", len(only), only)
+	}
+	for _, r := range only {
+		if r.Kind != "retsinfo" {
+			t.Errorf("kind filter leaked %s (%s)", r.ELIURL, r.Kind)
+		}
+	}
+
+	// Several kinds at once, and a kind nothing matches.
+	if many, err := s.PendingInventory(ctx, 100, 5, []string{"ft", "retsinfo"}); err != nil {
+		t.Fatal(err)
+	} else if len(many) != 3 {
+		t.Errorf("two-kind filter = %d rows, want 3", len(many))
+	}
+	if none, err := s.PendingInventory(ctx, 100, 5, []string{"nosuchkind"}); err != nil {
+		t.Fatal(err)
+	} else if len(none) != 0 {
+		t.Errorf("unknown kind matched %d rows, want 0", len(none))
+	}
+
+	counts, err := s.PendingByKind(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts["retsinfo"] != 2 || counts["ft"] != 1 || counts["lta"] != 0 {
+		t.Errorf("PendingByKind = %v, want retsinfo=2 ft=1 lta=0", counts)
 	}
 }
 

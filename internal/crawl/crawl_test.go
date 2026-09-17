@@ -153,6 +153,76 @@ func TestFetchReportsProgressEveryResource(t *testing.T) {
 	}
 }
 
+// --kind must narrow the work, not just the report: its purpose is sampling or
+// repairing one series without crawling everything that sorts before it. The
+// denominator has to follow the same filter, or the bar is built with the wrong
+// total.
+func TestFetchKindFilter(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte("<Dokument><Meta><AccessionNumber>W20261001925</AccessionNumber></Meta></Dokument>"))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dir
+	cfg.SiteBase = srv.URL
+	cfg.RequestTimeout = 5 * time.Second
+
+	st, err := store.Open(filepath.Join(dir, "meta", "kv"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+	ar, err := archive.Open(dir)
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	lim := limiter.NewTuned(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
+	}, 1.5, 2, time.Millisecond)
+	c := New(cfg, st, ar, rihttp.New(cfg, lim))
+
+	ctx := context.Background()
+	seed := []store.Inventory{
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/1", Kind: "ft", State: store.StatePending},
+		{ELIURL: "https://www.retsinformation.dk/eli/retsinfo/2021/10", Kind: "retsinfo", State: store.StatePending},
+		{ELIURL: "https://www.retsinformation.dk/eli/retsinfo/2021/11", Kind: "retsinfo", State: store.StatePending},
+	}
+	if err := st.PutInventoryBatch(ctx, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	total, err := c.PendingCount(ctx, 0, []string{"retsinfo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 {
+		t.Fatalf("PendingCount = %d, want 2", total)
+	}
+
+	var last FetchStats
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 2, Kinds: []string{"retsinfo"},
+		OnProgress: func(s FetchStats) { last = s }}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if last.Attempted != 2 || requests != 2 {
+		t.Errorf("attempted %d over %d requests, want 2 and 2: rows of other kinds were fetched", last.Attempted, requests)
+	}
+
+	// The excluded kind must still be waiting, untouched.
+	rest, err := c.PendingCount(ctx, 0, []string{"ft"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rest != 1 {
+		t.Errorf("pending ft after a filtered run = %d, want 1", rest)
+	}
+}
+
 // A second pass must report progress while closing every resource from disk,
 // which is the resume path a multi-day crawl takes most often.
 func TestFetchReportsProgressOnResumeWithoutRequests(t *testing.T) {
