@@ -230,6 +230,12 @@ type Filter struct {
 	States []string
 	// MaxAttempts bounds retries in the default sweep.
 	MaxAttempts int
+	// After pages the scan: rows whose ELI URL sorts at or before it are skipped.
+	// A caller walking a selection sets it to the last row it was given, which is
+	// what guarantees each row is offered once -- the attempt ceiling cannot do
+	// that for a hand-picked state, because re-fetching a row that stays in that
+	// state (a 404 retried under --state gone) would otherwise re-select it forever.
+	After string
 }
 
 // selector is a Filter with its lists turned into sets, compiled once per scan so
@@ -239,13 +245,14 @@ type selector struct {
 	states     map[string]bool // nil means the default sweep: pending plus failed
 	exact      bool            // states named by hand, so MaxAttempts does not apply
 	maxAttempt int
+	after      string // ELI URL to resume after, for paging a selection
 }
 
 // selector compiles the filter, refusing state names that cannot match anything.
 // A mistyped kind is only a warning later, because a kind can legitimately have
 // nothing pending; a mistyped state can never match at all, so it is an error.
 func (f Filter) selector() (selector, error) {
-	sel := selector{maxAttempt: f.MaxAttempts}
+	sel := selector{maxAttempt: f.MaxAttempts, after: f.After}
 	for _, k := range f.Kinds {
 		if sel.kinds == nil {
 			sel.kinds = map[string]bool{}
@@ -310,13 +317,25 @@ func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]In
 		ops.Prefix = []byte(prefixInventory)
 		it := tx.NewIterator(ops)
 		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
+		// Start past the cursor rather than walking everything before it: the
+		// catalogue is 200k rows, and re-walking it for every batch made a full
+		// crawl quadratic in the number of batches.
+		start := []byte(prefixInventory)
+		if sel.after != "" {
+			start = append(start, sel.after...)
+		}
+		for it.Seek(start); it.Valid(); it.Next() {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 			item := it.Item()
 			key := string(item.Key())
 			eliURL := strings.TrimPrefix(key, prefixInventory)
+			// Seek lands *on* the cursor, and the guard also covers any Seek that
+			// positions before the target rather than at or after it.
+			if sel.after != "" && eliURL <= sel.after {
+				continue
+			}
 			v, err := item.ValueCopy(nil)
 			if err != nil {
 				return err

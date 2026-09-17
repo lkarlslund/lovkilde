@@ -325,6 +325,12 @@ present it closes without a request, so only the genuinely missing rows cost any
 States compose with `--kind`, the bar's total follows both filters, and a state name that
 does not exist is an error listing the valid ones rather than a silent empty run.
 
+Each invocation visits each selected row **once**: the scan pages forward by ELI URL, so a
+row that is still in the selection after being fetched — a 404 re-tried under `--state gone`
+is written back as `gone` — is not offered again in the same run. Re-running the command is
+what re-tests them, and the forward cursor also means a long crawl no longer re-walks the
+whole 200k-row keyspace once per batch.
+
 ## Recovery
 
 If `meta/kv` is lost or suspect, in this exact order:
@@ -375,6 +381,16 @@ reports while issuing zero requests.
   every pass, up to five times each — harmless once, wasteful for years of daily
   updates. Now detected by payload and recorded as `gone`, alongside real 404s.
   Found in the first live run, not in tests: the fixture corpus had no example of it.
+- **A retry sweep that never ended.** `--state gone` re-fetches a 404, the 404 is written
+  back as `gone`, and the row therefore *still matches the filter* — so the next batch,
+  which re-scanned from the start of the keyspace, offered the same rows again forever. A
+  live run showed `255/83` on the bar and, in the log, URL order wrapping from
+  `1967/9000` back to `1748/10001`: three full passes over the same 83 rows. `--state
+  failed` looped the same way, because naming a state deliberately lifts the attempt
+  ceiling, and that ceiling had been the only thing terminating the loop. Found in a live
+  run by the operator, then pinned: the fetch loop now pages forward by ELI URL, so each
+  selected row is attempted at most once per invocation. Deleting the cursor line makes
+  `TestFetchStateRetryVisitsEachRowOnce` hang into its 5 s timeout, so the guard is real.
 - **A progress bar that rendered nothing at all.** The bar library latches its
   `finished` state the first time it renders while its max is still 0 — which is
   how `fetch` started, since the pending count only arrived with the first report.

@@ -298,6 +298,87 @@ func TestFetchStateFilterRetriesExhaustedFailures(t *testing.T) {
 	}
 }
 
+// A retry sweep must visit each selected row once per invocation. A 404 retried
+// under --state gone is written back as gone, so it still matches the filter, and the
+// batch loop re-scanned from the start of the keyspace: the run looped over the same
+// rows forever and the progress bar climbed past its total.
+func TestFetchStateRetryVisitsEachRowOnce(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dir
+	cfg.SiteBase = srv.URL
+	cfg.RequestTimeout = 5 * time.Second
+
+	st, err := store.Open(filepath.Join(dir, "meta", "kv"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+	ar, err := archive.Open(dir)
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	lim := limiter.NewTuned(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
+	}, 1.5, 2, time.Millisecond)
+	c := New(cfg, st, ar, rihttp.New(cfg, lim))
+
+	ctx := context.Background()
+	seed := []store.Inventory{
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/5", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/6", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/7", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
+	}
+	if err := st.PutInventoryBatch(ctx, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	// Batch smaller than the seed so the loop has to page: that is where the
+	// wrap-around happened.
+	runOnce := func() {
+		done := make(chan error, 1)
+		go func() {
+			done <- c.Fetch(ctx, FetchOptions{Batch: 2, MaxAttempts: 5, States: []string{"gone"}})
+		}()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("Fetch --state gone: %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Fetch did not terminate: a retry sweep kept re-selecting rows that stayed gone")
+		}
+	}
+
+	runOnce()
+	if requests != 3 {
+		t.Fatalf("first sweep made %d requests, want 3 (each gone row exactly once)", requests)
+	}
+	for _, row := range seed {
+		got, found, err := st.GetInventory(ctx, row.ELIURL)
+		if err != nil || !found {
+			t.Fatalf("GetInventory(%s): %v found=%v", row.ELIURL, err, found)
+		}
+		if got.State != store.StateGone {
+			t.Errorf("state after a retried 404 = %s, want gone", got.State)
+		}
+	}
+
+	// A second sweep re-tests them: that is the point of the flag, and it must
+	// still terminate after one pass.
+	runOnce()
+	if requests != 6 {
+		t.Errorf("two sweeps made %d requests, want 6", requests)
+	}
+}
+
 // A second pass must report progress while closing every resource from disk,
 // which is the resume path a multi-day crawl takes most often.
 func TestFetchReportsProgressOnResumeWithoutRequests(t *testing.T) {

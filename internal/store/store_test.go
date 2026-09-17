@@ -197,6 +197,54 @@ func TestInventoryStateSelection(t *testing.T) {
 	}
 }
 
+// Paging must advance strictly past the cursor, including off the end of the
+// prefix. This is what stops a retry sweep re-offering rows that stay selected.
+func TestPendingInventoryPagesAfterCursor(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	var rows []Inventory
+	for _, id := range []string{"a/1", "a/2", "a/3", "a/4", "a/5"} {
+		rows = append(rows, Inventory{ELIURL: "https://x/eli/" + id, State: StatePending, Kind: "a"})
+	}
+	if err := s.PutInventoryBatch(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+
+	seen := map[string]bool{}
+	var after string
+	for page := 0; page < 10; page++ {
+		got, err := s.PendingInventory(ctx, 2, Filter{MaxAttempts: 5, After: after})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) == 0 {
+			break
+		}
+		for _, in := range got {
+			if seen[in.ELIURL] {
+				t.Fatalf("cursor paging offered %s twice", in.ELIURL)
+			}
+			seen[in.ELIURL] = true
+		}
+		after = got[len(got)-1].ELIURL
+	}
+	if len(seen) != 5 {
+		t.Errorf("paged %d distinct rows, want 5", len(seen))
+	}
+
+	// A cursor at or past the last key must return nothing rather than wrapping.
+	if got, err := s.PendingInventory(ctx, 10, Filter{MaxAttempts: 5, After: "https://x/eli/a/5"}); err != nil {
+		t.Fatal(err)
+	} else if len(got) != 0 {
+		t.Errorf("cursor at the last key returned %d rows, want 0: %v", len(got), got)
+	}
+	if got, err := s.PendingInventory(ctx, 10, Filter{MaxAttempts: 5, After: "zzz-beyond-the-end"}); err != nil {
+		t.Fatal(err)
+	} else if len(got) != 0 {
+		t.Errorf("cursor past the prefix returned %d rows, want 0", len(got))
+	}
+}
+
 func TestCountByState(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

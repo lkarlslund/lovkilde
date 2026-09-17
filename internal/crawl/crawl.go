@@ -280,6 +280,14 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 		if len(pending) == 0 {
 			break
 		}
+		// Page past what this batch covered. Without the cursor the next batch
+		// re-scans from the start of the keyspace and offers again any row whose
+		// state still matches the filter -- which is the normal outcome for a
+		// retry (--state gone on a resource that 404s again stays gone), so an
+		// unbounded run would loop over the same rows forever and a progress bar
+		// would climb past its total. It also makes a full crawl stop re-walking
+		// 200k rows once per batch.
+		filter.After = pending[len(pending)-1].ELIURL
 
 		for _, row := range pending {
 			if err := ctx.Err(); err != nil {
