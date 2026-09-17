@@ -187,8 +187,10 @@ func TestRealCommandTree(t *testing.T) {
 	}
 }
 
-// fetch must expose --limit, --batch and --kind: --limit is the safety valve for
-// trial runs and --kind is how one series is sampled out of URL order.
+// fetch must expose --limit, --batch, --kind, --state and --order: --limit is the
+// safety valve for trial runs, --kind samples one series out of URL order, --state is
+// how failures get a second chance, and --order decides which end of 200k rows to
+// start from.
 func TestFetchHasLimitBatchAndKindFlags(t *testing.T) {
 	root := newRootCmd()
 	var fetch *cobra.Command
@@ -200,10 +202,29 @@ func TestFetchHasLimitBatchAndKindFlags(t *testing.T) {
 	if fetch == nil {
 		t.Fatal("fetch command missing")
 	}
-	for _, name := range []string{"limit", "batch", "kind", "state"} {
+	for _, name := range []string{"limit", "batch", "kind", "state", "order", "random-seed"} {
 		if fetch.Flags().Lookup(name) == nil {
 			t.Errorf("fetch is missing --%s", name)
 		}
+	}
+	// The default has to stay chronological: a mirror aiming to finish should finish
+	// in order, and a random default would turn a partial crawl into a shallow skim.
+	if got := fetch.Flags().Lookup("order").DefValue; got != "asc" {
+		t.Errorf("--order defaults to %q, want asc", got)
+	}
+}
+
+// A bad --order must be refused rather than quietly crawling in some other order.
+// This is the store's validation reached through the flag; silence here would look
+// like a crawl that had simply made no progress.
+func TestFetchRejectsUnknownOrder(t *testing.T) {
+	root := newRootCmd()
+	err := runCLI(t, root, "--data-dir", t.TempDir(), "fetch", "--order", "sideways")
+	if err == nil {
+		t.Fatal("--order sideways was accepted")
+	}
+	if !strings.Contains(err.Error(), "order") {
+		t.Errorf("error %q does not mention the order", err)
 	}
 }
 

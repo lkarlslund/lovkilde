@@ -214,6 +214,8 @@ exactly what a run will do. Run `retsin --help` for the full list. The important
 --limit / --batch N      on fetch: trial size and Badger commit batch
 --kind KINDS             on fetch: restrict to ELI series, e.g. retsinfo or lta,ltb
 --state STATES           on fetch: restrict to inventory states, e.g. failed or gone
+--order asc|desc|random  on fetch: which end of the catalogue to visit first
+--random-seed N          on fetch: fix the shuffle for --order random (0 = pick and log)
 ```
 
 Everything else about pacing is either a published obligation (12 s harvest), a
@@ -291,9 +293,10 @@ would be a wall. The learner only reaches the floor if the site proves it can ta
 
 ### Narrowing a run
 
-Pending resources are visited in ELI URL order, so a series that sorts late stays out of
-reach until everything before it is done. `--kind` selects by ELI kind, which is the axis
-the sitemap itself groups on:
+Pending resources are visited in ELI URL order by default, so a series that sorts late stays
+out of reach until everything before it is done — see [Changing the order](#changing-the-order)
+for `--order`. `--kind` selects by ELI kind, which is the axis the sitemap itself groups
+on:
 
 ```
 retsin fetch --kind retsinfo --limit 50    # sample one series
@@ -302,6 +305,33 @@ retsin fetch --kind lta,ltb --kind ltc     # several at once: comma-separated or
 
 `--limit N` caps the run; `--batch N` sizes the pending window. The bar's total honours
 the filter, and a kind with nothing pending warns rather than finishing silently.
+
+### Changing the order
+
+The catalogue is stored in ELI URL order, which is chronological within a kind, so the
+default walk meets 1873 before last month's law. `--order` chooses the other end:
+
+```
+retsin fetch --order desc --limit 20     # the twenty most recent documents
+retsin fetch --order random --limit 200  # an unbiased sample of the catalogue
+```
+
+`desc` walks the same keyspace backwards and pages by cursor exactly like `asc`, so it costs
+what a forward crawl costs, and reaches the part of the corpus that is read and amended
+most first.
+
+`random` is not a scan direction. The keyspace is stored in URL order, so a shuffled order
+has no cursor to resume from: the selection is materialised once as ELI URLs — a few tens of
+megabytes for all 201,579 rows — and drained in shuffled order, which is cheaper than
+re-scanning the catalogue once per batch to re-derive the same shuffle. The seed is logged at
+`debug` level, and `--random-seed` repeats a sample exactly.
+
+`asc` stays the default deliberately: a mirror aiming to finish should finish in order, and a
+random default would turn a partial crawl into a shallow skim of everything.
+
+All three compose with `--kind` and `--state`, all three honour `--limit`, and all three
+visit each selected row once per invocation. An order that does not exist is an error, not a
+silent fallback to another one.
 
 ### Retrying failures
 
@@ -369,7 +399,11 @@ reports while issuing zero requests.
 - **Manual `Accept-Encoding: gzip`** disabled Go's auto-decompression, so the sitemap
   arrived as 241 raw gzip bytes and failed XML decoding with a misleading syntax error.
 - **Badger `Reverse` + `Prefix`** iterated empty, which would have silently broken
-  harvest resumption. Replaced with a forward scan.
+  harvest resumption. Replaced with a forward scan. `--order desc` needs reverse
+  anyway, so `scanInventory` bounds the range by hand (seek above the last key of the
+  prefix, stop at the first key outside it) and
+  `TestBadgerPrefixAndReverseDoNotMix` pins the upstream behaviour: if that pairing
+  ever starts returning rows, the hand-rolled bound can go.
 - **`xml:"Meta>AccessionNumber"` inside a struct already bound to `Meta`** made the
   decoder look for `Dokument/Meta/Meta/AccessionNumber`. Go reports this by leaving the
   field *empty with no error*, so every document looked like it had no accession.
@@ -400,6 +434,10 @@ reports while issuing zero requests.
   pending count is taken *before* the bar is built, so a zero-max bar never exists.
   `OptionClearOnFinish` was the second trap: it suppresses the completed frame, so a
   crawl that reaches its last document shows nothing.
+- **`PendingInventory(ctx, 0, …)` returned one row.** The stop condition compared
+  `len(out) >= limit` directly, so the "unlimited" value the rest of the tool uses
+  (`--limit 0`) stopped the scan after the first document. `TestPendingInventoryDescending`
+  asked for the whole catalogue and got a single row; the guard is now `limit > 0 && …`.
 - **`--jitter 0` switched pacing off entirely.** Making the built-in 20 % jitter
   configurable introduced two bugs at once: `JitterPercentDefault / 100` is *integer*
   division, so the default came out as 0, and the new `jitter > 0` guard had been put on

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -178,6 +179,14 @@ type FetchOptions struct {
 	Batch int
 	// MaxAttempts bounds retries for a single resource.
 	MaxAttempts int
+	// Order is the sequence the selection is walked in: "asc" (default), "desc", or
+	// "random". It exists because the three questions people ask of a 200k catalogue
+	// need three different orders: finish it chronologically, take the newest law
+	// first, or take an unbiased sample of it.
+	Order string
+	// RandomSeed fixes the shuffle for Order=random; zero seeds from the clock.
+	// Recorded at debug level so a sample can be reproduced.
+	RandomSeed int64
 	// OnProgress, when set, is called after every resource with running
 	// totals. It runs on the crawl goroutine, so it must not block: it exists
 	// to drive a progress bar, not to do work.
@@ -221,6 +230,63 @@ func (c *Crawler) PendingCount(ctx context.Context, limit int, f store.Filter) (
 	return total, nil
 }
 
+// batchSource returns the function the fetch loop pulls its next batch from, so the
+// per-row work below stays shared whatever order was asked for.
+//
+// asc and desc page the keyspace by cursor: each batch resumes on the far side of
+// the last row handed out. Without that the next batch would re-scan from the start
+// and offer again any row whose state still matches the filter -- the normal outcome
+// for a retry, since a 404 re-tried under --state gone stays gone -- so an unbounded
+// run would loop over the same rows forever and a progress bar would climb past its
+// total. It also stops a full crawl re-walking 200k rows once per batch.
+//
+// random cannot page: the keyspace is stored in ELI URL order, so a shuffled order
+// has no cursor to resume from. Materialising the selection once and draining it
+// costs a few tens of megabytes of URLs on a run that asked for it, which beats
+// re-scanning the whole catalogue per batch to re-derive the same shuffle.
+func (c *Crawler) batchSource(ctx context.Context, filter store.Filter, opt FetchOptions) (func(context.Context, int) ([]store.Inventory, error), error) {
+	if filter.Order != store.OrderRandom {
+		return func(ctx context.Context, want int) ([]store.Inventory, error) {
+			rows, err := c.store.PendingInventory(ctx, want, filter)
+			if err != nil {
+				return nil, err
+			}
+			if len(rows) > 0 {
+				filter.Cursor = rows[len(rows)-1].ELIURL
+			}
+			return rows, nil
+		}, nil
+	}
+
+	keys, err := c.store.PendingKeys(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	seed := opt.RandomSeed
+	if seed == 0 {
+		seed = time.Now().UnixNano()
+	}
+	// Logged because a random sample that cannot be named afterwards is not
+	// reproducible, and this is the order people use for sampling.
+	slog.Debug("random fetch order", "seed", seed, "selected", len(keys))
+	rnd := rand.New(rand.NewSource(seed))
+	rnd.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
+
+	pos := 0
+	return func(ctx context.Context, want int) ([]store.Inventory, error) {
+		if pos >= len(keys) || want <= 0 {
+			return nil, nil
+		}
+		end := pos + want
+		if end > len(keys) {
+			end = len(keys)
+		}
+		page := keys[pos:end]
+		pos = end
+		return c.store.Inventories(ctx, page)
+	}, nil
+}
+
 // Fetch downloads canonical XML for every resource not already on disk.
 //
 // Idempotency comes from the filesystem: a resource whose file already exists
@@ -242,8 +308,12 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 	// it counts pending and failed rows without re-checking their attempt counts,
 	// which is an estimate that errs slightly high and only affects the
 	// percentage. Hand-picked states are counted exactly.
-	filter := store.Filter{Kinds: opt.Kinds, States: opt.States, MaxAttempts: opt.MaxAttempts}
+	filter := store.Filter{Kinds: opt.Kinds, States: opt.States, MaxAttempts: opt.MaxAttempts, Order: opt.Order}
 	totalPending, err := c.PendingCount(ctx, opt.Limit, filter)
+	if err != nil {
+		return err
+	}
+	nextBatch, err := c.batchSource(ctx, filter, opt)
 	if err != nil {
 		return err
 	}
@@ -273,21 +343,13 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 			}
 		}
 
-		pending, err := c.store.PendingInventory(ctx, want, filter)
+		pending, err := nextBatch(ctx, want)
 		if err != nil {
 			return err
 		}
 		if len(pending) == 0 {
 			break
 		}
-		// Page past what this batch covered. Without the cursor the next batch
-		// re-scans from the start of the keyspace and offers again any row whose
-		// state still matches the filter -- which is the normal outcome for a
-		// retry (--state gone on a resource that 404s again stays gone), so an
-		// unbounded run would loop over the same rows forever and a progress bar
-		// would climb past its total. It also makes a full crawl stop re-walking
-		// 200k rows once per batch.
-		filter.After = pending[len(pending)-1].ELIURL
 
 		for _, row := range pending {
 			if err := ctx.Err(); err != nil {

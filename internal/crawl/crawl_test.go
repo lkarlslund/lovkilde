@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -498,5 +499,168 @@ func TestFetchClosesHTMLResponseWithoutRetrying(t *testing.T) {
 	}
 	if requests != 1 {
 		t.Errorf("requests %d after a second pass, want still 1", requests)
+	}
+}
+
+// orderRecorder collects the order requests reached the server in. The fetch loop is
+// sequential, but the handler runs on httptest's goroutines, so the mutex keeps
+// -race honest.
+type orderRecorder struct {
+	mu   sync.Mutex
+	seen []string
+}
+
+func (o *orderRecorder) record(path string) {
+	o.mu.Lock()
+	o.seen = append(o.seen, path)
+	o.mu.Unlock()
+}
+
+func (o *orderRecorder) order() []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]string(nil), o.seen...)
+}
+
+// newOrderTester wires a crawler to a throwaway archive whose server answers 404 to
+// everything, so every row stays in the selection and the only thing under test is
+// which row is asked for next. Pacing drops to microseconds.
+func newOrderTester(t *testing.T, ids ...string) (*Crawler, *store.Store, *orderRecorder) {
+	rec := &orderRecorder{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec.record(r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dir
+	cfg.SiteBase = srv.URL
+	cfg.RequestTimeout = 5 * time.Second
+
+	st, err := store.Open(filepath.Join(dir, "meta", "kv"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	ar, err := archive.Open(dir)
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	lim := limiter.NewTuned(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
+	}, 1.5, 2, time.Millisecond)
+
+	ctx := context.Background()
+	var rows []store.Inventory
+	for _, id := range ids {
+		rows = append(rows, store.Inventory{
+			ELIURL: "https://www.retsinformation.dk/eli/lta/2024/" + id,
+			Kind:   "lta", LastMod: "2024-01-01", State: store.StatePending,
+		})
+	}
+	if err := st.PutInventoryBatch(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+	return New(cfg, st, ar, rihttp.New(cfg, lim)), st, rec
+}
+
+// fetchToCompletion fails the test rather than letting a broken cursor hang the run.
+func fetchToCompletion(t *testing.T, c *Crawler, opt FetchOptions) {
+	done := make(chan error, 1)
+	go func() { done <- c.Fetch(context.Background(), opt) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Fetch: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Fetch did not terminate")
+	}
+}
+
+// eliID extracts the document number a request path refers to. Requests carry the
+// canonical /xml representation suffix, so comparing raw paths against ELI ids would
+// silently never match.
+func eliID(path string) string {
+	path = strings.TrimSuffix(path, "/xml")
+	if i := strings.LastIndexByte(path, '/'); i >= 0 {
+		return path[i+1:]
+	}
+	return path
+}
+
+// --order desc is the live-mirror case: the newest law is the last key, so it has to
+// be the first request. Batch 2 forces the paging path.
+func TestFetchOrderDescendingAsksNewestFirst(t *testing.T) {
+	c, _, rec := newOrderTester(t, "1", "2", "3", "4", "5")
+	fetchToCompletion(t, c, FetchOptions{Batch: 2, MaxAttempts: 5, Order: store.OrderDesc})
+
+	want := []string{"5", "4", "3", "2", "1"}
+	var got []string
+	for _, path := range rec.order() {
+		got = append(got, eliID(path))
+	}
+	if len(got) != len(want) {
+		t.Fatalf("made %d requests, want %d: %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("request %d = %s, want document %s", i, got[i], want[i])
+		}
+	}
+}
+
+// --order random must still visit every row exactly once and stop. The keys are
+// materialised once and drained, so a bug in the drain shows up as a repeat or a
+// hang rather than as a wrong order nobody notices.
+func TestFetchOrderRandomVisitsEachRowOnce(t *testing.T) {
+	ids := []string{"1", "2", "3", "4", "5", "6", "7"}
+	c, _, rec := newOrderTester(t, ids...)
+	fetchToCompletion(t, c, FetchOptions{Batch: 2, MaxAttempts: 5, Order: store.OrderRandom, RandomSeed: 7})
+
+	got := rec.order()
+	if len(got) != len(ids) {
+		t.Fatalf("made %d requests, want %d: %v", len(got), len(ids), got)
+	}
+	seen := map[string]bool{}
+	for _, path := range got {
+		if seen[path] {
+			t.Fatalf("random order requested %s twice", path)
+		}
+		seen[path] = true
+	}
+	// A shuffle that quietly became a no-op would keep the ascending order, which
+	// is exactly what --order random exists to avoid.
+	shuffled := false
+	for i := range got {
+		if eliID(got[i]) != ids[i] {
+			shuffled = true
+			break
+		}
+	}
+	if !shuffled {
+		t.Errorf("random order came out as the ascending order: %v", got)
+	}
+}
+
+// The seed is logged so a sample can be repeated later, which only means something if
+// the same seed gives the same order.
+func TestFetchOrderRandomIsReproducible(t *testing.T) {
+	ids := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
+	c1, _, rec1 := newOrderTester(t, ids...)
+	fetchToCompletion(t, c1, FetchOptions{Batch: 3, MaxAttempts: 5, Order: store.OrderRandom, RandomSeed: 1234})
+	c2, _, rec2 := newOrderTester(t, ids...)
+	fetchToCompletion(t, c2, FetchOptions{Batch: 3, MaxAttempts: 5, Order: store.OrderRandom, RandomSeed: 1234})
+
+	a, b := rec1.order(), rec2.order()
+	if len(a) != len(b) {
+		t.Fatalf("same seed produced %d and %d requests", len(a), len(b))
+	}
+	for i := range a {
+		if eliID(a[i]) != eliID(b[i]) {
+			t.Fatalf("same seed produced a different order at %d: %s vs %s", i, a[i], b[i])
+		}
 	}
 }

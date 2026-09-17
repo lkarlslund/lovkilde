@@ -178,7 +178,6 @@ func (s *Store) GetInventory(ctx context.Context, eliURL string) (Inventory, boo
 }
 
 // PendingByKind counts resources still needing a fetch, grouped by ELI kind. It
-// PendingByKind counts resources still needing a fetch, grouped by ELI kind. It
 // exists because --kind filtering changes the denominator a progress bar needs
 // before the run starts, and the state totals cannot answer "how many of these
 // are retsinfo". The selection follows Filter, except that the attempt bound is
@@ -217,8 +216,39 @@ func (s *Store) PendingByKind(ctx context.Context, f Filter) (map[string]int64, 
 	return counts, err
 }
 
+// Order in which a scan hands out rows. --order exposes all three because they
+// answer different questions: the bootstrap wants chronology, a live mirror wants
+// the newest law first, and a sample wants neither.
+const (
+	// OrderAsc is ELI URL order, which for these paths is chronological within a
+	// kind. It is the default: a mirror aiming to finish should finish in order,
+	// and a random default would turn a partial crawl into a shallow skim.
+	OrderAsc = "asc"
+	// OrderDesc is the same keyspace walked backwards, so the newest documents come
+	// first -- the part of the corpus that is read most and amended most.
+	OrderDesc = "desc"
+	// OrderRandom hands out the selection in shuffled order. It is not a scan
+	// direction: see Store.PendingKeys for why it is materialised once per run.
+	OrderRandom = "random"
+)
+
+// parseOrder normalises and validates --order. An unknown value is an error rather
+// than a silent fallback to asc, because a sample taken in the wrong order looks
+// exactly like a sample taken in the right one.
+func parseOrder(name string) (string, error) {
+	switch name = strings.ToLower(strings.TrimSpace(name)); name {
+	case "", OrderAsc:
+		return OrderAsc, nil
+	case OrderDesc, OrderRandom:
+		return name, nil
+	default:
+		return "", fmt.Errorf("unknown order %q (valid: asc, desc, random)", name)
+	}
+}
+
 // Filter narrows which inventory rows a scan returns. The zero Filter is the
-// ordinary crawl sweep: pending rows plus failed rows still under MaxAttempts.
+// ordinary crawl sweep: pending rows plus failed rows still under MaxAttempts, in
+// ELI URL order.
 type Filter struct {
 	// Kinds restricts to ELI series as parsed from the sitemap URL ("retsinfo",
 	// "lta", ...). Empty means every kind.
@@ -230,29 +260,38 @@ type Filter struct {
 	States []string
 	// MaxAttempts bounds retries in the default sweep.
 	MaxAttempts int
-	// After pages the scan: rows whose ELI URL sorts at or before it are skipped.
-	// A caller walking a selection sets it to the last row it was given, which is
-	// what guarantees each row is offered once -- the attempt ceiling cannot do
-	// that for a hand-picked state, because re-fetching a row that stays in that
-	// state (a 404 retried under --state gone) would otherwise re-select it forever.
-	After string
+	// Order is OrderAsc, OrderDesc or OrderRandom.
+	Order string
+	// Cursor is the last ELI URL the caller was handed. The scan resumes on the far
+	// side of it, in the direction Order asks for, which is what guarantees each row
+	// is offered once per run -- the attempt ceiling cannot do that for a
+	// hand-picked state, because re-fetching a row that stays in that state (a 404
+	// retried under --state gone) would otherwise re-select it forever.
+	Cursor string
 }
 
-// selector is a Filter with its lists turned into sets, compiled once per scan so
-// a 200k-row walk does not re-parse the same flag values per row.
+// selector is a Filter with its lists turned into sets and its order resolved,
+// compiled once per scan so a 200k-row walk does not re-parse the same flag values
+// per row.
 type selector struct {
 	kinds      map[string]bool
 	states     map[string]bool // nil means the default sweep: pending plus failed
 	exact      bool            // states named by hand, so MaxAttempts does not apply
 	maxAttempt int
-	after      string // ELI URL to resume after, for paging a selection
+	cursor     string
+	reverse    bool
 }
 
-// selector compiles the filter, refusing state names that cannot match anything.
-// A mistyped kind is only a warning later, because a kind can legitimately have
-// nothing pending; a mistyped state can never match at all, so it is an error.
+// selector compiles the filter, refusing state and order names that cannot mean
+// anything. A mistyped kind is only a warning later, because a kind can
+// legitimately have nothing pending; a mistyped state or order can never do what
+// was asked, so they are errors.
 func (f Filter) selector() (selector, error) {
-	sel := selector{maxAttempt: f.MaxAttempts, after: f.After}
+	order, err := parseOrder(f.Order)
+	if err != nil {
+		return selector{}, err
+	}
+	sel := selector{maxAttempt: f.MaxAttempts, cursor: f.Cursor, reverse: order == OrderDesc}
 	for _, k := range f.Kinds {
 		if sel.kinds == nil {
 			sel.kinds = map[string]bool{}
@@ -298,59 +337,176 @@ func (sel selector) wantAttempts(attempts int) bool {
 	return sel.exact || attempts < sel.maxAttempt
 }
 
-// PendingInventory returns up to limit resources the filter selects, in ELI URL
-// order. A filtered call still walks the keyspace from the start -- a few tens of
-// milliseconds over the whole catalogue, which is noise next to the paced requests
-// it feeds.
-func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]Inventory, error) {
-	sel, err := f.selector()
-	if err != nil {
-		return nil, err
+// pastCursor reports whether a key is on the already-covered side of the cursor,
+// which depends on the direction being walked.
+func (sel selector) pastCursor(eliURL string) bool {
+	if sel.cursor == "" {
+		return false
 	}
-	var out []Inventory
-	err = s.db.View(func(tx *badger.Txn) error {
+	if sel.reverse {
+		return eliURL >= sel.cursor
+	}
+	return eliURL <= sel.cursor
+}
+
+// scanInventory walks the selection in the filter's direction and hands each
+// matching row to fn, stopping when fn says it has had enough. PendingInventory and
+// PendingKeys are thin wrappers so the direction and cursor handling exists once.
+func (s *Store) scanInventory(ctx context.Context, sel selector, fn func(eliURL, value string) (stop bool, err error)) error {
+	return s.db.View(func(tx *badger.Txn) error {
 		// Bigger value threshold keeps small records inline in the LSM, making
 		// this scan read only the LSM rather than the value log.
 		// (No per-transaction tuning is needed; Badger handles it.)
 		ops := badger.DefaultIteratorOptions
 		ops.PrefetchValues = false
-		ops.Prefix = []byte(prefixInventory)
+		if sel.reverse {
+			// Reverse + Prefix together iterated empty in this Badger version --
+			// a bug that once silently broke harvest resumption -- so the bound
+			// is enforced by hand: start above every key in the prefix and stop
+			// as soon as a key falls out of it.
+			ops.Reverse = true
+		} else {
+			ops.Prefix = []byte(prefixInventory)
+		}
 		it := tx.NewIterator(ops)
 		defer it.Close()
-		// Start past the cursor rather than walking everything before it: the
-		// catalogue is 200k rows, and re-walking it for every batch made a full
-		// crawl quadratic in the number of batches.
-		start := []byte(prefixInventory)
-		if sel.after != "" {
-			start = append(start, sel.after...)
-		}
-		for it.Seek(start); it.Valid(); it.Next() {
+
+		for it.Seek(sel.scanStart()); it.Valid(); it.Next() {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 			item := it.Item()
 			key := string(item.Key())
+			if sel.reverse && !strings.HasPrefix(key, prefixInventory) {
+				return nil // walked out of the bottom of the range
+			}
 			eliURL := strings.TrimPrefix(key, prefixInventory)
-			// Seek lands *on* the cursor, and the guard also covers any Seek that
-			// positions before the target rather than at or after it.
-			if sel.after != "" && eliURL <= sel.after {
+			// Seek lands *on* the target, so the cursor row itself needs dropping
+			// in both directions.
+			if sel.pastCursor(eliURL) {
 				continue
 			}
 			v, err := item.ValueCopy(nil)
 			if err != nil {
 				return err
 			}
-			in, err := decodeInventory(eliURL, string(v))
+			stop, err := fn(eliURL, string(v))
 			if err != nil {
 				return err
 			}
-			if !sel.wantState(string(in.State)) || !sel.wantAttempts(in.Attempts) || !sel.wantKind(in.Kind) {
-				continue
-			}
-			out = append(out, in)
-			if len(out) >= limit {
+			if stop {
 				return nil
 			}
+		}
+		return nil
+	})
+}
+
+// scanStart is the key a walk begins from. It is a separate function only so the
+// cursor case can be asserted directly: a descending batch that starts at the top of
+// the prefix instead of at its cursor still returns the right rows -- pastCursor drops
+// everything above -- but re-walks every row above the cursor once per batch, which
+// over a 200k catalogue is the quadratic scan that already bit the ascending path
+// once. Cost like that is invisible to result assertions.
+func (sel selector) scanStart() []byte {
+	switch {
+	case sel.reverse && sel.cursor != "":
+		// Badger's reverse Seek lands at or below the target, so aiming at the
+		// cursor itself starts the walk on its near side; pastCursor drops the row
+		// the cursor names.
+		return []byte(prefixInventory + sel.cursor)
+	case sel.reverse:
+		// 0xff cannot appear in an ELI URL, so this sits above every key with this
+		// prefix and below the next one (the keyspace uses single-letter prefixes),
+		// which is where a backwards walk with nothing covered yet should begin.
+		return append([]byte(prefixInventory), 0xff, 0xff, 0xff, 0xff)
+	case sel.cursor != "":
+		return []byte(prefixInventory + sel.cursor)
+	}
+	return []byte(prefixInventory)
+}
+
+// PendingInventory returns up to limit resources the filter selects, in the order
+// the filter asks for. A filtered call still walks the keyspace from the cursor --
+// a few tens of milliseconds over the whole catalogue, which is noise next to the
+// paced requests it feeds.
+func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]Inventory, error) {
+	sel, err := f.selector()
+	if err != nil {
+		return nil, err
+	}
+	var out []Inventory
+	err = s.scanInventory(ctx, sel, func(eliURL, value string) (bool, error) {
+		in, err := decodeInventory(eliURL, value)
+		if err != nil {
+			return false, err
+		}
+		if !sel.wantState(string(in.State)) || !sel.wantAttempts(in.Attempts) || !sel.wantKind(in.Kind) {
+			return false, nil
+		}
+		out = append(out, in)
+		// Zero means unlimited here, as it does for --limit; comparing directly
+		// would stop after the first row.
+		return limit > 0 && len(out) >= limit, nil
+	})
+	return out, err
+}
+
+// PendingKeys returns the ELI URLs the filter selects, without decoding the rows.
+// Order=random needs the whole selection in memory to shuffle it: paging a shuffled
+// order is impossible from a keyspace that is stored in ELI URL order, and
+// re-scanning per batch to re-derive it would put the quadratic walk back. At
+// roughly 60 bytes per URL, the full catalogue costs a few tens of megabytes --
+// paid once, on a run that asked for it.
+func (s *Store) PendingKeys(ctx context.Context, f Filter) ([]string, error) {
+	sel, err := f.selector()
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	err = s.scanInventory(ctx, sel, func(eliURL, value string) (bool, error) {
+		// Decoding the row costs nothing extra -- the value has to be read to apply
+		// the filter either way -- and going through decodeInventory keeps this
+		// selection identical to PendingInventory's rather than a second parse.
+		in, err := decodeInventory(eliURL, value)
+		if err != nil {
+			return false, err
+		}
+		if !sel.wantState(string(in.State)) || !sel.wantAttempts(in.Attempts) || !sel.wantKind(in.Kind) {
+			return false, nil
+		}
+		out = append(out, eliURL)
+		return false, nil
+	})
+	return out, err
+}
+
+// Inventories returns the rows for specific ELI URLs, in the order given, skipping
+// any that have disappeared. It is the point-lookup path Order=random uses after
+// shuffling, instead of re-scanning the keyspace per batch.
+func (s *Store) Inventories(ctx context.Context, eliURLs []string) ([]Inventory, error) {
+	var out []Inventory
+	err := s.db.View(func(tx *badger.Txn) error {
+		for _, u := range eliURLs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			item, err := tx.Get([]byte(prefixInventory + u))
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			in, err := decodeInventory(u, string(v))
+			if err != nil {
+				return err
+			}
+			out = append(out, in)
 		}
 		return nil
 	})

@@ -157,6 +157,8 @@ changes are gone and only a sitemap inventory pass can repair the gap.`,
 func fetchCmd(open openFunc) *cobra.Command {
 	var limit, batch int
 	var kinds, states []string
+	var order string
+	var randomSeed int64
 	cmd := &cobra.Command{
 		Use:   "fetch",
 		Short: "Download canonical ELI XML for anything not on disk",
@@ -166,8 +168,9 @@ Requests are paced by the adaptive document bucket. Resources already on disk ar
 closed without any request at all, so a multi-day crawl can be interrupted at any
 point and a second full pass after completion costs nothing.
 
-Pending resources are visited in URL order, so --kind is how a single series is
-sampled or repaired without crawling everything that sorts before it:
+By default resources are visited in URL order, so --kind is how a single series is sampled
+or repaired without crawling everything that sorts before it, and --order picks the other
+end of the keyspace instead:
 
   retsin fetch --kind retsinfo --limit 50
 
@@ -178,7 +181,15 @@ retried on purpose:
 
   retsin fetch --state failed              retry everything that failed
   retsin fetch --state gone --kind retsinfo  re-test 404s in one series
-  retsin fetch --state fetched             re-check rows that claim to be on disk`,
+  retsin fetch --state fetched             re-check rows that claim to be on disk
+
+--order changes which end of the catalogue is reached first. The newest law is at the
+top of the keyspace, so desc gets current legislation quickly where asc would spend
+days on 1873 first; random samples the catalogue evenly, which is the honest order
+for a trial run that should not be biased toward the old end:
+
+  retsin fetch --order desc --limit 20     the twenty most recent documents
+  retsin fetch --order random --limit 200  an unbiased sample`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, lim, err := open(cmd)
@@ -189,7 +200,7 @@ retried on purpose:
 			kinds = cleanList(kinds)
 			states = cleanList(states)
 			return runWith(a, lim, func(ctx context.Context) error {
-				filter := store.Filter{Kinds: kinds, States: states}
+				filter := store.Filter{Kinds: kinds, States: states, Order: order}
 				// Count first, then build the bar: it needs its denominator at
 				// construction, and a run with nothing pending gets no bar at all.
 				pending, err := a.crawl.PendingCount(ctx, limit, filter)
@@ -217,6 +228,7 @@ retried on purpose:
 				var barWarned bool
 				return a.crawl.Fetch(ctx, crawl.FetchOptions{
 					Limit: limit, Batch: batch, Kinds: kinds, States: states,
+					Order: order, RandomSeed: randomSeed,
 					OnProgress: func(st crawl.FetchStats) {
 						if err := bar.Set(st.Attempted); err != nil && !barWarned {
 							// Once is enough: a bar that cannot render is not
@@ -240,6 +252,11 @@ retried on purpose:
 	cmd.Flags().StringSliceVar(&states, "state", nil,
 		"only fetch rows in these states: pending, failed, gone, skipped, fetched (repeatable). "+
 			"Default is pending plus failed rows under the retry limit; naming a state retries it however often it has been tried")
+	cmd.Flags().StringVar(&order, "order", store.OrderAsc,
+		"which end of the catalogue to visit first: asc, desc, random. "+
+			"random shuffles the whole selection once, so the sample is not biased toward the old end of the keyspace")
+	cmd.Flags().Int64Var(&randomSeed, "random-seed", 0,
+		"seed for --order random; 0 picks one and logs it at debug level, so a sample can be repeated later")
 	return cmd
 }
 
