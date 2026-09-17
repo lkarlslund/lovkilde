@@ -1,0 +1,391 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="id9d4356f9-98be-473e-91c0-bf8249812ab9" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2016/09/26/FOB.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="idca8ee47a-f47f-4201-8b82-f66d292f5b54">
+    <DocumentType>FOU H#LOKDOK53</DocumentType>
+    <Rank>O</Rank>
+    <AccessionNumber>O19800010070</AccessionNumber>
+    <DocumentId>AX023137</DocumentId>
+    <UniqueDocumentId>207863</UniqueDocumentId>
+    <DocumentTitle>Opholdstilladelse til gæstearbejders barn</DocumentTitle>
+    <Year>1980</Year>
+    <DiesSigni>1980-01-01</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2019-03-08</StartDate>
+    <EndDate REFid="submit_1">2019-03-08</EndDate>
+    <Status>Valid</Status>
+    <Number>100</Number>
+    <Subject>Almindelige emner</Subject>
+    <Ministry>Folketinget</Ministry>
+    <AdministrativeAuthority>Folketingets Ombudsmand</AdministrativeAuthority>
+  </Meta>
+  <TitelGruppe id="idf7ebff61-e54c-4af8-9c5a-ca7645af3cdf">
+    <Titel id="id6b4fe087-1c0b-4b00-8231-a3c7cc7708b6">
+      <Linea>
+        <Char>Opholdstilladelse til gæstearbejders barn</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="id7c53b3b2-6392-48eb-8f7c-f78ae5c84fc1">
+    <Resume id="id01d1a6fb-641a-461f-89db-3f6afed13af6">
+      <Exitus>
+        <Linea>
+          <Char>Anmodet justitsministeriet om at tage en sag om opholdstilladelse til et barn af en herboende pakistansk gæstearbejder op til fornyet overvejelse, selv om barnets moder fortsat boede i Pakistan.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus />
+      <Exitus>
+        <Linea>
+          <Char>(J.</Char>
+        </Linea>
+        <Linea>
+          <Char>nr. 1979-1455-613)</Char>
+        </Linea>
+      </Exitus>
+      <Exitus />
+    </Resume>
+    <TekstGruppe id="idf01a2b5b-8844-4d75-b59b-f3e78b78cd41">
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>A klagede over, at justitsministeriet havde tiltrådt en afgørelse fra tilsynet med udlændinge, hvorefter en ansøgning om opholdstilladelse til hans søn, B, der var født den 21. november 1962, blev afslået.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Det fremgik af sagen, at A indrejste her til landet i 1970, og at han siden 1976 havde haft tidsubegrænset opholds- og arbejdstilladelse.</Char>
+        </Linea>
+        <Linea>
+          <Char>Han havde 2 hustruer - som han var blevet gift med i Pakistan - nemlig C, som han blev gift med i 1960, og som stadig boede i Pakistan, og D, som han blev gift med i 1976, og som i 1978 fik opholdstilladelse her i landet.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>B er født i ægteskabet mellem A og C.</Char>
+        </Linea>
+        <Linea>
+          <Char>Han boede og havde altid boet i Pakistan ligesom sin moder.</Char>
+        </Linea>
+        <Linea>
+          <Char>I 1979 søgte B gennem ambassaden i Pakistan om opholdstilladelse her i landet, idet han ønskede at tage ophold her hos sin fader og at få arbejde her i landet.</Char>
+        </Linea>
+        <Linea>
+          <Char>Ambassaden forelagde sagen for tilsynet med udlændinge, der i skrivelse af 4. juli 1979 meddelte ambassaden, at ansøgningen om opholdstilladelse ikke kunne bevilges, »da reglerne om familiesammenføring ikke er opfyldt«.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Ved personlig henvendelse i justitsministeriet den 10. juli 1979 klagede A til ministeriet over tilsynets afgørelse.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Justitsministeriet indhentede i den anledning en udtalelse af 25. juli 1979 fra tilsynet med udlændinge, der henstillede, at tilsynets afgørelse af 4. juli 1979 blev fastholdt.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I skrivelse af 20. august 1979 meddelte justitsministeriet A, at ministeriet efter en gennemgang af sagen ikke fandt grundlag for at ændre tilsynets afgørelse.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I skrivelse af 3. september 1979 rettede A på ny henvendelse til justitsministeriet, idet han udbad sig en nærmere begrundelse for afslaget, herunder oplysning om, »hvad de regler om familiesammenføring, som (tilsynet med udlændinge) anfører ikke er opfyldt, måtte gå ud på«.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I skrivelse af 6. september 1979 meddelte justitsministeriet A, at den trufne afgørelse var i overensstemmelse med sædvanlig praksis, idet hans søn ikke opfyldte betingelserne for familiesammenføring, da hans moder ikke opholdt sig her i landet.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I skrivelse af 8. oktober 1979 meddelte A justitsministeriet, at ministeriets begrundelse undrede ham, idet han kunne nævne - og nævnte - en række eksempler på pakistanske statsborgere, der havde fået opholdstilladelse her i landet, uanset at »moderen hverken opholdt sig her i landet eller er ankommet sammen med børnene«.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Tilsynet med udlændinge afgav en udførlig redegørelse af 27. november 1979 vedrørende de eksempler, A havde nævnt på pakistanske statsborgere, der havde fået opholdstilladelse her i landet, uanset at moderen boede i Pakistan.</Char>
+        </Linea>
+        <Linea>
+          <Char>Redegørelsen viste, at i det omfang, de personer, A havde nævnt, kunne identificeres, drejede det sig om personer, der var indrejst her til landet før det såkaldte gæstearbejderstop af 29. november 1973.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Justitsministeriet meddelte derefter i skrivelse af 5. december 1979 A, at ministeriet efter en fornyet gennemgang af sagen måtte fastholde sin afgørelse af 20. august 1979.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I klagen til mig anførte A følgende:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>»…</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Jeg er helt klar over, at en sådan opholdstilladelse på nuværende tidspunkt kun gives efter en konkret vurdering (jfr.</Char>
+        </Linea>
+        <Linea>
+          <Char>Betænkning nr. 882 om udlændingelovgivningen, Administrative retningslinier, side 81, 3. afsn.), men jeg har i min sidste skrivelse til justitsministeriet netop henvist til en lang række familier, hvor en af forældrene har fået opholdstilladelse til deres særbørn, således at det tydeligt fremgår heraf, at det ikke er fremmedpolitiets sædvanlige praksis at afslå opholdstilladelse til særbørn generelt.</Char>
+        </Linea>
+        <Linea>
+          <Char>Ydermere fremgår det af ovennævnte betænkning, at denne anbefaler tværtimod, at særbørn skal have ret til opholdstilladelse.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>…«</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Tilsynet med udlændinge henviste i en udtalelse af 9. januar 1980 til tilsynets skrivelser af 27. november og 25. juli 1979 til ministeriet.</Char>
+        </Linea>
+        <Linea>
+          <Char>Tilsynet havde ikke fundet, at A's klage til mig gav tilsynet anledning til yderligere bemærkninger.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Justitsministeriet henholdt sig i en udtalelse af 17. januar 1980 til de tidligere trufne afgørelser.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I en skrivelse til justitsministeriet anførte jeg herefter følgende:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>»Nærmere retningslinjer for meddelelse af opholdstilladelse til udlændinge med pårørende her i landet blev fastsat i justitsministeriets skrivelse af 25. juni 1976 til tilsynet med udlændinge.</Char>
+        </Linea>
+        <Linea>
+          <Char>Efter afsnit 2, pkt. 1, i denne skrivelse kan der gives opholdstilladelse til børn under 20 år, hvis begge forældre opholder sig her i landet.</Char>
+        </Linea>
+        <Linea>
+          <Char>Der kan tillige gives opholdstilladelse til børn, hvis den herboende fader eller moder er enke/enkemand, fraskilt eller frasepareret og har forældremyndigheden over barnet.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Det ville således have været en fravigelse af disse retningslinjer for meddelelse af opholdstilladelse på grundlag af »familiesammenføring«, om der var blevet meddelt (A) opholdstilladelse.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>(A) har i skrivelse af 10. december 1979 til mig - som det fremgår af citatet ovenfor - henvist til udvalgsbetænkning nr. 882/1979 om udlændingelovgivningen (afgivet i september 1979 af justitsministeriets fremmedlovsudvalg).</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I det udkast til bekendtgørelse om udlændinges adgang til og ophold i landet, som er udarbejdet af udvalget (betænkningens s.</Char>
+        </Linea>
+        <Linea>
+          <Char>50 ff), foreslås ændrede regler om meddelelse af opholdstilladelse på grundlag af familiesammenføring.</Char>
+        </Linea>
+        <Linea>
+          <Char>Udkastets § 25, stk. 1, nr. 3 (betænkningens s.</Char>
+        </Linea>
+        <Linea>
+          <Char>56), indeholder følgende bestemmelse:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>»Til følgende udlændinge udstedes opholdstilladelse under hensyn til deres tilknytning til Danmark:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>…</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>3.</Char>
+        </Linea>
+        <Linea>
+          <Char>Mindreårigt barn af en her fast boende dansk eller udenlandsk statsborger eller dennes ægtefælle, når barnet bor hos forældremyndighedens indehaver.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>…«</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Bestemmelsen er nu optaget i § 25 i justitsministeriets bekendtgørelse nr. 196 af 23. maj 1980 om udlændinges adgang til ophold i Danmark (ikrafttrådt den 1. juni 1980).</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>(A) har i sin ovennævnte skrivelse til mig omtalt udvalgets bemærkninger til denne bestemmelse, der indeholdes i betænkningen, s.</Char>
+        </Linea>
+        <Linea>
+          <Char>81, hvori det bl.</Char>
+        </Linea>
+        <Linea>
+          <Char>a.</Char>
+        </Linea>
+        <Linea>
+          <Char>anføres:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>»…</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Forslaget medfører en udvidelse af adgangen til opholdstilladelse for børn, idet det hidtil har været en betingelse, at begge barnets forældre opholder sig i Danmark.</Char>
+        </Linea>
+        <Linea>
+          <Char>Efter forslaget er det tilstrækkeligt, at en af forældremyndighedens indehavere opholder sig her.</Char>
+        </Linea>
+        <Linea>
+          <Char>Forslaget giver endvidere ægtefællernes særbørn ret til opholdstilladelse.</Char>
+        </Linea>
+        <Linea>
+          <Char>Disse har hidtil kun fået opholdstilladelse efter en konkret vurdering.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>…</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Opholdstilladelse til børn er endvidere betinget af, at de pågældende </Char>
+          <Char formaChar="Italic">tager ophold</Char>
+          <Char> hos forældrene </Char>
+          <Char formaChar="Italic">(fremhævet af mig).</Char>
+        </Linea>
+        <Linea>
+          <Char>Hvis de efter kort tid flytter fra forældrene, er forudsætningerne for tilladelsen bortfaldet, og muligheden for at inddrage den for så vidt til stede.</Char>
+        </Linea>
+        <Linea>
+          <Char>Dette er man også veget tilbage for, da det efter danske forhold må anses for urimeligt at tvinge 18-20-årige børn til at blive boende hos forældrene.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>…«</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>(B) er under 18 år;</Char>
+        </Linea>
+        <Linea>
+          <Char>jeg går ud fra, at (A) har forældremyndighed over ham;</Char>
+        </Linea>
+        <Linea>
+          <Char>efter det oplyste vil (B) tage ophold hos (A).</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Det forekommer mig herefter mest nærliggende at antage, at (B), såfremt en bekendtgørelse i overensstemmelse med udvalgets udkast havde været gennemført på tidspunkterne for justitsministeriets afgørelser, ville have været omfattet af formuleringen i § 25, stk. 1, nr. 3.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Efter at justitsministeriet traf afgørelser i sagen og afgav udtalelse til mig, har justitsministeren i en besvarelse den 4. marts 1980 af et spørgsmål i folketinget (nr. 441 - fra Inge Krogh) udtalt,</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>»… at justitsministeriet allerede nu i det væsentligste administrerer efter de regler, som er foreslået i betænkningen.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>…«</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Efter at justitsministeriet afgav sin udtalelse i sagen til mig, har ministeriet udstedt den ovennævnte bekendtgørelse af 23. maj 1980, der - som nævnt - er trådt i kraft den 1. juni 1980.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>På denne baggrund har jeg fundet at burde anmode justitsministeriet om at ville tage sagen op til fornyet overvejelse og at ville meddele (A) en fornyet afgørelse, således at der herved tages stilling til betydningen af hans henvisning til udvalgsbetænkningen, jfr.</Char>
+        </Linea>
+        <Linea>
+          <Char>nærmere ovenfor (og til betydningen af den ovenfor omtalte bestemmelse i den nu foreliggende bekendtgørelse).</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Jeg udbeder mig underretning om den afgørelse, der træffes.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>For så vidt ministeriet måtte fastholde det tidligere meddelte afslag, går jeg ud fra, at ministeriet vil redegøre nærmere - også over for (A) - for begrundelsen herfor.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>…«</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Ved skrivelse af 4. juli 1980 gjorde justitsministeriet mig bekendt med, at ministeriet i en skrivelse af samme dato havde skrevet således til A:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>»Justitsministeriet foretager sig ikke videre i anledning af Deres henvendelse om opholdstilladelse til Deres søn (B), efter at tilsynet med udlændinge den 27. juni 1980 har meddelt, at man er villig til at meddele Deres søn opholdstilladelse, såfremt det dokumenteres, at Deres hustru (C), der fortsat har del i forældremyndigheden, er indforstået med, at Deres søn tager ophold i Danmark.«</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>Jeg meddelte herefter justitsministeriet og tilsynet med udlændinge, at jeg havde taget det oplyste til efterretning, og udbad mig oplysning om, hvad der videre skete i sagen.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd">
+        <Linea>
+          <Char>I skrivelse af 15. september 1980 meddelte tilsynet med udlændinge mig, at tilsynet i henhold til moderens indforståelse i en skrivelse af 7. august 1980 havde bemyndiget den danske ambassade i Islamabad til at meddele B opholds- og arbejdstilladelse i 6 måneder.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="NormalInd" />
+      <Exitus formaForma="NormalInd" />
+      <Exitus />
+    </TekstGruppe>
+  </DokumentIndhold>
+</Dokument>

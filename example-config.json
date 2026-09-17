@@ -1,0 +1,18 @@
+{
+  "data_dir": "/storage/retsinformation",
+  "site_base": "https://www.retsinformation.dk",
+  "harvest_base": "https://api.retsinformation.dk",
+
+  "harvest_interval": "12s",
+  "document_interval": "1.2s",
+
+  "max_retries": 6,
+  "backoff_base": "10s",
+  "backoff_max": "15m",
+  "backoff_jitter": 0.3,
+
+  "request_timeout": "60s",
+  "user_agent": "retsin-mirror/0.1 (open-data mirror; contact: you@example.com)",
+
+  "fetch_json": false
+}

@@ -1,0 +1,1405 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="ida678d2a5-bbbe-4e65-9776-8fe30b98070c" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2025/08/19/BEKH.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="id24af6216-2bd3-4ac3-a719-e34db87b4c43">
+    <DocumentType>BEK H#LOKDOK04</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20260078905</AccessionNumber>
+    <DocumentId>DU000157</DocumentId>
+    <UniqueDocumentId>257654</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om ansøgningspuljen til civilsamfundsindsatser målrettet ældre herboende grønlændere</DocumentTitle>
+    <Year>2026</Year>
+    <DiesSigni>2026-09-11</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2026-09-16</StartDate>
+    <EndDate REFid="submit_1">2026-09-17</EndDate>
+    <Status>Valid</Status>
+    <Number>789</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2026-09-16</DiesEdicti>
+    <Concerns id="concerns_1" />
+    <Ref_Accn REFid="concerns_1">A20251024916</Ref_Accn>
+    <Ref_Af REFid="concerns_1">2025-12-16</Ref_Af>
+    <Ref_Text REFid="concerns_1">Tekstanmærkninger til finansloven for finansåret 2026</Ref_Text>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Maria Berkowitz Wichmann</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Karen Moritz Hansen</Signature>
+    <PlaceOfSignature>Social- og Boligstyrelsen</PlaceOfSignature>
+    <JournalNumber>Socialmin.,\nSocial- og Boligstyrelsen, j.nr. 2026-3856</JournalNumber>
+    <Ministry>Socialministeriet</Ministry>
+    <AdministrativeAuthority>Social- og Boligstyrelsen</AdministrativeAuthority>
+  </Meta>
+  <TitelGruppe id="id487a2f51-2b7b-4488-9830-f7001bf91cea">
+    <Titel id="id952fea64-126a-4ce8-91f8-8053592db031">
+      <Linea>
+        <Char>Bekendtgørelse om ansøgningspuljen til civilsamfundsindsatser målrettet ældre herboende grønlændere</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="id227ad055-edeb-4c8c-9744-8e8575d1be23">
+    <Indledning id="id83dfc868-e29d-4213-ad72-a5198815c5e1">
+      <Exitus>
+        <Linea>
+          <Char>I medfør af tekstanmærkning nr. 100, stk. 1, ad 18.21.84. til § 18 på finansloven for finansåret 2026 fastsættes efter bemyndigelse i henhold til § 2, nr. 1 og 2, i bekendtgørelse nr. 510 af 16. maj 2023 om delegation af ældreministerens beføjelser i lov om udlodning af overskud fra lotteri og visse beføjelser i finansloven:</Char>
+        </Linea>
+      </Exitus>
+    </Indledning>
+    <Afsnit id="idd97cad2d-d2b0-40d1-abdc-7a47509d0fd2" localId="1">
+      <Kapitel id="ide75efdae-e354-4112-bebc-85c0260c62bf" localId="1">
+        <Explicatus>Kapitel 1</Explicatus>
+        <Rubrica id="id4e3bca7c-4d57-4cd6-83de-de8133568209">
+          <Linea>
+            <Char formaChar="Italic">Anvendelsesområde og kompetence</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="idc8f85208-6884-4858-8491-34b8af0e4c54" localId="1">
+            <Explicatus>§ 1.</Explicatus>
+            <Stk id="idf34d13b4-0a5a-49b7-925e-eca8c23cdbd9">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen finder anvendelse på Social- og Boligstyrelsens forvaltning af tilskud fra ansøgningspuljen til civilsamfundsindsatser målrettet ældre herboende grønlændere, jf. § 18.21.84.10. på finansloven for finansåret 2026.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id724bcf9c-1440-4696-b97f-08488cc93097" localId="2">
+            <Explicatus>§ 2.</Explicatus>
+            <Stk id="id4168b2ae-d686-47dc-9319-a36d487d55c1">
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan yde tilskud fra ansøgningspuljen til civilsamfundsindsatser målrettet ældre herboende grønlændere.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id61b25864-6ad4-44f3-856c-ef8acdf0ad36" localId="2">
+        <Explicatus>Kapitel 2</Explicatus>
+        <Rubrica id="ided9eed2c-32b8-4f72-8c13-ca55af06d6f2">
+          <Linea>
+            <Char formaChar="Italic">Ansøgerkreds, formål og målgruppe</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id17519fc7-42c3-497d-80da-9cfbb5f00b90" localId="3">
+            <Explicatus>§ 3.</Explicatus>
+            <Stk id="ida304cd63-37f6-430b-9498-a994b01f655d">
+              <Exitus>
+                <Linea>
+                  <Char>Ansøgningspuljens ansøgerkreds er civilsamfundsorganisationer og lokale fællesskaber på området, eventuelt i samarbejde med kommuner og private leverandører af hjemmepleje.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id0a9c2a69-1c10-4770-8179-c6e1d75752b1" localId="4">
+            <Explicatus>§ 4.</Explicatus>
+            <Stk id="id347a5774-d02e-46f5-bdbb-6d13cf4ede5f">
+              <Exitus>
+                <Linea>
+                  <Char>Ansøgningspuljens formål er at støtte civilsamfundsindsatser målrettet ældre grønlændere bosiddende i Danmark, som oplever eller er i risiko for at opleve ensomhed og social isolation.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idfc3d418a-87a9-44c0-b159-ad4f072a48e6" localId="5">
+            <Explicatus>§ 5.</Explicatus>
+            <Stk id="id294f4fb1-85e8-45c2-b715-723e9c7a4374">
+              <Exitus>
+                <Linea>
+                  <Char>Ansøgningspuljens målgruppe er ældre grønlændere bosiddende i Danmark, som oplever eller er i risiko for at opleve ensomhed eller social isolation.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id68b34a2f-87b3-4974-ac11-8ec8ea122bd4" localId="3">
+        <Explicatus>Kapitel 3</Explicatus>
+        <Rubrica id="idc2e124fc-dfe4-4bc6-846f-a682aa9a5f6d">
+          <Linea>
+            <Char formaChar="Italic">Krav for at opnå tilskud</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id5ee6305e-bcc5-4c16-9307-45e750247437" localId="6">
+            <Explicatus>§ 6.</Explicatus>
+            <Stk id="id247f6ea4-34af-43d3-81bd-212692031d02">
+              <Exitus>
+                <Linea>
+                  <Char>Der gælder følgende krav for at opnå tilskud fra ansøgningspuljen:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id2909273e-9903-4d89-a961-9956441b75a4">
+                <Index>
+                  <Indentatio id="idf4b9513f-f630-410f-bedf-87ad6ec9b204" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Projektets ansøger, formål og målgruppe skal ligge inden for ansøgningspuljens ansøgerkreds, formål og målgruppe.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id067fc5a4-20b3-4dac-b6d2-8368010f44f6" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Projektets aktiviteter og tidsplan skal bidrage til opfyldelse af projektets formål.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id2f339779-4736-42db-85fb-5a4a6bae5e7b" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Projektets organisering skal understøtte gennemførelsen af projektet.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idc6d59a1a-bac4-4674-809e-9faf9c96a9f7" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Ansøger skal have relevant viden om, erfaring med eller kendskab til målgruppen.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id19425135-a5aa-4d5d-878d-62babec0b2c5" formaInd="Nummer">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Ansøger skal have en plan for opsporing og rekruttering af målgruppen til indsatsen.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id3a6b88c9-5566-4c19-8df6-bf309bd31a98" formaInd="Nummer">
+                    <Explicatus>6)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Ansøger skal inddrage målgruppens perspektiv i de initiativer, der søges støtte til.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id256752dc-83a0-4b47-8986-63a0e8b70d3d" localId="7">
+            <Explicatus>§ 7.</Explicatus>
+            <Stk id="id6232348e-0f91-4a94-a4f5-415afce1d0fd">
+              <Exitus>
+                <Linea>
+                  <Char>Der skal være sammenhæng mellem projektets formål, målgruppe, opfyldelse af krav i § 6, aktiviteter, organisering, tidsplan og budget.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idc6e908de-68c2-4938-8060-df7066b009e2" localId="8">
+            <Explicatus>§ 8.</Explicatus>
+            <Stk id="idcd937f33-cd35-4bed-94ab-bf18ec58bce9">
+              <Exitus>
+                <Linea>
+                  <Char>Der gælder følgende krav til udarbejdelse af projektets budget:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="ida399f0fc-1d88-4b60-8347-3ae2bf57a638">
+                <Index>
+                  <Indentatio id="id679c3fcc-76e1-49e7-918d-f7c4fdd9751b" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Budgettet skal udgøre en fyldestgørende beskrivelse af projektets forventede udgifter, som er afstemt i forhold til projektets aktivitetsniveau, tidsplan og organisering.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id9c72a66e-9b70-4ce4-a5f1-dd16e7d79b48" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Budgettet skal være sandfærdigt, realistisk og sparsommeligt.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idd30049c7-9dcd-43be-8c92-0d4108599b99" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Udgifterne skal specificeres i budgettet og kan ikke samles i overordnede budgetposter.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id287551e2-7ed5-425f-8d54-0d0bc22e1c93" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Udgifterne i budgettet skal fordeles på kvartaler i det projektår, hvor udgiften forventes afholdt.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id52c723c7-44c9-40df-a180-da4e1cc638d5" formaInd="Nummer">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Budgettet skal indeholde alle forventede indtægter fra salg eller lignende fra gennemførelsen af projektet.</Char>
+                      </Linea>
+                      <Linea>
+                        <Char>Hvis indtægten delvist er tilvejebragt ved aktiviteter, der ligger uden for projektet, skal indtægten indregnes forholdsmæssigt ud fra en aktivitets- eller udgiftsmæssig fordeling af indtægten.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id518c3843-f8c8-4942-b84e-54a2fadf048a" localId="9">
+            <Explicatus>§ 9.</Explicatus>
+            <Stk id="idcd1e343c-fb15-40f5-a579-906c22da236d">
+              <Exitus>
+                <Linea>
+                  <Char>Ansøger skal oplyse, hvis der er økonomiske interesser mellem ansøger og projektets samarbejdspartnere.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id67f1d688-14bd-4a60-873d-73ac39d240f7" localId="10">
+            <Explicatus>§ 10.</Explicatus>
+            <Stk id="id09cccbed-4080-4a22-ac11-9d71e1809b56">
+              <Exitus>
+                <Linea>
+                  <Char>Projektets gennemførelse må ikke være afhængig af, om der opnås tilskud fra anden side til projektet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id5424fa9f-eb71-47df-bbe4-4fe1e083a122" localId="4">
+        <Explicatus>Kapitel 4</Explicatus>
+        <Rubrica id="id1dfcd460-26b7-46f8-a074-8dd403d5c4d5">
+          <Linea>
+            <Char formaChar="Italic">Tilskudsberettigede udgifter</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id141f1985-accd-46ee-8617-ad27c217330d" localId="11">
+            <Explicatus>§ 11.</Explicatus>
+            <Stk id="id0d11820e-a1d7-4041-9e63-ba67e1944e33">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskud ydes til enten hel eller delvis dækning af projektrelaterede udgifter, som ansøger afholder eller påtager sig efter tilsagn om tilskud.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id455b718f-d1bd-417d-bc81-7e537e90df96">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Udgifter skal være afholdt, bogført, godkendt i henhold til regnskabskrav for tilskuddet og betalt.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id6331f8f0-92d5-4fda-b79f-b139dceea534">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Tilskud kan i særlige tilfælde ydes til dækning af projektrelaterede udgifter, som ansøger har afholdt eller påtaget sig, før tilsagnet om tilskud, hvis udgifterne er åbenbart knyttet til projektet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id5b20b575-617c-40ac-9743-744c6bd2f84d">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Tilskud ydes alene i det omfang, der ikke er opnået eller senere opnås tilskud fra anden side til dækning af de budgetposter, som har opnået tilsagn om tilskud fra ansøgningspuljen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id4733749c-0e15-4be3-ba03-be154eede4d4">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ydes der tilskud til løn til medarbejdere i projektet, skal det ske under følgende forudsætninger:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id2a2089fa-d9e7-4863-8be9-cd34e957f4ca">
+                <Index>
+                  <Indentatio id="id2af24787-24b5-4c47-8d94-651f30a5438c" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Timesatsen beregnes ud fra en årsnorm på 1.649 timer, og der skal foreligge dokumentation for faktisk anvendte timer.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id78f97536-027d-42cb-95cd-07b5443402f0" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Lønnen skal indregnes med den direkte løn, der kan henføres til medarbejderen.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="iddf8bd216-afc6-4657-9e3d-0e5c9d6a955c" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Lønniveauet må ikke være højere end det, der er aftalt i overenskomster for arbejdet på området.</Char>
+                      </Linea>
+                      <Linea>
+                        <Char>Hvis området ikke er dækket af en overenskomst, må lønniveauet ikke være højere end det, der er aftalt i de statslige overenskomster for lignende arbejde.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="id3392ccee-89ba-4d20-8824-3eef120190f7">
+              <Explicatus>Stk. 6.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Indkøbes der materiel, skal dette ske under hensyn til forsvarlig økonomisk forvaltning, herunder på sagligt grundlag og uden private interessehensyn m.v.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id613d93ad-1a35-4141-a397-0d8df7180474">
+              <Explicatus>Stk. 7.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ydes der tilskud til transport, skal transportudgifter opgøres efter statens regler, jf. cirkulære om Tjenesterejseaftalen og Personale Administrativ Vejledning.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Udgiften til transport i egen bil kan højst udgøre statens lave takst pr. km.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idb95b3bee-e72e-40b2-8afd-c929d9d9a66a">
+              <Explicatus>Stk. 8.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Der ydes tilskud til momsudgifter, hvis ansøger ikke er omfattet af en momskompensationsordning eller på anden vis kan få dækket eller afløftet momsen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idda63d1ff-0143-4ae9-904c-de3e7ccf7ac6" localId="12">
+            <Explicatus>§ 12.</Explicatus>
+            <Stk id="idb792342b-a5d0-4132-96a3-b3b10e9ada52">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskud ydes ikke til dækning af følgende udgifter:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="ide10b606d-940f-4041-bb2c-39653dbb2466">
+                <Index>
+                  <Indentatio id="id18c4da0e-ffbb-46e7-a971-4485642f9d43" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Køb af materiel over 50.000 kr. pr. år.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id8484e02d-9943-448e-9386-08c720df47f9" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Køb af fast ejendom.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id12d18762-01ce-4958-85e1-4fcadf489927" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Anlægsudgifter, herunder ombygning og renovering.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idc6f2429b-8a37-4436-9b6f-a90673be51fd" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Dækning af underskud eller anden gæld.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id4bbd81b1-da22-4b8d-b482-afea3b5ffdbd" formaInd="Nummer">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Støtte til enkeltpersoners underhold, herunder vouchers, gavekort og gaver.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idb02c0b18-4059-42a6-92a2-06441bb1540b" formaInd="Nummer">
+                    <Explicatus>6)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Udgifter, der fuldt ud er finansieret fra anden side.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="ide362ce0b-fe5a-40a4-944d-4a8e1f834d6d" formaInd="Nummer">
+                    <Explicatus>7)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Generelle uddannelses- og kursusaktiviteter.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idf07022cb-872c-4eba-a21e-e9b84ea779bb" formaInd="Nummer">
+                    <Explicatus>8)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Overhead, administrationsbidrag og uforudsete udgifter.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="ideb9f8178-74a9-4117-a647-4dc936c522a6" formaInd="Nummer">
+                    <Explicatus>9)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Aktiviteter eller tilsvarende for personer uden lovligt ophold i Danmark.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idbff72cff-f60f-4962-a132-482670c066a9" formaInd="Nummer">
+                    <Explicatus>10)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Projekter forankret i udlandet, i Grønland eller på Færøerne.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="idf03d08e0-c163-42c6-aff0-db04cdc51fbc" localId="5">
+        <Explicatus>Kapitel 5</Explicatus>
+        <Rubrica id="idd7e35296-e75d-4917-9e93-d4ba8c9a5011">
+          <Linea>
+            <Char formaChar="Italic">Ansøgning om tilskud og indsendelse af oplysninger</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id393e7979-6b59-47a1-bcbc-6805a0aaaaa8" localId="13">
+            <Explicatus>§ 13.</Explicatus>
+            <Stk id="idad5693b3-6abc-49ef-a115-f05a2854c3c2">
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen fastsætter krav til ansøgning om tilskud og indsendelse af oplysninger, herunder ansøgningsfrist.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Kravene offentliggøres på Social- og Boligstyrelsens hjemmeside.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idb90c7d31-65dd-4b05-9597-23c90cddca34" localId="14">
+            <Explicatus>§ 14.</Explicatus>
+            <Stk id="id17aa24de-5999-494e-af66-ee0ac4060540">
+              <Exitus>
+                <Linea>
+                  <Char>Offentlige myndigheder og offentlige institutioner m.v. skal indgive ansøgning om tilskud og indsende oplysninger ved anvendelse af Social- og Boligstyrelsens tilskudsportal.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id908baf02-f581-4fa2-b5b1-599f541999b7">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Private ansøgere kan indgive ansøgning om tilskud og indsende oplysninger ved anvendelse af Social- og Boligstyrelsens tilskudsportal.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id4897cb33-e111-4335-829d-72bad44bba62">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ansøgning om tilskud fra ansøgningspuljen skal indgives på den ansøgningsblanket og i det budgetskema, som Social- og Boligstyrelsen har udarbejdet til ansøgningspuljen efter denne bekendtgørelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Til ansøgningen skal vedlægges de bilag, der fremgår af ansøgningsmaterialet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id4a8c9e6a-bcd9-480e-9ce9-9d4ed78e4cea">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ved indsendelse af oplysninger skal tilskudsmodtager overholde eventuelle formkrav, herunder anvende de skemaer og blanketter, som Social- og Boligstyrelsen stiller til rådighed på hjemmesiden.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="ida19438e7-7053-4a4c-9d6f-6174735c64d4" localId="15">
+            <Explicatus>§ 15.</Explicatus>
+            <Stk id="idd76490b8-64ed-4b30-a7fd-5463eb30ebf4">
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan afvise ansøgninger og indsendte oplysninger, som ikke overholder de krav, der fremgår af §§ 13 og 14.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id92f5b8ad-8b9f-4b00-ad21-be3dbbe70843" localId="6">
+        <Explicatus>Kapitel 6</Explicatus>
+        <Rubrica id="id073bee10-56ad-4d72-a744-3fb7968662d6">
+          <Linea>
+            <Char formaChar="Italic">Udbetaling af tilskud</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Rubrica id="id66805f09-88a4-4649-8ad3-2c2e7871b4a6">
+            <Linea>
+              <Char formaChar="Italic">Rateudbetaling</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id1fa4e701-b780-49aa-abf4-cf50075bdcb5" localId="16">
+            <Explicatus>§ 16.</Explicatus>
+            <Stk id="idaebb336d-5f1c-46ca-a882-3241638449dd">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskud udbetales i rater henover projektperioden i overensstemmelse med det godkendte budget.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id5ccd5f22-a52f-4f02-a2f5-c9a486dc7e69">
+            <Linea>
+              <Char formaChar="Italic">Anmodning om udbetaling og udbetalingskonto</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="idff09df17-bfec-41df-b2cc-2b61e9351b15" localId="17">
+            <Explicatus>§ 17.</Explicatus>
+            <Stk id="idd160c82e-4274-4fcb-8b7e-07ee6c389430">
+              <Exitus>
+                <Linea>
+                  <Char>Udbetaling af tilskud igangsættes, når tilskudsmodtager har opfyldt vilkårene for udbetaling af tilskuddet, og Social- og Boligstyrelsen har modtaget en accept fra tilskudsmodtager om modtagelse af tilskuddet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc84cdfc3-1fb0-4d08-ad94-3b3c07c0cab3">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtagers accept om modtagelse af tilskuddet skal være modtaget i Social- og Boligstyrelsen i henhold til den frist, som er fastsat i tilsagnet om tilskud.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Hvis accepten ikke er modtaget i Social- og Boligstyrelsen inden for fristen, kan Social- og Boligstyrelsen lade tilskuddet bortfalde, jf. § 38, stk. 1, nr. 1, jf. § 37, stk. 1, nr. 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="idd371d521-7278-491a-875c-a5ae66c8329b" localId="7">
+        <Explicatus>Kapitel 7</Explicatus>
+        <Rubrica id="idf95adb25-7703-4717-8a5d-daf324ef19e0">
+          <Linea>
+            <Char formaChar="Italic">Ændringer i projektet</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Rubrica id="id7e0fc3e4-c09a-42bc-b881-bd115ac307bb">
+            <Linea>
+              <Char formaChar="Italic">Budget- og projektændring</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id81b5d6ad-1ebc-4b91-9c37-1eb6b83c4545" localId="18">
+            <Explicatus>§ 18.</Explicatus>
+            <Stk id="id693db016-6b25-428a-a642-eca7cc9007f6">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager skal forud for en budget- eller projektændring indhente en godkendelse fra Social- og Boligstyrelsen på baggrund af en skriftlig begrundet anmodning, jf. dog stk. 2 og 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc4682703-9b63-46a3-9b5e-de33a2a65f97">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager kan foretage budgetændringer på op til 10 pct. af en budgetpost inden for et projektår uden forudgående godkendelse fra Social- og Boligstyrelsen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idcc69b251-aba6-4e05-9d91-75168d58315a">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager kan uden forudgående godkendelse fra Social- og Boligstyrelsen overføre et uforbrugt tilskud til det efterfølgende projektår, hvis det uforbrugte tilskud udgør mindre end 10 pct. af tilskuddet i projektåret, dog maksimalt 100.000 kr. Tilskuddet skal fortsat anvendes inden for den samlede tilskudsperiode, som er fastsat i tilsagnet om tilskud.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id7ef3e55f-87bd-44bd-8670-4fc398154c67">
+            <Linea>
+              <Char formaChar="Italic">Projektforlængelse</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id6caeb4ff-8dce-42ac-9c79-d7328afe0f33" localId="19">
+            <Explicatus>§ 19.</Explicatus>
+            <Stk id="idf41181ad-5853-448c-bd70-c420685a99d2">
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan på baggrund af en skriftlig begrundet anmodning fra tilskudsmodtager i særlige tilfælde godkende en projektforlængelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id4700fd95-9e2d-4340-b72f-0e6c746f2862">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>En anmodning om projektforlængelse skal indsendes til Social- og Boligstyrelsen inden udgangen af den fastsatte projektperiode.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id6f722b42-471a-4a44-8fa2-33d18601b187">
+            <Linea>
+              <Char formaChar="Italic">Overdragelse af tilskuddet</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="ida62b6c8b-7449-478a-acc8-884b2c26b52b" localId="20">
+            <Explicatus>§ 20.</Explicatus>
+            <Stk id="id08b1439e-9261-477e-8257-0bef0c361a8f">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskuddet kan ikke overdrages til en ny tilskudsmodtager, jf. dog stk. 2.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idd5cdf457-5480-4776-a2e1-50020ae5df8f">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan i særlige tilfælde og på baggrund af en skriftlig begrundet anmodning fra tilskudsmodtager overdrage tilskud til en ny tilskudsmodtager.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="idc42d4bf2-183d-455c-9dc1-fcea1b2db742" localId="8">
+        <Explicatus>Kapitel 8</Explicatus>
+        <Rubrica id="id41e151c8-b508-48fe-831a-e9e316953680">
+          <Linea>
+            <Char formaChar="Italic">Faglig afrapportering</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id7a5f1192-9f6a-4818-93cd-b3ac5e0a9c0d" localId="21">
+            <Explicatus>§ 21.</Explicatus>
+            <Stk id="id05159c07-e510-464e-875d-3287a958178c">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager skal indsende faglig afrapportering til Social- og Boligstyrelsen i henhold til de perioder og frister, som er fastsat i tilsagnet om tilskud.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="iddcf29ac7-b066-4c7d-b85f-8c3ae99adde0" localId="22">
+            <Explicatus>§ 22.</Explicatus>
+            <Stk id="ida9792e1f-b121-439b-861e-3829b4405038">
+              <Exitus>
+                <Linea>
+                  <Char>Den faglige afrapportering skal udarbejdes i overensstemmelse med de krav, som er fastsat i tilsagnet om tilskud, herunder i det skema som Social- og Boligstyrelsen har udarbejdet til brug for ansøgningspuljen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idb5428f93-d5dd-42d0-9abf-128c9c4afd81">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den faglige afrapportering skal underskrives af tilskudsmodtager.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id57d57c84-e010-4d35-b539-a28a7711ef3f">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan indkalde grunddokumentation for den faglige afrapportering.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id51a3870c-41ba-4d12-a8fb-5932cbcbe0f2" localId="9">
+        <Explicatus>Kapitel 9</Explicatus>
+        <Rubrica id="id1578fad5-0f03-414e-b7bd-b494ba925006">
+          <Linea>
+            <Char formaChar="Italic">Regnskabsaflæggelse og revisionspåtegning af regnskab</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Rubrica id="id6283060e-7972-4e0a-8cd6-6a732cb02536">
+            <Linea>
+              <Char formaChar="Italic">Generelle krav til regnskabsaflæggelsen</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="idda9a4762-3c93-4f9a-a5c6-4b6f18bcb7d0" localId="23">
+            <Explicatus>§ 23.</Explicatus>
+            <Stk id="id16258e04-1020-41b9-b57b-6dacd758649d">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager skal indsende regnskab til Social- og Boligstyrelsen i henhold til de perioder og frister, som er fastsat i tilsagnet om tilskud.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id514ea3f1-ada5-47ac-902e-097cfd9721ea" localId="24">
+            <Explicatus>§ 24.</Explicatus>
+            <Stk id="id300df899-bd39-4668-870d-62540c45dc5f">
+              <Exitus>
+                <Linea>
+                  <Char>Regnskabet skal udarbejdes i overensstemmelse med de krav, som er fastsat i tilsagnet om tilskud, og opfylde følgende krav:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id9be8caec-91f2-431b-8547-90db515d6891">
+                <Index>
+                  <Indentatio id="id60a1cec1-ed0a-41fa-b886-9337fa5b3c37" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Tilskudsmodtager skal anvende det regnskabsskema, som Social- og Boligstyrelsen har udarbejdet til brug for ansøgningspuljen.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="iddc240075-4140-4254-ab74-3d90b6e7f348" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Tilskuddet skal være opført som en særskilt indtægtspost.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idbd4887d2-9017-411f-88d1-e59f9ec84e97" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Tilskuddet skal være anvendt i den godkendte projektperiode.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id526b07bb-9999-47a0-8384-ef5b596968a7" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Tilskudsfinansierede aktiviteter skal afholdes i projektperioden.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id166f6df5-f66b-4985-82f6-1fc0b8bce083" formaInd="Nummer">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Udgifter, der er afholdt af tilskuddet, skal være specificeret på samme måde som i det budget, Social- og Boligstyrelsen senest har godkendt.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="iddab2b11a-33f9-4bac-9095-9b6fe093e5b6" formaInd="Nummer">
+                    <Explicatus>6)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Eventuelle indtægter skal opføres som særskilte indtægtsposter, herunder salg af genstande indkøbt i eller produceret som følge af projektet, eller den regnskabsmæssige værdi af indkøbt materiel efter afskrivninger, såfremt der skal ske returbetaling, jf. § 34.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="idb9522574-a7a9-45de-b133-814320cf5f86">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Regnskabet skal underskrives af tilskudsmodtager.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id5df6483f-bca9-4c5b-90b7-71e70521423d">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan indkalde grunddokumentation for de afholdte udgifter.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id0b1e2349-8f23-437a-8aee-8c86b6fe3fc2">
+            <Linea>
+              <Char formaChar="Italic">Revisionspåtegning af regnskab</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id480a82e1-2075-4005-a9be-1107cfd5cd97" localId="25">
+            <Explicatus>§ 25.</Explicatus>
+            <Stk id="id56d09e3c-fd12-4dee-8e41-a51774e1fa9c">
+              <Exitus>
+                <Linea>
+                  <Char>Regnskabet skal revideres og påtegnes af en godkendt revisor, jf. dog stk. 2 og 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id0ab4dca5-5c77-4939-af7c-885bdca8ec31">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Regnskaber for tilskud til og med 100.000 kr. skal ikke revideres.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Tilskudsmodtager skal med regnskabet fremsende oversigt over bilag og dokumentation for faktisk anvendte løntimer.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id494801a1-9069-48b8-81ca-86c68a6bd455">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Statsinstitutioner og andre institutioner m.v., hvis regnskaber revideres af Rigsrevisionen i medfør af lov om revisionen af statens regnskaber m.m. (rigsrevisorloven) eller bestemmelser i anden lovgivning, er ikke omfattet af kravet om revision ved en godkendt revisor efter stk. 1.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="ida26dadd8-fbc7-4a82-8dca-ba2ad4e4c494" localId="26">
+            <Explicatus>§ 26.</Explicatus>
+            <Stk id="id28f831d7-cacd-4f5d-b2ce-12f656694e70">
+              <Exitus>
+                <Linea>
+                  <Char>Revisionen skal udføres af en person, der er godkendt som statsautoriseret eller registreret revisor efter lov om godkendte revisorer og revisionsvirksomheder (revisorloven).</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id9ba7de18-8ef1-4c3f-98f2-86d7770237d6">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Revisionen skal udføres efter aftale mellem tilskudsmodtager og den godkendte revisor.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id461bf365-5741-4c4b-99c4-d7e70a148519">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Revisor skal påse, at forudsætningerne for, at revisor kan acceptere og gennemføre opgaven, er opfyldt.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Tilskudsmodtager skal give revisor de oplysninger, som må anses at have betydning for revisors opgave.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idcacef24d-4a50-4439-996c-9e6d6d176c7b">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>De vilkår for revisors opgave, der følger af denne bekendtgørelse, kan ikke tilsidesættes ved aftale mellem revisor og tilskudsmodtager.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idf97bb906-fbd6-4c0e-a775-daf66753c47d" localId="27">
+            <Explicatus>§ 27.</Explicatus>
+            <Stk id="id90bb196e-c507-4246-9ad5-e687857d1fef">
+              <Exitus>
+                <Linea>
+                  <Char>Den godkendte revisors opgave angår det regnskab, som udarbejdes af tilskudsmodtager i henhold til kravene om regnskabet i denne bekendtgørelse og tilsagnet om tilskud.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id5cd87f5d-a81d-45bc-ae14-2f5bb28ceca7">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Revisionen omfatter regnskabet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Regnskabet udarbejdes til brug for Social- og Boligstyrelsen med det formål at give Social- og Boligstyrelsen et sikkert grundlag for kontrol med tilskuddets anvendelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Regnskabet skal være rigtigt og udarbejdet i overensstemmelse med retningslinjerne i bekendtgørelsen, herunder at regnskabets oplysninger om gennemførte aktiviteter og opnåede resultater er korrekte, og at de indtægter og udgifter, der indgår i regnskabet, er opnået og afholdt i overensstemmelse med de fastsatte generelle og individuelle betingelser for opnåelsen af tilskud.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idcc0e8bd0-6d6e-4652-ad1d-3340c4a3e0a4" localId="28">
+            <Explicatus>§ 28.</Explicatus>
+            <Stk id="id658b7dc0-759f-4846-99b2-d7e9faace70e">
+              <Exitus>
+                <Linea>
+                  <Char>Revisionen skal udføres i overensstemmelse med internationale standarder om revision og de yderligere krav, der er gældende i Danmark, samt standarderne for offentlig revision.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Standarderne for offentlig revision præciserer de særlige krav til en revision af et tilskudsregnskab, der følger af god offentlig revisionsskik, således som dette begreb er fastlagt i § 3 i lov om revisionen af statens regnskaber m.m. Dette indebærer, at revisor gennemfører juridisk-kritiske revisioner og forvaltningsrevisioner som led i opgaven.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idfa78cc20-21e2-4de9-88c8-e735742b65d1" localId="29">
+            <Explicatus>§ 29.</Explicatus>
+            <Stk id="id835f64b0-3fdd-4169-9808-bbbd7a3e7cb4">
+              <Exitus>
+                <Linea>
+                  <Char>For tilskud over 500.000 kr. skal revisor efterprøve, om:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id5378f8d6-70c1-43d5-bf30-7f94b23e53db">
+                <Index>
+                  <Indentatio id="id1dc9c7c3-caa1-40ad-bdf2-3afe0fa9d439" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>De oplysninger, som tilskudsmodtager har meddelt Social- og Boligstyrelsen om opfyldelse af resultatkravene, er dokumenterede.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id71e81013-3968-4adf-a9ee-4a6f12903855" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Tilskudsmodtagers ledelse har foretaget en faglig afrapportering, jf. §§ 21 og 22, og at de data, der ligger til grund herfor, er pålidelige.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id2b0782d7-4933-40ae-8f8b-856bb5594680" localId="30">
+            <Explicatus>§ 30.</Explicatus>
+            <Stk id="idc915cfaa-16e4-496d-8bc9-d08477558f50">
+              <Exitus>
+                <Linea>
+                  <Char>Revisor skal udarbejde en erklæring om den udførte revision, hvoraf det skal fremgå, at opgaven er udført på grundlag af bestemmelserne i denne bekendtgørelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id1a9054cd-27c1-4105-952d-2706eb384c57">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Revisor skal oplyse i erklæringen, at revisor har udført sin revision i overensstemmelse med internationale standarder om revision og de yderligere krav, der er gældende i Danmark, samt standarderne for offentlig revision.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id97e96506-0ed9-4431-8775-802e06989c5d" localId="31">
+            <Explicatus>§ 31.</Explicatus>
+            <Stk id="id0347562d-e16b-41af-a20b-e3266017ee69">
+              <Exitus>
+                <Linea>
+                  <Char>Revisor skal udarbejde et protokollat, der skal indeholde de oplysninger, som revisor skriftligt kommunikerer til tilskudsmodtagerens øverste ledelse som led i opgaven.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idb06e8f03-deed-4f79-bda6-05bfa67a89a4">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Protokollatet skal indeholde revisors rapportering af konklusionerne af alle juridisk-kritiske revisioner og forvaltningsrevisioner, som revisor gennemfører i overensstemmelse med standarderne for offentlig revision.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idb6ddb439-02da-412b-9cc3-f02fa8a949dc">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Revisor skal påse, at tilskudsmodtager indsender en genpart af protokollaterne til Social- og Boligstyrelsen sammen med revisors erklæring og det reviderede regnskab.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id8c335450-e987-4219-84e7-74fdca4bbd89" localId="32">
+            <Explicatus>§ 32.</Explicatus>
+            <Stk id="id4dc06993-2be3-44f4-8655-6e731a93089c">
+              <Exitus>
+                <Linea>
+                  <Char>Bliver revisor opmærksom på lovovertrædelser eller tilsidesættelser af forskrifter af væsentlig betydning i forbindelse med tilskuddets forvaltning, skal revisor straks give tilskudsmodtager meddelelse herom og påse, at tilskudsmodtager straks giver Social- og Boligstyrelsen meddelelse herom.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Indsender tilskudsmodtager ikke meddelelse efter 1. pkt., skal revisor orientere Social- og Boligstyrelsen om overtrædelserne eller tilsidesættelserne.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Revisors bemærkninger til lovovertrædelser eller tilsidesættelser af forskrifter af væsentlig betydning indsendes sammen med meddelelsen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idd9173eeb-3c3c-4619-a5d9-53980e48390d">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Bliver revisor opmærksom på, at gennemførelsen af det projekt eller den samlede aktivitet, hvortil der ydes tilskud, er usikker af økonomiske eller andre årsager, eller agter revisor at fratræde opgaven, fordi forudsætningerne for gennemførelsen af en revision i overensstemmelse med gældende etiske og faglige krav og standarder ikke længere er til stede, og dette skyldes forhold hos tilskudsmodtageren, skal revisor straks give tilskudsmodtager meddelelse herom og påse, at tilskudsmodtager straks giver Social- og Boligstyrelsen meddelelse herom.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id0c1c288e-7783-49d8-bd5a-f950b30e53b6" localId="10">
+        <Explicatus>Kapitel 10</Explicatus>
+        <Rubrica id="id644376f6-abe1-4416-853c-aac9067b1722">
+          <Linea>
+            <Char formaChar="Italic">Opbevaringstid for dokumentation</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="idca6ce447-8d96-4d68-989f-b7378fe01d27" localId="33">
+            <Explicatus>§ 33.</Explicatus>
+            <Stk id="id2e2e86ea-ac96-42ba-b390-785046ec789c">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager skal opbevare dokumentation for gennemførelse af projektet i mindst 5 år regnet fra udgangen af det kalenderår, hvor projektets sidste regnskab eller faglige slutrapportering afgives.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id093326bf-8cef-4d69-a9bc-aa520f499123" localId="11">
+        <Explicatus>Kapitel 11</Explicatus>
+        <Rubrica id="id4437e4f9-bd05-4b47-bd03-c6bc449287bc">
+          <Linea>
+            <Char formaChar="Italic">Projektets anskaffede materiel ved projektophør</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="idca30d0fb-6a92-44b3-add4-d55b4e078b34" localId="34">
+            <Explicatus>§ 34.</Explicatus>
+            <Stk id="id2662e016-9861-4266-87ae-10158d45ddfd">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager skal tilbagebetale modtaget tilskud til materiel.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Beløbet, der skal tilbagebetales skal svare til den regnskabsmæssige værdi efter afskrivning.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Afskrivningen skal afspejle forbruget af materiellet med anvendelse af levetider på aktiver efter almindelig god regnskabspraksis, jf. dog stk. 2 og 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id3fe573fa-7461-4b1d-9dd8-eae99f03106f">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan godkende, at tilskudsmodtager ikke skal tilbagebetale tilskud til materiel, hvis:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id7161b6f3-46d4-4219-8f11-9577bd8dd106">
+                <Index>
+                  <Indentatio id="id38433796-1b0b-42f5-acf4-c4e7ec56cb91" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Det samlede anskaffelsesbeløb for projektets indkøbte materiel er mindre end 10.000 kr.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id54e89eda-55f6-48b6-a9b9-4960a7b09146" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Materiellet, som en del af projektets formål, er forudsat at skulle anvendes efter projektets gennemførelse.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id876800d6-1073-4c6f-94b2-9606d0fccb1f" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Materiellet anvendes til lignende aktiviteter efter projektets gennemførelse.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="id7f36bca9-887e-4a4a-83aa-d53349a45e4c">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan i særlige tilfælde, herunder ved materiel af større værdi, beslutte, at tilskudsmodtager skal opgøre markedsværdien af materiellet ved projektperiodens udløb</Char>
+                  <Char formaChar="Italic">.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Markedsværdien skal dokumenteres ved en sagkyndig eller uvildig ekstern vurdering.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="idea00a6bb-9c5b-4d57-9ecf-4486432ec9cd" localId="12">
+        <Explicatus>Kapitel 12</Explicatus>
+        <Rubrica id="idca8958dc-39a5-4c4d-81ed-4266bc134563">
+          <Linea>
+            <Char formaChar="Italic">Underretnings- og dokumentationspligt</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="idd85a24a1-08f2-4a29-9343-e934050b475f" localId="35">
+            <Explicatus>§ 35.</Explicatus>
+            <Stk id="id2ffae246-4e27-4d5d-a5bb-7d54b0094466">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskudsmodtager skal straks underrette Social- og Boligstyrelsen skriftligt, hvis:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id2f59e6c4-6d7d-43b2-9efa-5ab0668d5bf7">
+                <Index>
+                  <Indentatio id="idd3ca3240-191a-4f62-a971-5c97f71e1212" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Tilskudsmodtager bliver bekendt med forhold, der kan medføre suspension, bortfald eller tilbagebetaling af tilskud, jf. §§ 37-39.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id5b238b10-9733-4b5d-88ff-468486d31126" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Tilskudsmodtager skifter revisor i løbet af projektperioden, og projektperioden overstiger 1 år.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id8be45ad6-d0bf-4a54-9bc5-36de35855421" localId="36">
+            <Explicatus>§ 36.</Explicatus>
+            <Stk id="id90984996-b126-4934-b595-8fd1f090a6d9">
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan pålægge tilskudsmodtager at dokumentere, at betingelserne for tilskud er opfyldt.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id7b5fffa6-702e-4a7d-9fee-646225ebcaf2" localId="13">
+        <Explicatus>Kapitel 13</Explicatus>
+        <Rubrica id="id90dd63f9-66c0-4aa8-bfa2-5b47e0cbb733">
+          <Linea>
+            <Char formaChar="Italic">Suspension, bortfald og tilbagebetaling af tilskud</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id4ad42f4f-e30d-424b-9889-f516ac2cbfee" localId="37">
+            <Explicatus>§ 37.</Explicatus>
+            <Stk id="idba731b0b-5ba4-4b8a-b173-ce40b7cb43b9">
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan beslutte, at udbetaling af tilskuddet suspenderes, hvis</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id8cbc67b8-0086-49bf-9ef4-80cc9707b5cb">
+                <Index>
+                  <Indentatio id="id7bcb80f6-2f8e-4820-8028-5addbcacbd80" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Social- og Boligstyrelsen bliver bekendt med forhold, som rejser tvivl om, hvorvidt tilskudsmodtager anvender tilskuddet i overensstemmelse med den godkendte indholdsmæssige og økonomiske ramme,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id787b835b-2147-4006-94e5-dea2f33a72b7" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>tilskudsmodtager har givet urigtige eller vildledende oplysninger eller har fortiet oplysninger af betydning for tilsagnet om tilskud,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idc816cd3c-f75a-44d8-9ebe-17c5a998d794" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>tilskudsmodtager ikke har indsendt relevante dokumenter i overensstemmelse med vilkårene for tilskuddet, eller Social- og Boligstyrelsen ikke kan godkende oplysningerne heri,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id6b9d15c8-e6f1-4b16-bd29-9ab901376b1c" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>en forfalden tilbagebetaling for et tilskud fra Social- og Boligstyrelsen ikke er indbetalt til Social- og Boligstyrelsen,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id3f98a463-4182-4e67-908f-39bb2e376b6e" formaInd="Nummer">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektet ophører inden projektperiodens ophør,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id9f24ee59-3dfb-4fb3-9878-3440334d2752" formaInd="Nummer">
+                    <Explicatus>6)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>tilskudsmodtager begæres konkurs, træder i likvidation, standser sine betalinger, indleder forhandlinger om tvangsakkord, eller hvis der foretages udlæg eller arrest hos tilskudsmodtager, eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idc84854f5-7a30-4419-bae6-67aa630ec699" formaInd="Nummer">
+                    <Explicatus>7)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>forudsætningerne for tilskuddet i øvrigt er ændrede.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="idbd599b52-4599-4251-a5ee-b5a9a6b1d768">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Udbetaling af tilskuddet genoptages, når Social- og Boligstyrelsen træffer beslutning herom.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id220dcce1-9024-45b4-91fe-b824fc37b0e4" localId="38">
+            <Explicatus>§ 38.</Explicatus>
+            <Stk id="id5ceaff20-2ceb-452e-9039-59acc2687101">
+              <Exitus>
+                <Linea>
+                  <Char>Social- og Boligstyrelsen kan træffe afgørelse om, at tilskuddet bortfalder helt eller delvist, og at udbetalte tilskud skal tilbagebetales helt eller delvist, hvis</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id87f21ecc-7aff-4be3-aa21-a933ed5f7c58">
+                <Index>
+                  <Indentatio id="idbd6c3e0c-aef0-42d0-8843-dc6c1fb08bd5" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektet er suspenderet, eller der er grundlag for at suspendere udbetaling af tilskuddet, jf. § 37, stk. 1, nr. 2-7,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id467cb4ea-e4d1-49ed-9c1f-77b5a24b1e2d" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektet ikke gennemføres i overensstemmelse med eller afviger markant fra den godkendte indholdsmæssige og økonomiske ramme for tilskuddet,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idb4077cab-0aff-42d2-99f2-14152a69f2bd" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektet ikke er påbegyndt inden 6 måneder efter godkendt startdato,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id525fbed0-8662-4041-aaa7-9d3bb2afc6ee" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>en forfalden tilbagebetaling for et tilskud fra Social- og Boligstyrelsen ikke er indbetalt til Social- og Boligstyrelsen senest 2 måneder efter forfaldsdagen, eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idbcd31f75-84e3-4253-8840-e6dac261a12d" formaInd="Nummer">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektet genererer kommercielle indtægter efter projektperioden.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id2647929a-0be3-4892-a00d-5f6593ad9f8b" localId="39">
+            <Explicatus>§ 39.</Explicatus>
+            <Stk id="id6801b1aa-2815-452e-9384-7e2c8dc7858a">
+              <Exitus>
+                <Linea>
+                  <Char>Tilskud skal tilbagebetales, hvis</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id04cd1d51-7c8d-4444-9ec8-cfd4f6bdf60a">
+                <Index>
+                  <Indentatio id="idb9b4d79a-d320-4613-9a3f-d293b30885dd" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>hele tilskuddet ikke er brugt, og de samlede godkendte, bogførte og faktiske projektrelaterede udgifter, fratrukket eventuelle indtægter i det endelige regnskab, er mindre end tilskuddet, herunder at tilskud fra anden side m.v. viser sig at overstige det forudsatte ved ydelsen af tilskuddet, eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idf9244059-cf70-4eff-804b-bf170f17d64f" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektet</Char>
+                        <Char formaChar="Bold"></Char>
+                        <Char>får ydet tilskud fra anden side til hel eller delvis dækning af de budgetposter, som Social- og Boligstyrelsen har givet tilskud til.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="idc1e4c7dc-bd72-4d7f-8a34-2ba3df14e685" localId="14">
+        <Explicatus>Kapitel 14</Explicatus>
+        <Rubrica id="id9484e79e-88cd-4ef8-ab3c-ed361f60bdd2">
+          <Linea>
+            <Char formaChar="Italic">Ikrafttræden m.v.</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id23edfab1-1d6f-42b3-9887-b33e4e6b435e" localId="40">
+            <Explicatus>§ 40.</Explicatus>
+            <Stk id="id3547233f-efe9-49a9-9f1e-7d7d9efde2c5">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen træder i kraft den 21. september 2026.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id9e515616-a9e3-49f2-89dc-53cb10e653dd">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>For tilskud, der ydes i medfør af denne bekendtgørelse, finder bekendtgørelse nr. 97 af 27. januar 2014 om regnskab og revision m.v. af regnskaber for modtagere af tilskud fra puljer under Social-, Børne- og Integrationsministeriets område ikke anvendelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+    </Afsnit>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="id40ea54cb-760c-4766-811a-9c242a2a5f99">
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>
