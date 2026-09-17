@@ -177,19 +177,19 @@ func (s *Store) GetInventory(ctx context.Context, eliURL string) (Inventory, boo
 	return out, found, err
 }
 
-// PendingInventory scans the inventory prefix for fetchable records, stopping
-// once limit have been collected. Failed records are only offered while their
-// attempt count is below maxAttempts, so a permanently broken URL cannot spin
-// forever and consume the polite request budget.
-// PendingInventory returns up to limit resources still needing a fetch. kinds
+// PendingByKind counts resources still needing a fetch, grouped by ELI kind. It
 // PendingByKind counts resources still needing a fetch, grouped by ELI kind. It
 // exists because --kind filtering changes the denominator a progress bar needs
 // before the run starts, and the state totals cannot answer "how many of these
-// are retsinfo". Retryable failures are included to match PendingInventory's
-// selection; the attempt bound is not, so the count errs slightly high.
-func (s *Store) PendingByKind(ctx context.Context) (map[string]int64, error) {
+// are retsinfo". The selection follows Filter, except that the attempt bound is
+// not applied, so a default count errs slightly high.
+func (s *Store) PendingByKind(ctx context.Context, f Filter) (map[string]int64, error) {
+	sel, err := f.selector()
+	if err != nil {
+		return nil, err
+	}
 	counts := map[string]int64{}
-	err := s.db.View(func(tx *badger.Txn) error {
+	err = s.db.View(func(tx *badger.Txn) error {
 		ops := badger.DefaultIteratorOptions
 		ops.PrefetchValues = false
 		ops.Prefix = []byte(prefixInventory)
@@ -207,9 +207,7 @@ func (s *Store) PendingByKind(ctx context.Context) (map[string]int64, error) {
 			if len(f) < 3 {
 				continue
 			}
-			switch f[2] {
-			case string(StatePending), string(StateFailed), "":
-			default:
+			if !sel.wantState(f[2]) || !sel.wantKind(f[1]) {
 				continue
 			}
 			counts[f[1]]++
@@ -219,22 +217,91 @@ func (s *Store) PendingByKind(ctx context.Context) (map[string]int64, error) {
 	return counts, err
 }
 
-// PendingInventory returns up to limit resources still needing a fetch. kinds
-// restricts the result to specific ELI kinds ("retsinfo", "lta", ...); empty
-// means every kind. Matching uses the Kind recorded from the sitemap URL, so no
-// second index is required. A filtered call still walks the keyspace from the
-// start -- a few tens of milliseconds over the whole catalogue, which is noise
-// next to the paced requests it feeds.
-func (s *Store) PendingInventory(ctx context.Context, limit, maxAttempts int, kinds []string) ([]Inventory, error) {
-	var want map[string]bool
-	if len(kinds) > 0 {
-		want = make(map[string]bool, len(kinds))
-		for _, k := range kinds {
-			want[k] = true
+// Filter narrows which inventory rows a scan returns. The zero Filter is the
+// ordinary crawl sweep: pending rows plus failed rows still under MaxAttempts.
+type Filter struct {
+	// Kinds restricts to ELI series as parsed from the sitemap URL ("retsinfo",
+	// "lta", ...). Empty means every kind.
+	Kinds []string
+	// States restricts to rows in these states. Empty means pending and failed.
+	// Naming states lifts MaxAttempts: the attempt ceiling exists to stop an
+	// automatic sweep spinning on a dead URL, and "retire these failures anyway"
+	// is precisely the case that ceiling must not veto.
+	States []string
+	// MaxAttempts bounds retries in the default sweep.
+	MaxAttempts int
+}
+
+// selector is a Filter with its lists turned into sets, compiled once per scan so
+// a 200k-row walk does not re-parse the same flag values per row.
+type selector struct {
+	kinds      map[string]bool
+	states     map[string]bool // nil means the default sweep: pending plus failed
+	exact      bool            // states named by hand, so MaxAttempts does not apply
+	maxAttempt int
+}
+
+// selector compiles the filter, refusing state names that cannot match anything.
+// A mistyped kind is only a warning later, because a kind can legitimately have
+// nothing pending; a mistyped state can never match at all, so it is an error.
+func (f Filter) selector() (selector, error) {
+	sel := selector{maxAttempt: f.MaxAttempts}
+	for _, k := range f.Kinds {
+		if sel.kinds == nil {
+			sel.kinds = map[string]bool{}
 		}
+		sel.kinds[k] = true
+	}
+	for _, st := range f.States {
+		st = strings.ToLower(strings.TrimSpace(st))
+		switch State(st) {
+		case StatePending, StateFetched, StateFailed, StateSkipped, StateGone:
+		default:
+			return selector{}, fmt.Errorf("unknown state %q (valid: pending, fetched, failed, skipped, gone)", st)
+		}
+		if sel.states == nil {
+			sel.states = map[string]bool{}
+		}
+		sel.states[st] = true
+		sel.exact = true
+	}
+	return sel, nil
+}
+
+// wantKind reports whether a row of this ELI kind is in scope.
+func (sel selector) wantKind(kind string) bool {
+	return sel.kinds == nil || sel.kinds[kind]
+}
+
+// wantState reports whether a row in this state is in scope. An empty state is a
+// record written before the state column existed, and counts as pending.
+func (sel selector) wantState(state string) bool {
+	if state == "" {
+		state = string(StatePending)
+	}
+	if sel.states == nil {
+		return state == string(StatePending) || state == string(StateFailed)
+	}
+	return sel.states[state]
+}
+
+// wantAttempts reports whether the retry ceiling still admits a row. The ceiling
+// belongs to the automatic sweep; a hand-picked state is a deliberate retry.
+func (sel selector) wantAttempts(attempts int) bool {
+	return sel.exact || attempts < sel.maxAttempt
+}
+
+// PendingInventory returns up to limit resources the filter selects, in ELI URL
+// order. A filtered call still walks the keyspace from the start -- a few tens of
+// milliseconds over the whole catalogue, which is noise next to the paced requests
+// it feeds.
+func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]Inventory, error) {
+	sel, err := f.selector()
+	if err != nil {
+		return nil, err
 	}
 	var out []Inventory
-	err := s.db.View(func(tx *badger.Txn) error {
+	err = s.db.View(func(tx *badger.Txn) error {
 		// Bigger value threshold keeps small records inline in the LSM, making
 		// this scan read only the LSM rather than the value log.
 		// (No per-transaction tuning is needed; Badger handles it.)
@@ -258,15 +325,7 @@ func (s *Store) PendingInventory(ctx context.Context, limit, maxAttempts int, ki
 			if err != nil {
 				return err
 			}
-			switch in.State {
-			case StatePending, StateFailed:
-				if in.Attempts >= maxAttempts {
-					continue
-				}
-			default:
-				continue
-			}
-			if want != nil && !want[in.Kind] {
+			if !sel.wantState(string(in.State)) || !sel.wantAttempts(in.Attempts) || !sel.wantKind(in.Kind) {
 				continue
 			}
 			out = append(out, in)

@@ -113,10 +113,13 @@ Pacing:
   the origin, so their interval is learned rather than fixed. It starts at the
   floor and stays there while the service is happy: any 429 or 5xx doubles the
   interval and holds it for 10 minutes, after which 20 consecutive successes step
-  it back down. The only pacing flag is --document-floor: the interval to start at
-  and the fastest one to return to. 200ms is the considerate default rather than a
-  limit — set it lower and the learner will pursue it until the service pushes
-  back. Learning starts over on every run.
+  it back down. Two flags shape it. --document-floor is the interval to start at and
+  the fastest one to return to; 200ms is the considerate default rather than a
+  limit, and setting it lower is honoured until the service pushes back. --jitter
+  adds a random share of the current interval on top of each wait, so a crawl that
+  runs for days is not machine-regular; it never shortens a wait, so the floor stays
+  a hard minimum, and --jitter 0 gives exact spacing when the question is whether a
+  service limit is what you are hitting. Learning starts over on every run.
 
 Data layout:
   <data-dir>/xml/<kind>/<year>/<id>.xml   canonical documents (the archive)
@@ -135,11 +138,15 @@ func registerFlags(pf *pflag.FlagSet, cfg *config.Config, logLevel, progress *st
 	pf.StringVar(&cfg.SiteBase, "site", cfg.SiteBase, "origin serving /eli and the document API")
 	pf.StringVar(&cfg.HarvestBase, "harvest-api", cfg.HarvestBase, "origin of the harvesting service")
 
-	// Pacing has one knob: how fast the learner is allowed to settle. The rest of
-	// the schedule is either a published obligation (harvest), a measurement
-	// (sitemap), or the learner's own shape, all of them constants.
+	// Pacing has two knobs: how fast the learner is allowed to settle, and how far
+	// each request may drift past that interval. The rest of the schedule is either
+	// a published obligation (harvest), a measurement (sitemap), or the learner's
+	// own shape, all of them constants.
 	pf.DurationVar(&cfg.DocumentFloor, "document-floor", cfg.DocumentFloor,
 		fmt.Sprintf("fastest document interval the learner may settle at; %s is the considerate default, and anything lower is honoured at the risk of a 429", config.DefaultDocumentFloor))
+
+	pf.Float64Var(&cfg.JitterPercent, "jitter", cfg.JitterPercent,
+		"random extra wait as a percentage of the current interval, so a long crawl is not metronome-paced; 0 gives exact spacing, which is what to use when testing whether a service limit is what you are hitting")
 
 	pf.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "timeout for a single HTTP request")
 	pf.StringVar(logLevel, "log-level", "info", "log level: debug, info, warn, error")
@@ -187,6 +194,7 @@ func logPacing(cfg config.Config, cmd string) {
 		"command", cmd,
 		"data_dir", cfg.DataDir,
 		"document_floor", cfg.DocumentFloor.String(),
+		"jitter_percent", cfg.JitterPercent,
 		"harvest_interval", config.HarvestInterval.String(),
 		"sitemap_interval", config.SitemapInterval.String())
 }

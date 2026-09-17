@@ -29,6 +29,42 @@ type app struct {
 	client *rihttp.Client
 }
 
+// newLimiter builds the process-wide pacing schedule.
+//
+// One limiter for the whole process makes the published "once per 10 seconds"
+// harvesting limit a structural guarantee rather than a convention. The harvest
+// bucket is pinned: that limit is an obligation, not an observation, so there is
+// nothing to learn from success and no room to be faster.
+//
+// Document and sitemap buckets are adaptive: the service publishes no limit for
+// them and sends no Retry-After header, so the safe interval can only be found by
+// probing, and must back off the moment it is told to slow down. Only their floors
+// and the jitter come from the caller; the learner's shape is fixed in the limiter.
+//
+// This is a function rather than inline code in newApp so a test can assert the
+// flags actually reach the limiter: a flag that is parsed and then dropped is worse
+// than no flag at all.
+func newLimiter(cfg config.Config) *limiter.Limiter {
+	lim := limiter.New(map[string]limiter.Spec{
+		limiter.BucketHarvest: {
+			Start:  config.HarvestInterval,
+			Floor:  config.HarvestInterval,
+			Max:    config.HarvestInterval,
+			Pinned: true,
+		},
+		limiter.BucketDocument: {
+			Floor: cfg.DocumentFloor,
+			Max:   limiter.MaxInterval,
+		},
+		limiter.BucketSitemap: {
+			Floor: config.SitemapInterval,
+			Max:   config.SitemapInterval * 8,
+		},
+	})
+	lim.SetJitterPercent(cfg.JitterPercent)
+	return lim
+}
+
 // newApp opens storage and builds the pacing schedule. The limiter is returned
 // alongside the app so callers such as `status` can report the interval actually in
 // force without inventing a partially-opened app.
@@ -46,32 +82,7 @@ func newApp(cfg config.Config) (*app, *limiter.Limiter, error) {
 		return nil, nil, err
 	}
 
-	// One limiter for the whole process makes the published "once per 10 seconds"
-	// harvesting limit a structural guarantee rather than a convention. The harvest
-	// bucket is pinned: that limit is an obligation, not an observation, so there
-	// is nothing to learn from success and no room to be faster.
-	//
-	// Document and sitemap buckets are adaptive: the service publishes no limit for
-	// them and sends no Retry-After header, so the safe interval can only be found
-	// by probing, and must back off the moment it is told to slow down. Only their
-	// floors come from the caller; the learner's shape is fixed in the limiter.
-	specs := map[string]limiter.Spec{
-		limiter.BucketHarvest: {
-			Start:  config.HarvestInterval,
-			Floor:  config.HarvestInterval,
-			Max:    config.HarvestInterval,
-			Pinned: true,
-		},
-		limiter.BucketDocument: {
-			Floor: cfg.DocumentFloor,
-			Max:   limiter.MaxInterval,
-		},
-		limiter.BucketSitemap: {
-			Floor: config.SitemapInterval,
-			Max:   config.SitemapInterval * 8,
-		},
-	}
-	lim := limiter.New(specs)
+	lim := newLimiter(cfg)
 	client := rihttp.New(cfg, lim)
 
 	return &app{
@@ -145,7 +156,7 @@ changes are gone and only a sitemap inventory pass can repair the gap.`,
 
 func fetchCmd(open openFunc) *cobra.Command {
 	var limit, batch int
-	var kinds []string
+	var kinds, states []string
 	cmd := &cobra.Command{
 		Use:   "fetch",
 		Short: "Download canonical ELI XML for anything not on disk",
@@ -158,7 +169,16 @@ point and a second full pass after completion costs nothing.
 Pending resources are visited in URL order, so --kind is how a single series is
 sampled or repaired without crawling everything that sorts before it:
 
-  retsin fetch --kind retsinfo --limit 50`,
+  retsin fetch --kind retsinfo --limit 50
+
+--state selects rows by what happened to them last, which is how failures get a
+second chance. A default run takes pending rows plus failures still under the retry
+limit; naming a state lifts that limit, so exhausted failures and 404s can be
+retried on purpose:
+
+  retsin fetch --state failed              retry everything that failed
+  retsin fetch --state gone --kind retsinfo  re-test 404s in one series
+  retsin fetch --state fetched             re-check rows that claim to be on disk`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, lim, err := open(cmd)
@@ -166,28 +186,37 @@ sampled or repaired without crawling everything that sorts before it:
 				return err
 			}
 			defer a.Close()
-			kinds = cleanKinds(kinds)
+			kinds = cleanList(kinds)
+			states = cleanList(states)
 			return runWith(a, lim, func(ctx context.Context) error {
+				filter := store.Filter{Kinds: kinds, States: states}
 				// Count first, then build the bar: it needs its denominator at
 				// construction, and a run with nothing pending gets no bar at all.
-				pending, err := a.crawl.PendingCount(ctx, limit, kinds)
+				pending, err := a.crawl.PendingCount(ctx, limit, filter)
 				if err != nil {
 					return err
 				}
-				if len(kinds) > 0 {
-					// A kind that matches nothing is a typo, and silence would
-					// look like a crawl that had nothing to do.
+				if len(kinds) > 0 || len(states) > 0 {
+					// A filter that matches nothing is usually a typo, and silence
+					// would look like a crawl that had nothing to do.
+					attrs := []any{}
+					if len(kinds) > 0 {
+						attrs = append(attrs, "kinds", strings.Join(kinds, ","))
+					}
+					if len(states) > 0 {
+						attrs = append(attrs, "states", strings.Join(states, ","))
+					}
 					if pending == 0 {
-						slog.Warn("no pending resources match --kind", "kinds", strings.Join(kinds, ","))
+						slog.Warn("no resources match these filters", append(attrs, "total", pending)...)
 					} else {
-						slog.Info("fetch filtered by kind", "kinds", strings.Join(kinds, ","), "pending", pending)
+						slog.Info("fetch filtered", append(attrs, "total", pending)...)
 					}
 				}
 				bar := newFetchBar(lim, progressModeValue, pending)
 				defer bar.Finish()
 				var barWarned bool
 				return a.crawl.Fetch(ctx, crawl.FetchOptions{
-					Limit: limit, Batch: batch, Kinds: kinds,
+					Limit: limit, Batch: batch, Kinds: kinds, States: states,
 					OnProgress: func(st crawl.FetchStats) {
 						if err := bar.Set(st.Attempted); err != nil && !barWarned {
 							// Once is enough: a bar that cannot render is not
@@ -208,13 +237,17 @@ sampled or repaired without crawling everything that sorts before it:
 	cmd.Flags().IntVar(&limit, "limit", 0, "stop after N items (useful for a trial run)")
 	cmd.Flags().IntVar(&batch, "batch", 200, "pending rows to process per batch")
 	cmd.Flags().StringSliceVar(&kinds, "kind", nil, "only fetch these ELI kinds, e.g. retsinfo or lta,ltb (repeatable)")
+	cmd.Flags().StringSliceVar(&states, "state", nil,
+		"only fetch rows in these states: pending, failed, gone, skipped, fetched (repeatable). "+
+			"Default is pending plus failed rows under the retry limit; naming a state retries it however often it has been tried")
 	return cmd
 }
 
-// cleanKinds normalises --kind values: trimmed, lower-cased, de-duplicated, empty
-// entries dropped. The comparison is exact against the kind parsed from the ELI
-// URL, so shell history should not be able to miss by case or a stray space.
-func cleanKinds(in []string) []string {
+// cleanList normalises a repeated or comma-separated list flag: trimmed,
+// lower-cased, de-duplicated, empty entries dropped. Comparisons against stored
+// values are exact, so shell history should not be able to miss by case or a stray
+// space.
+func cleanList(in []string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, s := range in {
@@ -235,9 +268,7 @@ func cleanKinds(in []string) []string {
 // the learner acting on what the origin is actually accepting.
 func newFetchBar(lim *limiter.Limiter, mode progress.Mode, total int64) *progress.Bar {
 	bar := progress.NewBar(gate, "fetch", total, mode)
-	if d, ok := lim.Current(limiter.BucketDocument); ok {
-		bar.Describe("fetch @" + d.Round(time.Millisecond).String())
-	}
+	bar.Describe(pacingLabel(lim))
 	return bar
 }
 
@@ -247,7 +278,13 @@ func pacingLabel(lim *limiter.Limiter) string {
 	if !ok {
 		return "fetch"
 	}
-	return "fetch @" + d.Round(time.Millisecond).String()
+	label := "fetch @" + d.Round(time.Millisecond).String()
+	if j := lim.JitterPercent(); j > 0 {
+		// Showing the jitter is what makes a --jitter change verifiable from the
+		// terminal instead of from the source.
+		label += fmt.Sprintf(" ±%.0f%%", j)
+	}
+	return label
 }
 
 func updateCmd(open openFunc) *cobra.Command {

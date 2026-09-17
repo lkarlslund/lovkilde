@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -54,7 +55,7 @@ func TestPendingSkipsExhaustedAndFetched(t *testing.T) {
 	if err := s.PutInventoryBatch(ctx, rows); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.PendingInventory(ctx, 100, 5, nil)
+	got, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +69,7 @@ func TestPendingSkipsExhaustedAndFetched(t *testing.T) {
 	}
 
 	// A limit must be honoured so batches stay small and memory flat.
-	limited, err := s.PendingInventory(ctx, 1, 5, nil)
+	limited, err := s.PendingInventory(ctx, 1, Filter{MaxAttempts: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestPendingByKind(t *testing.T) {
 	}
 
 	// One kind only, and retryable failures count while fetched/gone do not.
-	only, err := s.PendingInventory(ctx, 100, 5, []string{"retsinfo"})
+	only, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5, Kinds: []string{"retsinfo"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,23 +107,93 @@ func TestPendingByKind(t *testing.T) {
 	}
 
 	// Several kinds at once, and a kind nothing matches.
-	if many, err := s.PendingInventory(ctx, 100, 5, []string{"ft", "retsinfo"}); err != nil {
+	if many, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5, Kinds: []string{"ft", "retsinfo"}}); err != nil {
 		t.Fatal(err)
 	} else if len(many) != 3 {
 		t.Errorf("two-kind filter = %d rows, want 3", len(many))
 	}
-	if none, err := s.PendingInventory(ctx, 100, 5, []string{"nosuchkind"}); err != nil {
+	if none, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5, Kinds: []string{"nosuchkind"}}); err != nil {
 		t.Fatal(err)
 	} else if len(none) != 0 {
 		t.Errorf("unknown kind matched %d rows, want 0", len(none))
 	}
 
-	counts, err := s.PendingByKind(ctx)
+	counts, err := s.PendingByKind(ctx, Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if counts["retsinfo"] != 2 || counts["ft"] != 1 || counts["lta"] != 0 {
 		t.Errorf("PendingByKind = %v, want retsinfo=2 ft=1 lta=0", counts)
+	}
+}
+
+// Naming states is the retry-the-failures path, and it must reach rows the
+// automatic sweep has given up on.
+func TestInventoryStateSelection(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	rows := []Inventory{
+		{ELIURL: "https://x/eli/ft/1", State: StatePending, Kind: "ft"},
+		{ELIURL: "https://x/eli/ft/2", State: StateFailed, Attempts: 1, Kind: "ft"},
+		{ELIURL: "https://x/eli/ft/3", State: StateFailed, Attempts: 99, Kind: "ft"},
+		{ELIURL: "https://x/eli/lta/1", State: StateGone, Kind: "lta", Error: "404 Not Found"},
+		{ELIURL: "https://x/eli/lta/2", State: StateFetched, Kind: "lta", SHA256: "aa"},
+		{ELIURL: "https://x/eli/ltb/1", State: StateSkipped, Kind: "ltb"},
+	}
+	if err := s.PutInventoryBatch(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+
+	count := func(f Filter) int {
+		got, err := s.PendingInventory(ctx, 100, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(got)
+	}
+
+	// Naming failed must include the row at 99 attempts: the ceiling protects the
+	// automatic sweep, not a deliberate retry.
+	if n := count(Filter{States: []string{"failed"}, MaxAttempts: 5}); n != 2 {
+		t.Errorf("states=failed matched %d rows, want 2 (exhausted failures must be retriable)", n)
+	}
+	if n := count(Filter{States: []string{"gone"}}); n != 1 {
+		t.Errorf("states=gone matched %d rows, want 1", n)
+	}
+	if n := count(Filter{States: []string{"gone", "skipped"}}); n != 2 {
+		t.Errorf("two states matched %d rows, want 2", n)
+	}
+	// fetched is a legitimate target: it re-checks rows that claim to be on disk.
+	if n := count(Filter{States: []string{"fetched"}}); n != 1 {
+		t.Errorf("states=fetched matched %d rows, want 1", n)
+	}
+	// Case and padding are normalised, so a hand-typed state still matches.
+	if n := count(Filter{States: []string{" GONE "}}); n != 1 {
+		t.Errorf(`states=" GONE " matched %d rows, want 1`, n)
+	}
+	// States compose with kinds.
+	if n := count(Filter{States: []string{"gone", "fetched"}, Kinds: []string{"lta"}}); n != 2 {
+		t.Errorf("state+kind filter matched %d rows, want 2", n)
+	}
+
+	// A state that cannot exist is an error, not an empty run: silence here would
+	// look like a crawl that had nothing to do.
+	if _, err := s.PendingInventory(ctx, 100, Filter{States: []string{"borked"}}); err == nil {
+		t.Error("unknown state should be an error")
+	} else if !strings.Contains(err.Error(), "pending") {
+		t.Errorf("error should list the valid states, got %v", err)
+	}
+	if _, err := s.PendingByKind(ctx, Filter{States: []string{"borked"}}); err == nil {
+		t.Error("unknown state should be an error for counts too")
+	}
+
+	// Counts honour states too, so the bar's total matches what is fetched.
+	counts, err := s.PendingByKind(ctx, Filter{States: []string{"failed"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts["ft"] != 2 {
+		t.Errorf("PendingByKind(failed) = %v, want ft=2", counts)
 	}
 }
 

@@ -168,6 +168,11 @@ type FetchOptions struct {
 	// empty means every kind. It exists so a kind can be sampled or repaired
 	// without first crawling everything that sorts before it.
 	Kinds []string
+	// States restricts the pass to inventory rows in these states ("failed",
+	// "gone", ...); empty means the ordinary sweep of pending plus retryable
+	// failures. Naming a state also lifts MaxAttempts for it, so exhausted
+	// failures can be retried on purpose.
+	States []string
 	// Batch is how many pending rows to load at a time. Small batches keep
 	// memory flat and make progress checkpoints frequent.
 	Batch int
@@ -198,26 +203,17 @@ type FetchStats struct {
 //
 // It counts pending and retryable-failed rows without re-checking their attempt
 // counts, which errs slightly high and only affects the bar's percentage.
-func (c *Crawler) PendingCount(ctx context.Context, limit int, kinds []string) (int64, error) {
-	byKind, err := c.store.PendingByKind(ctx)
+// PendingCount reports how many rows a fetch will take on, which is the
+// denominator the progress bar needs at construction. The filter is applied by the
+// store, so this is one scan rather than a full count narrowed afterwards.
+func (c *Crawler) PendingCount(ctx context.Context, limit int, f store.Filter) (int64, error) {
+	byKind, err := c.store.PendingByKind(ctx, f)
 	if err != nil {
 		return 0, err
 	}
-	wanted := make(map[string]bool, len(kinds))
-	for _, k := range kinds {
-		wanted[k] = true
-	}
 	var total int64
-	if len(wanted) == 0 {
-		for _, n := range byKind {
-			total += n
-		}
-	} else {
-		for k, n := range byKind {
-			if wanted[k] {
-				total += n
-			}
-		}
+	for _, n := range byKind {
+		total += n
 	}
 	if limit > 0 && int64(limit) < total {
 		total = int64(limit)
@@ -242,10 +238,12 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 	start := time.Now()
 
 	// The denominator comes from the state store rather than the batch loop, so
-	// the bar can show a percentage from the first document. It counts pending
-	// and retryable-failed rows without re-checking their attempt counts, which
-	// is an estimate that errs slightly high and only affects the percentage.
-	totalPending, err := c.PendingCount(ctx, opt.Limit, opt.Kinds)
+	// the bar can show a percentage from the first document. For the default sweep
+	// it counts pending and failed rows without re-checking their attempt counts,
+	// which is an estimate that errs slightly high and only affects the
+	// percentage. Hand-picked states are counted exactly.
+	filter := store.Filter{Kinds: opt.Kinds, States: opt.States, MaxAttempts: opt.MaxAttempts}
+	totalPending, err := c.PendingCount(ctx, opt.Limit, filter)
 	if err != nil {
 		return err
 	}
@@ -275,7 +273,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 			}
 		}
 
-		pending, err := c.store.PendingInventory(ctx, want, opt.MaxAttempts, opt.Kinds)
+		pending, err := c.store.PendingInventory(ctx, want, filter)
 		if err != nil {
 			return err
 		}

@@ -3,12 +3,13 @@
 // does is visible in the invocation that started it, and a stale file cannot
 // silently change a multi-day crawl.
 //
-// Pacing is not configurable beyond one number: DocumentFloor. The learner that
-// approaches it is tuned by constants in internal/limiter, because every measured
-// run behaved the same way and extra knobs would only offer more ways to
-// misconfigure a crawl. The floor itself is a default rather than a limit — the
-// one pace the terms actually impose (one harvest call per 10 s) is a constant
-// with no flag at all.
+// Pacing is configurable by two numbers: DocumentFloor, the interval the learner
+// starts at and returns to, and JitterPercent, how far each request may drift past
+// that interval. The learner that approaches the floor is tuned by constants in
+// internal/limiter, because every measured run behaved the same way and extra knobs
+// would only offer more ways to misconfigure a crawl. The floor itself is a default
+// rather than a limit — the one pace the terms actually impose (one harvest call per
+// 10 s) is a constant with no flag at all.
 package config
 
 import (
@@ -33,6 +34,10 @@ const (
 	HarvestInterval = 12 * time.Second
 	// SitemapInterval paces the ~22 sitemap requests.
 	SitemapInterval = 2 * time.Second
+	// DefaultJitterPercent is the share of the current interval added at random on
+	// top of each paced wait. Kept equal to limiter.JitterPercentDefault, which the
+	// limiter applies when nothing overrides it; a test asserts the two agree.
+	DefaultJitterPercent = 10
 	// DefaultDocumentFloor is where the document bucket is allowed to settle by
 	// default. Document responses are served uncached straight from the origin, so
 	// this is a judgement about a considerate pace, not a limit we enforce: an
@@ -62,6 +67,13 @@ type Config struct {
 	// the choice was too ambitious.
 	DocumentFloor time.Duration
 
+	// JitterPercent is how much of the current interval may be added at random on
+	// top of each paced wait, so a multi-day crawl does not run on a metronome. It
+	// only ever delays a request, so DocumentFloor remains a hard minimum. Zero
+	// gives exact spacing, which is the setting to choose when testing whether a
+	// service's own limits are the thing being hit.
+	JitterPercent float64
+
 	// RequestTimeout bounds a single HTTP request.
 	RequestTimeout time.Duration
 }
@@ -74,6 +86,7 @@ func Default() Config {
 		HarvestBase:    "https://api.retsinformation.dk",
 		UserAgent:      DefaultUserAgent,
 		DocumentFloor:  DefaultDocumentFloor,
+		JitterPercent:  DefaultJitterPercent,
 		RequestTimeout: 60 * time.Second,
 	}
 }
@@ -96,6 +109,11 @@ func (c Config) Validate() error {
 	}
 	if c.RequestTimeout <= 0 {
 		return fmt.Errorf("request timeout must be positive")
+	}
+	if c.JitterPercent < 0 || c.JitterPercent > 100 {
+		// Refused rather than clamped: --jitter 500 is a typo, and silently
+		// halving the wait it implies would hide the mistake.
+		return fmt.Errorf("jitter percent must be between 0 (exact spacing) and 100 (up to one extra interval), got %g", c.JitterPercent)
 	}
 	return nil
 }

@@ -196,7 +196,7 @@ func TestFetchKindFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	total, err := c.PendingCount(ctx, 0, []string{"retsinfo"})
+	total, err := c.PendingCount(ctx, 0, store.Filter{Kinds: []string{"retsinfo"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,12 +214,87 @@ func TestFetchKindFilter(t *testing.T) {
 	}
 
 	// The excluded kind must still be waiting, untouched.
-	rest, err := c.PendingCount(ctx, 0, []string{"ft"})
+	rest, err := c.PendingCount(ctx, 0, store.Filter{Kinds: []string{"ft"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rest != 1 {
 		t.Errorf("pending ft after a filtered run = %d, want 1", rest)
+	}
+}
+
+// --state failed is the retry path for rows the ordinary sweep has given up on, so
+// the attempt ceiling must not veto it -- and must still veto it for a default run,
+// which is what keeps a dead URL from being re-requested forever.
+func TestFetchStateFilterRetriesExhaustedFailures(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte("<Dokument><Meta><AccessionNumber>W20261001926</AccessionNumber></Meta></Dokument>"))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dir
+	cfg.SiteBase = srv.URL
+	cfg.RequestTimeout = 5 * time.Second
+
+	st, err := store.Open(filepath.Join(dir, "meta", "kv"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+	ar, err := archive.Open(dir)
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	lim := limiter.NewTuned(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
+	}, 1.5, 2, time.Millisecond)
+	c := New(cfg, st, ar, rihttp.New(cfg, lim))
+
+	ctx := context.Background()
+	seed := []store.Inventory{
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/2", Kind: "ft", State: store.StateFailed, Attempts: 99, Error: "transport"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/3", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
+	}
+	if err := st.PutInventoryBatch(ctx, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	// The ordinary sweep: both rows are out of scope, so nothing is requested.
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 5}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if requests != 0 {
+		t.Fatalf("default sweep made %d requests, want 0: exhausted failures and 404s must stay put", requests)
+	}
+
+	// Named states: the ceiling lifts and the failed row is retried.
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 5, States: []string{"failed"}}); err != nil {
+		t.Fatalf("Fetch --state failed: %v", err)
+	}
+	if requests != 1 {
+		t.Fatalf("requests after --state failed = %d, want 1", requests)
+	}
+	got, found, err := st.GetInventory(ctx, seed[0].ELIURL)
+	if err != nil || !found {
+		t.Fatalf("GetInventory: %v found=%v", err, found)
+	}
+	if got.State != store.StateFetched {
+		t.Errorf("state after retry = %s, want fetched", got.State)
+	}
+
+	// The count the progress bar uses must follow the same states, or the bar is
+	// built with a total of 189k for a run that has one row to do.
+	n, err := c.PendingCount(ctx, 0, store.Filter{States: []string{"gone"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("PendingCount(gone) = %d, want 1", n)
 	}
 }
 

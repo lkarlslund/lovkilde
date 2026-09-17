@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -199,16 +200,66 @@ func TestFetchHasLimitBatchAndKindFlags(t *testing.T) {
 	if fetch == nil {
 		t.Fatal("fetch command missing")
 	}
-	for _, name := range []string{"limit", "batch", "kind"} {
+	for _, name := range []string{"limit", "batch", "kind", "state"} {
 		if fetch.Flags().Lookup(name) == nil {
 			t.Errorf("fetch is missing --%s", name)
 		}
 	}
 }
 
-// The defaults must be valid or every run fails at startup, and the pacing
-// surface must stay one flag wide: a pace that is either a published obligation
-// or a learned value cannot have a flag.
+// The pacing flags must reach the limiter, not just the config struct: a flag that
+// parses and is then dropped is worse than no flag, because it looks like a setting
+// that works. This is the guard for that failure.
+func TestLimiterTakesThePacingFlags(t *testing.T) {
+	cfg := config.Default()
+	cfg.DocumentFloor = 45 * time.Millisecond
+	cfg.JitterPercent = 33
+	lim := newLimiter(cfg)
+
+	if d, ok := lim.Current(limiter.BucketDocument); !ok || d != 45*time.Millisecond {
+		t.Errorf("document bucket = %s (present %v), want the 45ms floor from the flag", d, ok)
+	}
+	if got := lim.JitterPercent(); got != 33 {
+		t.Errorf("--jitter 33 reached the limiter as %g", got)
+	}
+	// The harvest obligation is not a setting: no flag may loosen the published
+	// one-call-per-10s limit, so it stays pinned regardless of config.
+	if d, ok := lim.Current(limiter.BucketHarvest); !ok || d != config.HarvestInterval {
+		t.Errorf("harvest bucket = %s (present %v), want the pinned %s", d, ok, config.HarvestInterval)
+	}
+}
+
+// Jitter is a percentage of the current interval and may only ever delay a
+// request, so the floor stays a hard minimum.
+func TestJitterDelaysButNeverAdvances(t *testing.T) {
+	cfg := config.Default()
+	cfg.DocumentFloor = 10 * time.Millisecond
+	cfg.JitterPercent = 100
+	lim := newLimiter(cfg)
+	ctx := context.Background()
+	if err := lim.Wait(ctx, limiter.BucketDocument); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	for i := 0; i < 8; i++ {
+		if err := lim.Wait(ctx, limiter.BucketDocument); err != nil {
+			t.Fatal(err)
+		}
+	}
+	elapsed := time.Since(start)
+	// Eight slots of 10ms plus up to one extra interval each: never faster than
+	// 80ms, never slower than 160ms.
+	if elapsed < 80*time.Millisecond {
+		t.Errorf("8 paced waits took %s, want at least 80ms (jitter must not shorten the floor)", elapsed)
+	}
+	if elapsed > 160*time.Millisecond+40*time.Millisecond {
+		t.Errorf("8 paced waits took %s, want at most ~160ms (jitter is capped at 100%% of the interval)", elapsed)
+	}
+}
+
+// The defaults must be valid or every run fails at startup, and the pacing surface
+// must stay two flags wide: a pace that is either a published obligation or a
+// learned value cannot have a flag.
 func TestConfigSafety(t *testing.T) {
 	if err := config.Default().Validate(); err != nil {
 		t.Fatalf("defaults invalid: %v", err)
@@ -218,13 +269,16 @@ func TestConfigSafety(t *testing.T) {
 	for _, name := range []string{
 		"harvest-interval", "sitemap-interval", "document-interval", "document-max-interval",
 		"pinned-intervals", "adaptive-window", "adaptive-step-down", "adaptive-cooldown",
+		"jitter-interval", "jitter-max",
 	} {
 		if root.PersistentFlags().Lookup(name) != nil {
 			t.Errorf("--%s exists: that pace is a constant or a learned value, not an option", name)
 		}
 	}
-	if root.PersistentFlags().Lookup("document-floor") == nil {
-		t.Error("--document-floor is the one pacing knob and must exist")
+	for _, name := range []string{"document-floor", "jitter"} {
+		if root.PersistentFlags().Lookup(name) == nil {
+			t.Errorf("--%s is a pacing knob and must exist", name)
+		}
 	}
 
 	// The floor itself is not policed — only a value that would leave requests
@@ -233,6 +287,27 @@ func TestConfigSafety(t *testing.T) {
 	unpaced.DocumentFloor = 0
 	if err := unpaced.Validate(); err == nil {
 		t.Error("a zero document floor was accepted, which would disable pacing")
+	}
+
+	// Jitter is a percentage, so nonsense outside 0-100 is refused rather than
+	// quietly clamped: --jitter 500 is a typo, not a request to double every wait.
+	for _, j := range []float64{-1, 101, 500} {
+		bad := config.Default()
+		bad.JitterPercent = j
+		if err := bad.Validate(); err == nil {
+			t.Errorf("jitter %g accepted, want refusal", j)
+		}
+	}
+	exact := config.Default()
+	exact.JitterPercent = 0
+	if err := exact.Validate(); err != nil {
+		t.Errorf("--jitter 0 (exact spacing) rejected: %v", err)
+	}
+	// The two defaults must agree, or the flag's help text and the limiter's
+	// built-in default drift apart.
+	if config.Default().JitterPercent != float64(limiter.JitterPercentDefault) {
+		t.Errorf("default jitter %g does not match limiter.JitterPercentDefault %d",
+			config.Default().JitterPercent, limiter.JitterPercentDefault)
 	}
 }
 
@@ -273,17 +348,23 @@ func TestFetchBarPaints(t *testing.T) {
 	if !strings.Contains(out, "fetch @") {
 		t.Errorf("pacing label missing from the bar: %q", out)
 	}
+	if !strings.Contains(out, "±") {
+		t.Errorf("jitter not visible in the label, so --jitter cannot be verified from the terminal: %q", out)
+	}
 }
 
-// Kind matching against the store is exact, so what --kind collects has to be
-// normalised first: shell history should not miss by case or a stray space, and
-// repeated flags must not ask for the same kind twice.
-func TestCleanKinds(t *testing.T) {
-	got := cleanKinds([]string{" RETSINFO ", "retsinfo", "", "lta"})
+// List flags are compared against stored values exactly, so what --kind and
+// --state collect has to be normalised first: shell history should not miss by case
+// or a stray space, and repeated flags must not ask for the same value twice.
+func TestCleanListValues(t *testing.T) {
+	got := cleanList([]string{" RETSINFO ", "retsinfo", "", "lta"})
 	if len(got) != 2 || got[0] != "retsinfo" || got[1] != "lta" {
-		t.Errorf("cleanKinds = %q, want [retsinfo lta]", got)
+		t.Errorf("cleanList = %q, want [retsinfo lta]", got)
 	}
-	if len(cleanKinds(nil)) != 0 || len(cleanKinds([]string{" ", ""})) != 0 {
+	if len(cleanList(nil)) != 0 || len(cleanList([]string{" ", ""})) != 0 {
 		t.Error("empty input must clean to nothing")
+	}
+	if got := cleanList([]string{" GONE ", "gone", "Failed"}); len(got) != 2 || got[0] != "gone" || got[1] != "failed" {
+		t.Errorf("cleanList(states) = %q, want [gone failed]", got)
 	}
 }

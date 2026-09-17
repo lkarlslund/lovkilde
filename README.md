@@ -156,6 +156,15 @@ learner answers by doubling the interval on its own.
 Learning restarts each run — deliberate, because the site's capacity changes and a
 persisted fast interval would begin the next run already presumptuous.
 
+**Jitter** is the second pacing flag, and it is about signature rather than speed. A crawl
+that runs for days at exactly 200 ms is a recognisable machine, so each wait gets a random
+share of the current interval added on top — 10 % by default, up to 20 ms extra at the
+floor. It never shortens a wait, so `--document-floor` stays a hard minimum. `--jitter 0`
+gives exact spacing, which is the setting to choose when the question is whether a service
+limit is what you are hitting: then nothing else is varying, and a 429 means what it says.
+The interval and the jitter in force are printed on the progress bar (`fetch @200ms ±10%`)
+and in the startup line, so a flag that did not take effect is visible rather than implied.
+
 Measured against production: the 200 ms floor sustained **4.1 documents/s over the
 first ~2,100 documents with zero throttles**, which is why the learner starts there
 instead of crawling down to it. If that guess is ever wrong, the cost is one doubled
@@ -193,8 +202,10 @@ exactly what a run will do. Run `retsin --help` for the full list. The important
 
 ```
 --data-dir DIR           archive + state location (default ./data)
---document-floor 200ms   the ONE pacing knob: fastest the learner may settle at
+--document-floor 200ms   the interval to start at and the fastest to return to
                          (a default, not a limit: lower is honoured)
+--jitter 10              random extra wait, as a percentage of the current interval
+                         (0 = exact spacing)
 --user-agent STRING      keep a contact address in it
 --site / --harvest-api   origins
 --request-timeout 1m     per-request timeout
@@ -202,6 +213,7 @@ exactly what a run will do. Run `retsin --help` for the full list. The important
 --progress auto          live bar: auto (terminals only), always, or never
 --limit / --batch N      on fetch: trial size and Badger commit batch
 --kind KINDS             on fetch: restrict to ELI series, e.g. retsinfo or lta,ltb
+--state STATES           on fetch: restrict to inventory states, e.g. failed or gone
 ```
 
 Everything else about pacing is either a published obligation (12 s harvest), a
@@ -291,6 +303,28 @@ retsin fetch --kind lta,ltb --kind ltc     # several at once: comma-separated or
 `--limit N` caps the run; `--batch N` sizes the pending window. The bar's total honours
 the filter, and a kind with nothing pending warns rather than finishing silently.
 
+### Retrying failures
+
+`--state` selects by what happened to a row last, which is how failures get a second chance
+without re-crawling anything:
+
+```
+retsin fetch --state failed                 # retry every failure
+retsin fetch --state gone --kind retsinfo   # re-test 404s in one series
+retsin fetch --state fetched                # re-check rows that claim to be on disk
+```
+
+A default run takes `pending` plus `failed` rows still under the retry limit, so a
+permanently dead URL cannot spin forever. **Naming a state lifts that limit**: the ceiling
+exists to protect the automatic sweep, and `--state failed` is a deliberate override, so a
+row already tried 99 times is fetched again. `gone` covers both ways a representation can be
+missing (404, or HTML served where XML was expected) and is worth re-testing after changing
+`--site`. `fetched` is the repair path for a row whose file has gone missing — with the file
+present it closes without a request, so only the genuinely missing rows cost anything.
+
+States compose with `--kind`, the bar's total follows both filters, and a state name that
+does not exist is an error listing the valid ones rather than a silent empty run.
+
 ## Recovery
 
 If `meta/kv` is lost or suspect, in this exact order:
@@ -350,6 +384,16 @@ reports while issuing zero requests.
   pending count is taken *before* the bar is built, so a zero-max bar never exists.
   `OptionClearOnFinish` was the second trap: it suppresses the completed frame, so a
   crawl that reaches its last document shows nothing.
+- **`--jitter 0` switched pacing off entirely.** Making the built-in 20 % jitter
+  configurable introduced two bugs at once: `JitterPercentDefault / 100` is *integer*
+  division, so the default came out as 0, and the new `jitter > 0` guard had been put on
+  the branch that **respects the reserved slot** instead of on the jitter inside it. With
+  jitter at 0, `Wait` returned immediately — silently discarding both the minimum
+  interval and any `Retry-After` already applied to the bucket. `TestDelayPacesTheWholeBucket`
+  and two `rihttp` throttle tests failed within the same second of writing it.
+  `TestJitterZeroStillPaces` now pins the case on its own, and one assertion keeps
+  `config.Default().JitterPercent` equal to the limiter's own default so the two cannot
+  drift.
 
 ## Notes and limitations
 

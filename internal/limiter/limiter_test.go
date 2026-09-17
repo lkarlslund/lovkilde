@@ -216,6 +216,58 @@ func TestStatesSnapshot(t *testing.T) {
 }
 
 // Defaults must protect against nonsense configuration.
+// Turning jitter off must not turn off pacing. This is the case that a naive
+// "skip the jitter branch" implementation gets wrong: with no jitter the reserved
+// slot, and any Retry-After pushed onto the bucket, still have to be honoured.
+func TestJitterZeroStillPaces(t *testing.T) {
+	l := NewTuned(map[string]Spec{
+		BucketDocument: {Start: 60 * time.Millisecond, Floor: 60 * time.Millisecond, Max: time.Second},
+	}, 1.5, 20, time.Minute)
+	l.SetJitterPercent(0)
+	ctx := context.Background()
+	if err := l.Wait(ctx, BucketDocument); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := l.Wait(ctx, BucketDocument); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < 55*time.Millisecond {
+		t.Errorf("second Wait returned after %s, want the 60ms interval even with jitter off", elapsed)
+	}
+
+	applied := l.Delay(BucketDocument, 120*time.Millisecond)
+	start = time.Now()
+	if err := l.Wait(ctx, BucketDocument); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < applied-5*time.Millisecond {
+		t.Errorf("after a %s delay the next Wait took %s, want the delay honoured", applied, elapsed)
+	}
+}
+
+func TestJitterPercentSetting(t *testing.T) {
+	l := New(map[string]Spec{BucketDocument: {Floor: time.Millisecond, Max: time.Second}})
+	if got := l.JitterPercent(); got != JitterPercentDefault {
+		t.Errorf("default jitter = %g, want the %d percent default", got, JitterPercentDefault)
+	}
+	// Clamped at both ends rather than wrapped: a negative or enormous value is a
+	// mistake, and jitter must never become negative delay.
+	for _, in := range []float64{-5, 500} {
+		l.SetJitterPercent(in)
+		if got := l.JitterPercent(); in < 0 && got != 0 {
+			t.Errorf("SetJitterPercent(%g) = %g, want 0", in, got)
+		}
+		if got := l.JitterPercent(); in > 100 && got != 100 {
+			t.Errorf("SetJitterPercent(%g) = %g, want 100", in, got)
+		}
+	}
+	l.SetJitterPercent(25)
+	if got := l.JitterPercent(); got != 25 {
+		t.Errorf("SetJitterPercent(25) = %g", got)
+	}
+}
+
 func TestColdBucketStartsAtTheFloor(t *testing.T) {
 	// The production shape: no Start, so the learner opens at the pace it believes
 	// is safe rather than crawling up to it.

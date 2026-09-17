@@ -84,6 +84,7 @@ type Limiter struct {
 	stepDown float64 // interval *= 1/stepDown once a window succeeds
 	window   int     // consecutive OK requests required to step down
 	cooldown time.Duration
+	jitter   float64 // fraction of the interval added at random to a reserved slot
 
 	steps int // interval changes made, for logging and tests
 }
@@ -103,6 +104,11 @@ const (
 	StepDown = 1.5
 	// Cooldown suppresses probing for this long after a throttle.
 	Cooldown = 10 * time.Minute
+	// JitterPercentDefault is the share of the current interval added at random on
+	// top of each reserved slot, so a multi-day crawl does not present a
+	// machine-regular request signature. It only ever delays a slot, never
+	// advances one, so the minimum interval stays a guarantee.
+	JitterPercentDefault = 10
 	// MaxDelay caps how far a server's Retry-After may push a bucket forward.
 	// Longer guidance is logged and clamped so one header cannot stall a crawl.
 	MaxDelay = time.Hour
@@ -133,6 +139,7 @@ func NewTuned(specs map[string]Spec, stepDown float64, window int, cooldown time
 		stepDown: stepDown,
 		window:   window,
 		cooldown: cooldown,
+		jitter:   float64(JitterPercentDefault) / 100,
 	}
 	for name, spec := range specs {
 		if spec.Floor <= 0 {
@@ -154,6 +161,31 @@ func NewTuned(specs map[string]Spec, stepDown float64, window int, cooldown time
 	return l
 }
 
+// SetJitterPercent sets how much of the current interval may be added at random
+// on top of each reserved slot. Zero makes requests perfectly regular: kinder to
+// a rate-limited service, but it gives a multi-day crawl a machine-regular
+// signature. Above 100 it is clamped, because a wait past twice the interval is a
+// pacing choice better made with a larger floor. Call it at startup, before the
+// first request.
+func (l *Limiter) SetJitterPercent(percent float64) {
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	l.mu.Lock()
+	l.jitter = percent / 100
+	l.mu.Unlock()
+}
+
+// JitterPercent reports the jitter in force, as a percentage of the interval.
+func (l *Limiter) JitterPercent() float64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.jitter * 100
+}
+
 // Wait blocks until a call in the named bucket may proceed, then reserves the
 // slot. Jitter is added so a long crawl does not present a machine-regular
 // request signature.
@@ -167,9 +199,15 @@ func (l *Limiter) Wait(ctx context.Context, name string) error {
 	now := time.Now()
 	reserved := now
 	if b.scheduled.After(now) {
-		// Jitter only ever delays a reserved slot, never advances it, so the
-		// minimum interval remains a hard guarantee.
-		reserved = b.scheduled.Add(time.Duration(l.rand.Float64() * 0.2 * float64(b.cur)))
+		// The reservation is respected whether or not jitter is on: dropping it
+		// here would let an exact-spacing run ignore both the interval and any
+		// Retry-After already applied to the bucket.
+		reserved = b.scheduled
+		if l.jitter > 0 {
+			// Jitter only ever delays a reserved slot, never advances it, so the
+			// minimum interval remains a hard guarantee.
+			reserved = reserved.Add(time.Duration(l.rand.Float64() * l.jitter * float64(b.cur)))
+		}
 	}
 	b.scheduled = reserved.Add(b.cur)
 	l.mu.Unlock()
