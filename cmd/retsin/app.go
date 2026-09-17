@@ -162,20 +162,18 @@ point and a second full pass after completion costs nothing.`,
 			}
 			defer a.Close()
 			return runWith(a, lim, func(ctx context.Context) error {
-				bar := newFetchBar(lim, progressModeValue)
+				// Count first, then build the bar: it needs its denominator at
+				// construction, and a run with nothing pending gets no bar at all.
+				pending, err := a.crawl.PendingCount(ctx, limit)
+				if err != nil {
+					return err
+				}
+				bar := newFetchBar(lim, progressModeValue, pending)
 				defer bar.Finish()
-				var totalSet, barWarned bool
+				var barWarned bool
 				return a.crawl.Fetch(ctx, crawl.FetchOptions{
 					Limit: limit, Batch: batch,
 					OnProgress: func(st crawl.FetchStats) {
-						// The denominator must be in place before the first
-						// update: the library rejects any update while its max
-						// is unset, so setting the count first would discard
-						// every frame and leave a bar that never moves.
-						if !totalSet && st.Total > 0 {
-							bar.SetTotal(st.Total)
-							totalSet = true
-						}
 						if err := bar.Set(st.Attempted); err != nil && !barWarned {
 							// Once is enough: a bar that cannot render is not
 							// worth 200k warnings, but it is worth knowing about.
@@ -198,14 +196,12 @@ point and a second full pass after completion costs nothing.`,
 }
 
 // newFetchBar builds the live progress line for a fetch run, honouring
-// --progress. The label carries the interval currently in force, which is the
-// one number worth watching on a multi-day crawl: it shows the learner acting
-// on what the origin is actually accepting.
-func newFetchBar(lim *limiter.Limiter, mode progress.Mode) *progress.Bar {
-	bar := progress.NewBar(gate, "fetch", 0, mode)
-	if !bar.Enabled() {
-		return bar
-	}
+// --progress. total must be the number of items the run will take on: a bar with
+// nothing to count is not built. The label carries the interval currently in
+// force, which is the one number worth watching on a multi-day crawl: it shows
+// the learner acting on what the origin is actually accepting.
+func newFetchBar(lim *limiter.Limiter, mode progress.Mode, total int64) *progress.Bar {
+	bar := progress.NewBar(gate, "fetch", total, mode)
 	if d, ok := lim.Current(limiter.BucketDocument); ok {
 		bar.Describe("fetch @" + d.Round(time.Millisecond).String())
 	}

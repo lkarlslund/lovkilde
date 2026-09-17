@@ -187,6 +187,25 @@ type FetchStats struct {
 	Total int64
 }
 
+// PendingCount reports how many resources a fetch pass would take on, applying
+// the same --limit clamp the loop does. The CLI needs this *before* starting: a
+// progress bar must be built with its denominator already in place, so the count
+// is exposed rather than reported mid-run.
+//
+// It counts pending and retryable-failed rows without re-checking their attempt
+// counts, which errs slightly high and only affects the bar's percentage.
+func (c *Crawler) PendingCount(ctx context.Context, limit int) (int64, error) {
+	counts, _, err := c.store.CountByState(ctx)
+	if err != nil {
+		return 0, err
+	}
+	total := counts[store.StatePending] + counts[store.StateFailed]
+	if limit > 0 && int64(limit) < total {
+		total = int64(limit)
+	}
+	return total, nil
+}
+
 // Fetch downloads canonical XML for every resource not already on disk.
 //
 // Idempotency comes from the filesystem: a resource whose file already exists
@@ -207,13 +226,9 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 	// the bar can show a percentage from the first document. It counts pending
 	// and retryable-failed rows without re-checking their attempt counts, which
 	// is an estimate that errs slightly high and only affects the percentage.
-	counts, _, err := c.store.CountByState(ctx)
+	totalPending, err := c.PendingCount(ctx, opt.Limit)
 	if err != nil {
 		return err
-	}
-	totalPending := counts[store.StatePending] + counts[store.StateFailed]
-	if opt.Limit > 0 && int64(opt.Limit) < totalPending {
-		totalPending = int64(opt.Limit)
 	}
 
 	report := func() {

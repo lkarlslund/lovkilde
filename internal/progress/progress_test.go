@@ -66,7 +66,6 @@ func TestBarAutoIsSilentOffTerminal(t *testing.T) {
 	if b.Enabled() {
 		t.Fatal("bar enabled on a non-terminal writer")
 	}
-	b.SetTotal(100)
 	b.Set(50)
 	b.Describe("fetch @250ms")
 	b.Finish()
@@ -78,12 +77,11 @@ func TestBarAutoIsSilentOffTerminal(t *testing.T) {
 
 func TestBarAlwaysRendersCounts(t *testing.T) {
 	var buf bytes.Buffer
-	b := NewBar(NewGate(&buf), "fetch", 0, ModeAlways)
+	b := NewBar(NewGate(&buf), "fetch", 100, ModeAlways)
 	if !b.Enabled() {
 		t.Fatal("always mode disabled on a non-terminal writer")
 	}
 
-	b.SetTotal(100)
 	b.Set(50)
 
 	// Redraws are throttled on purpose, so a frame is only due once the
@@ -149,11 +147,10 @@ func TestParseMode(t *testing.T) {
 	}
 }
 
-// A nil bar is what a command that has no progress phase holds, so every method
-// has to tolerate it.
+// A nil bar is what a command with no progress phase holds, so every method has
+// to tolerate it.
 func TestNilBarIsInert(t *testing.T) {
 	var b *Bar
-	b.SetTotal(10)
 	b.Set(1)
 	b.Describe("x")
 	if b.Enabled() {
@@ -162,40 +159,23 @@ func TestNilBarIsInert(t *testing.T) {
 	b.Finish()
 }
 
-// Regression: the underlying library latches its finished state if a frame ever
-// renders while its max is still unset, after which it ignores every update. A
-// bar whose total arrives late -- which is how fetch works -- must survive being
-// labelled first, or the operator watches a line that never moves.
-func TestBarSurvivesDescribeBeforeTotal(t *testing.T) {
+// Without a total there is nothing to draw, so no bar is built: the crawl that
+// has nothing to do gets its summary log line and no frame. This replaces the
+// earlier machinery for a total that arrives late, which existed only to dodge a
+// latch in the bar library -- building with a known total makes that unreachable.
+func TestBarWithoutTotalIsInert(t *testing.T) {
 	var buf bytes.Buffer
 	b := NewBar(NewGate(&buf), "fetch", 0, ModeAlways)
 
-	b.Describe("fetch @250ms") // renders while the total is still unknown
-	b.SetTotal(10)
-	time.Sleep(200 * time.Millisecond)
-	if err := b.Set(10); err != nil {
-		t.Fatalf("Set: %v", err)
+	if b.Enabled() {
+		t.Error("a bar with nothing to count reported enabled")
 	}
-	time.Sleep(200 * time.Millisecond)
-	if err := b.Set(10); err != nil {
-		t.Fatalf("Set: %v", err)
-	}
-
-	if !strings.Contains(buf.String(), "10/10") {
-		t.Errorf("bar silenced by an early Describe: %q", buf.String())
-	}
-}
-
-// Updates before a total is known are dropped rather than drawn against a
-// placeholder denominator, which would read as a completed crawl.
-func TestBarIgnoresCountsUntilTotal(t *testing.T) {
-	var buf bytes.Buffer
-	b := NewBar(NewGate(&buf), "fetch", 0, ModeAlways)
-
+	b.Describe("fetch @250ms")
 	if err := b.Set(3); err != nil {
-		t.Fatalf("Set before total: %v", err)
+		t.Fatalf("Set on an inert bar: %v", err)
 	}
+	b.Finish()
 	if buf.Len() != 0 {
-		t.Errorf("painted %q with no total to measure against", buf.String())
+		t.Errorf("inert bar wrote %q", buf.String())
 	}
 }

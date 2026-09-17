@@ -115,35 +115,33 @@ func ParseMode(s string) (Mode, error) {
 }
 
 // Bar is the fetch progress line: documents done, docs/sec, and ETA.
+//
+// A bar is only ever built with a known total. The underlying library tests
+// "current >= max" on every render, so one built with a max of 0 latches its
+// finished state at once and then silently ignores every later update — a bar
+// that reads as a stalled crawl. Counting before building is therefore part of
+// the design rather than a guard to work around.
 type Bar struct {
-	pb      *progressbar.ProgressBar
-	w       io.Writer
-	enabled bool
-
-	// totalUnknown guards a trap in the underlying library: rendering while its
-	// max is still 0 evaluates "current >= max" as true, latches its finished
-	// state, and silently ignores every later update -- a progress bar that
-	// looks frozen. The library offers no way to un-latch short of Reset(), so
-	// the wrapper simply never lets a frame render before a total is known.
-	totalUnknown bool
+	pb *progressbar.ProgressBar
+	w  io.Writer // gated writer, so Finish's newline cannot split a log record
 }
 
-// NewBar builds a bar over gate. total may be 0 and set later with SetTotal.
+// NewBar builds a bar over gate for a run of total items. It returns an inert
+// bar — not nil — when there is nothing to count or --progress has ruled the bar
+// out, so callers need no nil checks and an unattended run pays nothing for a
+// frame nobody is watching.
 func NewBar(g *Gate, label string, total int64, mode Mode) *Bar {
-	enabled := mode == ModeAlways || (mode == ModeAuto && g.IsTerminal())
-	b := &Bar{enabled: enabled}
-	// A zero max is what triggers the finish latch described on Bar, so an
-	// unknown total is represented by a placeholder the first SetTotal replaces.
-	construct := total
-	if construct <= 0 {
-		construct = 1
-		b.totalUnknown = true
+	b := &Bar{w: g.BarWriter()}
+	if total <= 0 {
+		return b
 	}
-	b.w = g.BarWriter()
-	b.pb = progressbar.NewOptions64(construct,
-		// Off unless we are on a terminal: "invisible" short-circuits before
-		// any formatting, so an unattended run pays nothing for the bar.
-		progressbar.OptionSetVisibility(enabled),
+	if mode == ModeAuto && !g.IsTerminal() {
+		return b
+	}
+	b.pb = progressbar.NewOptions64(total,
+		// Must go through the gate: the default writer is os.Stdout, which would
+		// put frames on a different stream than the log and outside the gate's
+		// line ownership entirely.
 		progressbar.OptionSetWriter(g.BarWriter()),
 		// The crawl emits one event per document, which at sub-second pacing
 		// would flood the terminal and dominate the request budget.
@@ -159,36 +157,14 @@ func NewBar(g *Gate, label string, total int64, mode Mode) *Bar {
 	return b
 }
 
-// Enabled reports whether the bar renders anything. A nil bar is inert, which is
-// what the phases without a progress line hold.
-func (b *Bar) Enabled() bool { return b != nil && b.enabled }
+// Enabled reports whether the bar renders anything.
+func (b *Bar) Enabled() bool { return b != nil && b.pb != nil }
 
-// SetTotal sets the denominator, e.g. the number of pending documents.
-func (b *Bar) SetTotal(total int64) {
-	if b == nil || b.pb == nil || total <= 0 {
-		return
-	}
-	b.pb.ChangeMax64(total)
-	b.totalUnknown = false
-}
-
-// Total reports the denominator currently in force, for diagnostics.
-func (b *Bar) Total() int64 {
-	if b == nil || b.pb == nil {
-		return 0
-	}
-	return b.pb.GetMax64()
-}
-
-// Set moves the bar to an absolute count. The error is returned rather than
-// swallowed so a caller can log it: the library rejects updates when its max is
-// unset, which is exactly the kind of silent no-op that wastes an hour.
+// Set moves the bar to an absolute count. The error is passed through rather
+// than swallowed so a caller can warn once; a bar that cannot render is worth
+// knowing about, but not worth 200k warnings.
 func (b *Bar) Set(n int64) error {
 	if b == nil || b.pb == nil {
-		return nil
-	}
-	if b.totalUnknown {
-		// Nothing meaningful to draw, and painting now risks the latch above.
 		return nil
 	}
 	return b.pb.Set64(n)
@@ -196,9 +172,7 @@ func (b *Bar) Set(n int64) error {
 
 // Describe updates the leading label, used to surface the current pacing.
 func (b *Bar) Describe(s string) {
-	if b == nil || b.pb == nil || b.totalUnknown {
-		// Describe repaints immediately, and painting against the placeholder
-		// denominator would show a crawl that reads as finished at 0/1.
+	if b == nil || b.pb == nil {
 		return
 	}
 	b.pb.Describe(s)
@@ -208,7 +182,7 @@ func (b *Bar) Describe(s string) {
 // crawl logs its summary the moment a run ends, and the tally the bar built up
 // should stay above it rather than vanish.
 func (b *Bar) Finish() {
-	if b == nil || b.pb == nil || !b.enabled {
+	if b == nil || b.pb == nil {
 		return
 	}
 	_, _ = io.WriteString(b.w, "\n")

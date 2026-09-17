@@ -249,14 +249,13 @@ func TestFetchBarPaints(t *testing.T) {
 		limiter.BucketDocument: {Start: 300 * time.Millisecond, Floor: 200 * time.Millisecond, Max: time.Minute},
 	}, 1.5, 4, time.Minute)
 
-	bar := newFetchBar(lim, progress.ModeAlways)
+	// The same order the command uses: count, build the bar, then paint counts,
+	// spaced further apart than the redraw throttle.
+	bar := newFetchBar(lim, progress.ModeAlways, 8)
 	if !bar.Enabled() {
 		t.Fatal("bar disabled in always mode")
 	}
 
-	// The same call order the fetch loop uses: total first, then the count,
-	// spaced further apart than the redraw throttle.
-	bar.SetTotal(8)
 	for i := int64(1); i <= 8; i++ {
 		if err := bar.Set(i); err != nil {
 			t.Fatalf("Set(%d): %v", i, err)

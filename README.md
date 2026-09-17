@@ -219,14 +219,17 @@ library. Three properties were non-negotiable:
   a bar frame ends without a newline — so a log record would otherwise be
   appended to the tail of a frame. `internal/progress.Gate` serializes both
   writers and erases the frame before each record.
-- **It disappears by itself.** Off a terminal, the library's invisible mode
-  short-circuits before any formatting, so cron runs and redirected output contain
-  no escape sequences and pay nothing.
+- **It disappears by itself.** Off a terminal, or with `--progress never`, the bar is
+  simply not constructed, so cron runs and redirected output contain no escape
+  sequences and pay nothing.
 - **A stall is visible.** The crawl reports every resource, including failures, so
   a bar that stops moving means the crawl stopped, not that the bar broke.
+- **It is built with its total.** The pending count is taken before the bar exists,
+  so there is no "unknown total" state to render, no placeholder denominator, and no
+  frame that reads as a finished crawl. A run with nothing pending gets no bar.
 
 The bar is `github.com/schollz/progressbar/v3` (from awesome-go's list); this
-repository only adds the gate and guards around the library's rough edges.
+repository adds the gate and the rule above, and nothing else.
 
 Subcommands: `inventory`, `harvest`, `fetch`, `update`, `status`, `rebuild`.
 
@@ -318,12 +321,13 @@ reports while issuing zero requests.
   Found in the first live run, not in tests: the fixture corpus had no example of it.
 - **A progress bar that rendered nothing at all.** The bar library latches its
   `finished` state the first time it renders while its max is still 0 — which is
-  how `fetch` starts, since the pending count arrives with the first report. Setting
-  the label triggers a render, so the very first label update killed the bar for the
-  rest of the run, with no error and no output. `progress.Bar` now refuses to paint
-  anything until a real total is known. `OptionClearOnFinish` was the second trap:
-  it suppresses the completed frame, so a crawl that reaches its last document shows
-  nothing.
+  how `fetch` started, since the pending count only arrived with the first report.
+  Setting the label triggers a render, so the very first label update killed the bar
+  for the rest of the run, with no error and no output. The first fix was a wrapper
+  that refused to paint until a total was known; the real fix is structural — the
+  pending count is taken *before* the bar is built, so a zero-max bar never exists.
+  `OptionClearOnFinish` was the second trap: it suppresses the completed frame, so a
+  crawl that reaches its last document shows nothing.
 
 ## Notes and limitations
 
