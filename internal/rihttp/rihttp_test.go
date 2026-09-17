@@ -17,33 +17,23 @@ import (
 	"github.com/lkarlslund/retsinformation/internal/limiter"
 )
 
-func testClient(t *testing.T, h http.Handler, tune func(*config.Config)) (*Client, string) {
+// testClient builds a client against h. Buckets are pinned at millisecond scale
+// so these tests assert how the client reacts to a status code, not how fast it
+// paces: the learner's arithmetic has its own package test.
+func testClient(t *testing.T, h http.Handler) (*Client, string) {
 	t.Helper()
-	cfg := config.Default()
-	// Keep tests fast: the pacing under test is verified by its own package test.
-	cfg.DocumentStart = 200 * time.Millisecond
-	cfg.DocumentFloor = 200 * time.Millisecond
-	cfg.DocumentMax = time.Minute
-	cfg.HarvestInterval = 10 * time.Second
-	cfg.BackoffBase = 20 * time.Millisecond
-	cfg.BackoffMax = 80 * time.Millisecond
-	cfg.MaxRetries = 3
-	if tune != nil {
-		tune(&cfg)
-	}
-	if err := cfg.Validate(); err != nil {
+	if err := config.Default().Validate(); err != nil {
 		t.Fatalf("config: %v", err)
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
+	ms := limiter.Spec{Start: time.Millisecond, Floor: time.Millisecond, Max: time.Second, Pinned: true}
 	lim := limiter.New(map[string]limiter.Spec{
-		// Pinned so pacing tests measure the client's retry behaviour rather than
-		// the adaptive learner moving intervals underneath them.
-		limiter.BucketDocument: {Start: cfg.DocumentStart, Floor: cfg.DocumentStart, Max: cfg.DocumentMax, Pinned: true},
-		limiter.BucketHarvest:  {Start: cfg.HarvestInterval, Floor: cfg.HarvestInterval, Max: cfg.HarvestInterval, Pinned: true},
-		limiter.BucketSitemap:  {Start: cfg.SitemapInterval, Floor: cfg.SitemapInterval, Max: cfg.SitemapInterval, Pinned: true},
-	}, cfg.AdaptiveStepDown, cfg.AdaptiveWindow, cfg.AdaptiveCooldown)
-	return New(cfg, lim), srv.URL
+		limiter.BucketDocument: ms,
+		limiter.BucketHarvest:  ms,
+		limiter.BucketSitemap:  ms,
+	})
+	return New(config.Default(), lim), srv.URL
 }
 
 // gzipServing reproduces the real deployment: the origin sits behind a CDN that
@@ -62,7 +52,7 @@ func TestTransparentlyDecodesGzip(t *testing.T) {
 		_, _ = gz.Write([]byte(want))
 		_ = gz.Close()
 	})
-	c, url := testClient(t, h, nil)
+	c, url := testClient(t, h)
 	got, err := c.GetJSON(context.Background(), limiter.BucketSitemap, url+"/eli/sitemap.xml", "application/xml")
 	if err != nil {
 		t.Fatal(err)
@@ -76,14 +66,13 @@ func TestTransparentlyDecodesGzip(t *testing.T) {
 	}
 }
 
-// The published harvesting limit is one call per 10 seconds; when exceeded the
-// service answers 429. The client must back off rather than hammer on, and must
-// respect Retry-After.
-func TestBacksOffOn429AndHonoursRetryAfter(t *testing.T) {
+// A throttle is answered by returning, not by retrying inside the call: the
+// adaptive learner is the only backoff, and it acts on the whole bucket. A
+// Retry-After must therefore delay the *next* request rather than stall this one.
+func TestThrottleReturnsAndPacesTheNextRequest(t *testing.T) {
 	var hits atomic.Int64
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := hits.Add(1)
-		if n <= 2 {
+		if hits.Add(1) == 1 {
 			w.Header().Set("Retry-After", "1")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_, _ = io.WriteString(w, "Servicen er kaldt for ofte.")
@@ -91,41 +80,72 @@ func TestBacksOffOn429AndHonoursRetryAfter(t *testing.T) {
 		}
 		_, _ = io.WriteString(w, "ok")
 	})
-	c, url := testClient(t, h, nil)
+	c, url := testClient(t, h)
+	ctx := context.Background()
+
+	_, err := c.GetJSON(ctx, limiter.BucketDocument, url+"/x", "text/plain")
+	var sc *StatusCodeError
+	if !errors.As(err, &sc) {
+		t.Fatalf("first call: expected StatusCodeError, got %T: %v", err, err)
+	}
+	if sc.RetryAfter != time.Second {
+		t.Errorf("RetryAfter = %s, want 1s", sc.RetryAfter)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Errorf("server saw %d requests for one call, want 1: the client must not retry in place", got)
+	}
+	if c.Throttle.Load() != 1 {
+		t.Errorf("Throttle = %d, want 1", c.Throttle.Load())
+	}
 
 	start := time.Now()
-	got, err := c.GetJSON(context.Background(), limiter.BucketDocument, url+"/x", "text/plain")
+	got, err := c.GetJSON(ctx, limiter.BucketDocument, url+"/x", "text/plain")
 	if err != nil {
-		t.Fatalf("request should eventually succeed: %v", err)
+		t.Fatalf("second call should succeed once the wait has passed: %v", err)
 	}
 	if string(got) != "ok" {
 		t.Errorf("body = %q", got)
 	}
-	if c.Throttle.Load() != 2 {
-		t.Errorf("Throttle = %d, want 2", c.Throttle.Load())
-	}
-	// Two Retry-After: 1 responses must have forced at least ~2s of waiting.
-	if elapsed := time.Since(start); elapsed < 1500*time.Millisecond {
-		t.Errorf("only waited %s for two Retry-After: 1 responses", elapsed)
+	if elapsed := time.Since(start); elapsed < 900*time.Millisecond {
+		t.Errorf("second call waited %s, want the Retry-After interval to be honoured", elapsed)
 	}
 }
 
-// A persistent 429 must end in an error, not an infinite retry loop that keeps
-// the mirror hammering a service that has told it to stop.
-func TestGivesUpWhenThrottlingPersists(t *testing.T) {
+// An endless 429 must cost one request per call, not a retry chain: the mirror is
+// told to stop, and the crawl decides whether to try the resource again later.
+func TestPersistentThrottleCostsOneRequestPerCall(t *testing.T) {
 	var hits atomic.Int64
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 		w.WriteHeader(http.StatusTooManyRequests)
 	})
-	c, url := testClient(t, h, func(cfg *config.Config) { cfg.MaxRetries = 2 })
+	c, url := testClient(t, h)
+	ctx := context.Background()
 
-	_, err := c.GetJSON(context.Background(), limiter.BucketDocument, url+"/x", "text/plain")
-	if err == nil {
-		t.Fatal("expected error after exhausting retries")
+	for i := 0; i < 3; i++ {
+		if _, err := c.GetJSON(ctx, limiter.BucketDocument, url+"/x", "text/plain"); err == nil {
+			t.Fatalf("call %d: expected a throttle error", i+1)
+		}
 	}
-	if got := hits.Load(); got != 3 { // initial attempt + MaxRetries
-		t.Errorf("server saw %d requests, want 3", got)
+	if got := hits.Load(); got != 3 {
+		t.Errorf("server saw %d requests for 3 calls, want 3", got)
+	}
+}
+
+// A server fault is a load signal, so it is reported as throttling, but it is
+// still one request per call rather than a retry ladder.
+func TestServerFaultIsReportedOnce(t *testing.T) {
+	var hits atomic.Int64
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	c, url := testClient(t, h)
+	if _, err := c.GetJSON(context.Background(), limiter.BucketDocument, url+"/x", "text/plain"); err == nil {
+		t.Fatal("expected error")
+	}
+	if got := hits.Load(); got != 1 {
+		t.Errorf("server saw %d requests, want 1", got)
 	}
 }
 
@@ -137,7 +157,7 @@ func TestNonRetryableClientErrors(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = io.WriteString(w, "not found")
 	})
-	c, url := testClient(t, h, nil)
+	c, url := testClient(t, h)
 
 	_, err := c.GetJSON(context.Background(), limiter.BucketDocument, url+"/gone", "application/xml")
 	var sc *StatusCodeError
@@ -148,7 +168,7 @@ func TestNonRetryableClientErrors(t *testing.T) {
 		t.Errorf("status = %d", sc.StatusCode)
 	}
 	if hits.Load() != 1 {
-		t.Errorf("404 retried %d times, want 1", hits.Load())
+		t.Errorf("404 requested %d times, want 1", hits.Load())
 	}
 }
 
@@ -157,7 +177,7 @@ func TestSendsIdentifyingUserAgent(t *testing.T) {
 	// contact us instead of banning our IP.
 	got := make(chan string, 1)
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got <- r.Header.Get("User-Agent") })
-	c, url := testClient(t, h, nil)
+	c, url := testClient(t, h)
 	if _, err := c.GetJSON(context.Background(), limiter.BucketDocument, url+"/x", "text/plain"); err != nil {
 		t.Fatal(err)
 	}
@@ -167,15 +187,33 @@ func TestSendsIdentifyingUserAgent(t *testing.T) {
 	}
 }
 
-func TestContextCancellationStopsRetryLoop(t *testing.T) {
+// A Retry-After wait must stay cancellable, so Ctrl-C during a long throttle does
+// not strand the crawl until the server's patience expires.
+func TestThrottleWaitIsCancellable(t *testing.T) {
+	var hits atomic.Int64
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
+		if hits.Add(1) == 1 {
+			w.Header().Set("Retry-After", "30")
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
 	})
-	c, url := testClient(t, h, func(cfg *config.Config) { cfg.MaxRetries = 50 })
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
+	c, url := testClient(t, h)
+	ctx := context.Background()
 	if _, err := c.GetJSON(ctx, limiter.BucketDocument, url+"/x", "text/plain"); err == nil {
-		t.Fatal("expected cancellation error")
+		t.Fatal("expected throttle error")
+	}
+
+	short, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := c.GetJSON(short, limiter.BucketDocument, url+"/x", "text/plain"); err == nil {
+		t.Fatal("expected cancellation while the bucket is held")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("cancelled wait took %s, want prompt return", elapsed)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Errorf("server saw %d requests, want 1", got)
 	}
 }
 
@@ -191,29 +229,16 @@ func minInt(a, b int) int {
 // fixed schedule.
 func adaptiveClient(t *testing.T, h http.Handler) (*Client, string, *limiter.Limiter) {
 	t.Helper()
-	cfg := config.Default()
-	cfg.DocumentStart = 600 * time.Millisecond
-	cfg.DocumentFloor = 200 * time.Millisecond
-	cfg.DocumentMax = 30 * time.Second
-	cfg.AdaptiveWindow = 3
-	cfg.AdaptiveStepDown = 1.5
-	cfg.AdaptiveCooldown = 0
-	cfg.BackoffBase = 10 * time.Millisecond
-	cfg.BackoffMax = 20 * time.Millisecond
-	cfg.MaxRetries = 1
-	if err := cfg.Validate(); err != nil {
-		t.Fatal(err)
-	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	lim := limiter.New(map[string]limiter.Spec{
-		limiter.BucketDocument: {Start: cfg.DocumentStart, Floor: cfg.DocumentFloor, Max: cfg.DocumentMax},
-	}, cfg.AdaptiveStepDown, cfg.AdaptiveWindow, cfg.AdaptiveCooldown)
-	return New(cfg, lim), srv.URL, lim
+	lim := limiter.NewTuned(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: 600 * time.Millisecond, Floor: 200 * time.Millisecond, Max: 30 * time.Second},
+	}, 1.5, 3, 0)
+	return New(config.Default(), lim), srv.URL, lim
 }
 
-// A 429 must make the adaptive bucket slower for subsequent requests, not just
-// for the current retry chain.
+// A 429 must make the adaptive bucket slower for subsequent requests. One request
+// is one observation: the doubling happens once, not once per retry hop.
 func TestClientLearnsToSlowDownFrom429(t *testing.T) {
 	var throttle atomic.Bool
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -238,11 +263,9 @@ func TestClientLearnsToSlowDownFrom429(t *testing.T) {
 	// slowdown itself.
 	_, _ = c.GetJSON(ctx, limiter.BucketDocument, url+"/x", "text/plain")
 
-	// MaxRetries=1 means the initial attempt plus one retry, both throttled, so
-	// the learner should have doubled twice: 600ms -> 1.2s -> 2.4s.
 	cur, _ := lim.Current(limiter.BucketDocument)
-	if cur != 2400*time.Millisecond {
-		t.Errorf("after two throttled attempts: interval = %s, want 2.4s (client did not report the throttle to the learner)", cur)
+	if cur != 1200*time.Millisecond {
+		t.Errorf("after one throttled request: interval = %s, want 1.2s (client did not report the throttle to the learner)", cur)
 	}
 }
 

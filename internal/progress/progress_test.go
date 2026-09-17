@@ -15,12 +15,12 @@ func TestGateErasesBarBeforeLog(t *testing.T) {
 	g := NewGate(&buf)
 
 	_, _ = g.BarWriter().Write([]byte("\rfetch ▕███▏ 10/100"))
-	_, _ = g.LogWriter().Write([]byte("time=... msg=\"fetch progress\"\n"))
+	_, _ = g.LogWriter().Write([]byte("time=... msg=\"harvested day\"\n"))
 
 	out := buf.String()
 	iFrame := strings.Index(out, "fetch ▕███▏")
 	iClear := strings.Index(out, "\r\033[K")
-	iLog := strings.Index(out, "msg=\"fetch progress\"")
+	iLog := strings.Index(out, "msg=\"harvested day\"")
 	if iFrame < 0 || iClear < 0 || iLog < 0 {
 		t.Fatalf("missing part of the sequence in %q", out)
 	}

@@ -85,10 +85,36 @@ type Limiter struct {
 	steps int // interval changes made, for logging and tests
 }
 
-// New builds a limiter. stepDown (e.g. 1.5) and window (e.g. 20) control how
-// fast adaptive buckets approach their floor; cooldown suppresses re-probing
-// shortly after being throttled.
-func New(specs map[string]Spec, stepDown float64, window int, cooldown time.Duration) *Limiter {
+// Pacing constants for the adaptive learner. Only the floor is user-settable:
+// these shape how the learner behaves, and every measured run reached the floor
+// with them, so they are observations rather than options.
+const (
+	// StartInterval is where a cold adaptive bucket begins. It is deliberately
+	// slow: the safe pace is unknown at startup and must be earned.
+	StartInterval = 1200 * time.Millisecond
+	// MaxInterval caps growth after throttling, so one bad patch cannot park a
+	// multi-day crawl for hours.
+	MaxInterval = 5 * time.Minute
+	// Window is consecutive successful requests required to probe faster.
+	Window = 20
+	// StepDown is the factor each probe-faster step divides by. Measured
+	// behaviour: 1.2s settles at the 200ms floor in five steps.
+	StepDown = 1.5
+	// Cooldown suppresses probing for this long after a throttle.
+	Cooldown = 10 * time.Minute
+	// MaxDelay caps how far a server's Retry-After may push a bucket forward.
+	// Longer guidance is logged and clamped so one header cannot stall a crawl.
+	MaxDelay = time.Hour
+)
+
+// New builds a limiter with the production pacing constants.
+func New(specs map[string]Spec) *Limiter {
+	return NewTuned(specs, StepDown, Window, Cooldown)
+}
+
+// NewTuned builds a limiter with an explicit learner shape. Tests use it to run
+// the same state machine on millisecond scales; production uses New.
+func NewTuned(specs map[string]Spec, stepDown float64, window int, cooldown time.Duration) *Limiter {
 	if stepDown <= 1 {
 		stepDown = 1.5
 	}
@@ -145,6 +171,27 @@ func (l *Limiter) Wait(ctx context.Context, name string) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+// Delay pushes a bucket's next slot out by d without sleeping here. It is how a
+// server's Retry-After is honoured: the wait becomes pacing for the whole bucket
+// instead of a stalled request holding a crawl open. It returns the delay
+// actually applied, which is less than d when MaxDelay clamped it.
+func (l *Limiter) Delay(name string, d time.Duration) time.Duration {
+	if d <= 0 {
+		return 0
+	}
+	if d > MaxDelay {
+		d = MaxDelay
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if b, ok := l.buckets[name]; ok {
+		if until := time.Now().Add(d); b.scheduled.Before(until) {
+			b.scheduled = until
+		}
+	}
+	return d
 }
 
 // Feedback reports how a request finished and adapts the bucket.

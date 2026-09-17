@@ -85,7 +85,7 @@ func TestFlagsBindOnEitherSideOfSubcommand(t *testing.T) {
 		{"global flag before command", []string{"--data-dir", "/tmp/x", "probe"}, "data-dir", "/tmp/x"},
 		{"global flag after command", []string{"probe", "--data-dir", "/tmp/x"}, "data-dir", "/tmp/x"},
 		{"both sides at once", []string{"--data-dir", "/tmp/y", "probe", "--limit", "7"}, "limit", "7"},
-		{"adaptive flag before command", []string{"--adaptive-window", "4", "probe"}, "adaptive-window", "4"},
+		{"duration flag before command", []string{"--request-timeout", "30s", "probe"}, "request-timeout", "30s"},
 		{"duration with unit after command", []string{"probe", "--document-floor", "300ms"}, "document-floor", "300ms"},
 		{"progress mode after command", []string{"probe", "--progress", "never"}, "progress", "never"},
 		{"progress mode before command", []string{"--progress", "always", "probe"}, "progress", "always"},
@@ -129,18 +129,20 @@ func TestFlagValueIsNotTreatedAsCommand(t *testing.T) {
 	}
 }
 
-// Bool flags consume no following argument, so the next token is the command.
-func TestBoolFlagDoesNotConsumeCommand(t *testing.T) {
+// A value-taking flag placed before the command must not swallow the command
+// token. (The bool variant of this test is retired: after the pacing cleanup the
+// CLI has no bool flags, and testing pflag's own parsing is not our business.)
+func TestDurationFlagBeforeCommandDoesNotConsumeCommand(t *testing.T) {
 	var p parsed
 	root := testTree(t, &p)
-	if err := runCLI(t, root, "--pinned-intervals", "probe"); err != nil {
+	if err := runCLI(t, root, "--request-timeout", "30s", "probe"); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	if p.called != "probe" {
 		t.Fatalf("called %q, want probe", p.called)
 	}
-	if v, _ := p.recorded("pinned-intervals"); v != "true" {
-		t.Errorf("pinned-intervals = %q, want true", v)
+	if v, _ := p.recorded("request-timeout"); v != "30s" {
+		t.Errorf("request-timeout = %q, want 30s", v)
 	}
 }
 
@@ -203,32 +205,31 @@ func TestFetchHasLimitAndBatchFlags(t *testing.T) {
 	}
 }
 
-// The published harvesting limit must not be configurable away, and the defaults
-// themselves must be valid or every run fails at startup.
+// The defaults must be valid or every run fails at startup, and the pacing
+// surface must stay one flag wide: a pace that is either a published obligation
+// or a learned value cannot have a flag.
 func TestConfigSafety(t *testing.T) {
 	if err := config.Default().Validate(); err != nil {
 		t.Fatalf("defaults invalid: %v", err)
 	}
 
-	breach := config.Default()
-	breach.HarvestInterval = 5 * time.Second
-	if err := breach.Validate(); err == nil {
-		t.Error("harvest interval below the published 10s limit was accepted")
-	} else if !strings.Contains(err.Error(), "429") {
-		t.Errorf("error should state the consequence, got: %v", err)
+	root := newRootCmd()
+	for _, name := range []string{
+		"harvest-interval", "sitemap-interval", "document-interval", "document-max-interval",
+		"pinned-intervals", "adaptive-window", "adaptive-step-down", "adaptive-cooldown",
+	} {
+		if root.PersistentFlags().Lookup(name) != nil {
+			t.Errorf("--%s exists: that pace is a constant or a learned value, not an option", name)
+		}
+	}
+	if root.PersistentFlags().Lookup("document-floor") == nil {
+		t.Error("--document-floor is the one pacing knob and must exist")
 	}
 
 	tooFast := config.Default()
 	tooFast.DocumentFloor = 10 * time.Millisecond
 	if err := tooFast.Validate(); err == nil {
 		t.Error("document floor below the courtesy minimum was accepted")
-	}
-
-	// Backoff must never be able to speed the crawl up.
-	inverted := config.Default()
-	inverted.DocumentMax = inverted.DocumentStart / 2
-	if err := inverted.Validate(); err == nil {
-		t.Error("document max below start was accepted, which would make backoff accelerate")
 	}
 }
 
@@ -242,7 +243,7 @@ func TestFetchBarPaints(t *testing.T) {
 	gate = progress.NewGate(&buf)
 	defer func() { gate = orig }()
 
-	lim := limiter.New(map[string]limiter.Spec{
+	lim := limiter.NewTuned(map[string]limiter.Spec{
 		limiter.BucketDocument: {Start: 300 * time.Millisecond, Floor: 200 * time.Millisecond, Max: time.Minute},
 	}, 1.5, 4, time.Minute)
 

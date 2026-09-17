@@ -108,7 +108,7 @@ func TestFetchReportsProgressEveryResource(t *testing.T) {
 	}
 	// Pacing collapsed to microseconds: this is a correctness test, and the
 	// limiter has its own suite for pacing behaviour.
-	lim := limiter.New(map[string]limiter.Spec{
+	lim := limiter.NewTuned(map[string]limiter.Spec{
 		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
 	}, 1.5, 2, time.Millisecond)
 	c := New(cfg, st, ar, rihttp.New(cfg, lim))
@@ -187,7 +187,7 @@ func TestFetchReportsProgressOnResumeWithoutRequests(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	lim := limiter.New(map[string]limiter.Spec{
+	lim := limiter.NewTuned(map[string]limiter.Spec{
 		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
 	}, 1.5, 2, time.Millisecond)
 	c := New(cfg, st, ar, rihttp.New(cfg, lim))
@@ -240,7 +240,7 @@ func TestFetchClosesHTMLResponseWithoutRetrying(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	lim := limiter.New(map[string]limiter.Spec{
+	lim := limiter.NewTuned(map[string]limiter.Spec{
 		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
 	}, 1.5, 2, time.Millisecond)
 	c := New(cfg, st, ar, rihttp.New(cfg, lim))

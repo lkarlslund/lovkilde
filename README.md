@@ -75,7 +75,7 @@ flowchart LR
   subgraph PACE["internal/limiter — process-global, self-learning"]
     B["harvest 12s PINNED<br/>document 1.2s → floor 200ms<br/>sitemap 2s → floor 250ms"]
   end
-  C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>reports outcome → learner<br/>429 → Retry-After + exp backoff+jitter"]
+  C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>reports outcome → learner<br/>one request per call · Retry-After → bucket delay"]
   H --> RI["retsininformation.dk"]
   PACE --> RI2["api.retsinformation.dk"]
   H --> RI2
@@ -122,41 +122,49 @@ Example: `xml/fob/1980/100.xml`, `xml/retsinfo/2026/10019.xml`.
 
 There are exactly two kinds of limit here, and the tool treats them differently.
 
-**Pinned — proven obligations.** The harvesting service publishes a 1 call / 10 s
+**Constants — proven obligations.** The harvesting service publishes a 1 call / 10 s
 limit and returns a real `429` when exceeded, with no `Retry-After` header to be
-polite about. That interval is a contract, not an observation, so it is **fixed** and
-`config.Validate()` refuses to start if `--harvest-interval` is below 10 s. Pass
-`--pinned-intervals` to pin any other bucket the same way.
+polite about. That interval is a contract, not an observation, so it is a **constant**
+(`config.HarvestInterval`, 12 s for clock-skew margin) with no flag: there is no
+configuration in which going faster is acceptable. The sitemap pace (2 s) is a
+constant too, because it was measured rather than guessed.
 
-**Adaptive — everything unpublished.** There is no published limit for document or
-sitemap requests, so guessing one is the wrong move: too fast risks an IP-wide
-Cloudflare block, too slow wastes the bootstrap. Instead the learner measures the site
-and finds its own ceiling — a TCP-AIMD style controller:
+**Adaptive — everything unpublished.** There is no published limit for document
+requests, so guessing one is the wrong move: too fast risks an IP-wide Cloudflare
+block, too slow wastes the bootstrap. Instead the learner measures the site and finds
+its own ceiling — a TCP-AIMD style controller:
 
 | Event | Action |
 |---|---|
-| `--adaptive-window` consecutive successes | shorten the interval by `/--adaptive-step-down` (1.5×) |
-| any `429`/`5xx`/transport failure | **double** the interval immediately, then cool down |
-| settled interval | clamped to `[--document-floor, --document-max-interval]` |
+| 20 consecutive successes (`limiter.Window`) | shorten the interval by ÷1.5 (`limiter.StepDown`) |
+| any `429`/`5xx` | **double** the interval immediately, then hold it for a 10 min cooldown before probing faster again |
+| any transport failure | neither faster nor slower, but it breaks the success streak, so learning only happens on clean windows |
+| interval | clamped to `[--document-floor, limiter.MaxInterval]`, starting at `limiter.StartInterval` (1.2 s) |
 
-It starts conservative (1.2 s) and only tightens on evidence, so it is fast when the
-origin is healthy and backs off the instant it isn't. Learning restarts each run —
-deliberate, because the site's capacity changes and a persisted fast interval would
-begin the next run already presumptuous.
+Only the **floor** is a flag. Every other number above is a constant, because every
+measured run behaved the same way: five step-downs from 1.2 s down to the floor, and
+nothing to react to. More knobs would only be more ways to configure a crawl the terms
+do not allow.
 
-Measured against production: starting at 900 ms with a 250 ms floor, the learner
-tightened **900 → 600 → 400 → 267 → 250 ms** across 25 documents, with zero throttles.
+Learning restarts each run — deliberate, because the site's capacity changes and a
+persisted fast interval would begin the next run already presumptuous.
+
+Measured against production: at the 200 ms floor the learner tightened
+**1200 → 800 → 533 → 355 → 237 → 200 ms** (five step-downs) and sustained
+4.1 requests/s over the first ~2,100 documents with zero throttles.
 
 ## Anti-blocking measures
 
 1. **Process-global token buckets.** Every request in the process passes one gate per
-   bucket, so no phase or caller can bypass pacing, and the pinned 10 s harvest floor
-   is enforced at startup by `config.Validate()`.
-2. **Throttle-aware backoff.** Any 429/503/504 honours `Retry-After`, then backs off
-   exponentially 10 s → 15 min **with jitter**, and pushes the bucket forward so the
-   *next* request is delayed too. Jitter prevents retry synchronisation. The learner
-   doubles the interval on the same signal, so backoff survives past the single
-   request that triggered it.
+   bucket, so no phase or caller can bypass pacing, and the 10 s harvest obligation is
+   a constant with no flag that can lower it.
+2. **A throttle changes the schedule, not the retry count.** Any 429/503/5xx reports
+   the outcome to the learner, which doubles the interval and holds it through a
+   cooldown. If the server sends `Retry-After`, that wait is applied to the **bucket**
+   rather than sleeping the request open, so the next request is delayed too and a
+   cancellation still takes effect immediately. The client issues exactly one request
+   per call: the crawl re-selects a failed resource on a later sweep instead of the
+   HTTP layer hammering a service that has just said no.
 3. **Conservative transport.** 1–2 connections per host, HTTP/2, no worker pool. Extra
    concurrency would only raise block risk without finishing sooner, since pacing is
    the bottleneck.
@@ -165,8 +173,9 @@ tightened **900 → 600 → 400 → 267 → 250 ms** across 25 documents, with z
 5. **Idempotent, resumable phases.** A resource already on disk is closed with **no
    request at all**, so a multi-day crawl can be interrupted freely and a second pass
    costs nothing.
-6. **Bounded retries.** Resources failing `--max-attempts` times stop being retried
-   instead of consuming the polite budget forever; non-retryable 4xx never retries.
+6. **Bounded re-attempts.** A resource is re-tried on a later sweep at most five times
+   before it stops consuming the polite budget; permanent 4xx (404/410) is recorded as
+   gone and never asked for again.
 7. **Run-end warning** if the server throttled us at all during the run.
 
 ## Configuration
@@ -175,22 +184,19 @@ Flags only — no config file and no environment overrides, so `ps` and a cron l
 exactly what a run will do. Run `retsin --help` for the full list. The important ones:
 
 ```
---data-dir DIR            archive + state location (default ./data)
---harvest-interval 12s    pinned; cannot go below the published 10s
---document-interval 1.2s  starting document pace
---document-floor 200ms    fastest the learner may settle at
---document-max-interval 5m slowest backoff may reach after throttling
---sitemap-interval 2s     starting pace for sitemap pages
---adaptive-window 20      consecutive successes before a step down
---adaptive-step-down 1.5  divisor per step
---adaptive-cooldown 10m   hold after being throttled before probing faster
---pinned-intervals        freeze buckets instead of learning
---user-agent STRING       keep a contact address in it
---site / --harvest-api    origins
---request-timeout 1m      per-request timeout
---log-level info          debug, info, warn, error
---progress auto           live bar: auto (terminals only), always, or never
+--data-dir DIR           archive + state location (default ./data)
+--document-floor 200ms   the ONE pacing knob: fastest the learner may settle at
+--user-agent STRING      keep a contact address in it
+--site / --harvest-api   origins
+--request-timeout 1m     per-request timeout
+--log-level info         debug, info, warn, error
+--progress auto          live bar: auto (terminals only), always, or never
+--limit / --batch N      on fetch: trial size and Badger commit batch
 ```
+
+Everything else about pacing is either a published obligation (12 s harvest), a
+measurement (2 s sitemap), or the learner's own shape — all constants, all asserted in
+`internal/config/config_test.go`.
 
 ### Progress bar
 
@@ -242,14 +248,17 @@ Flags go before or after the subcommand, either form works.
 `update` = inventory + harvest + fetch and is safe to run on any schedule: unchanged
 documents are never re-requested.
 
-**Estimated bootstrap:** 203,152 resources ≈ **2.8 days** at the 1.2 s default, less if
-the learner finds headroom — at the 200 ms floor it is under 12 hours. About 22 GB raw.
-Daily updates afterwards are ~1 harvest call plus a few hundred documents.
+**Measured bootstrap:** the learner reaches the 200 ms floor within ~1,000 documents and
+held **4.1 requests/s** there with zero throttles, so 201,580 resources is roughly
+**14 hours** of unattended crawling. Documents average 35.5 KB, which puts the archive
+near **7 GB** — not the 22 GB an early estimate assumed from the larger JSON
+representation. Daily updates afterwards are ~1 harvest call plus a few hundred
+documents.
 
-To explore faster, lower `--document-interval` or `--document-floor` — but note those
-requests are served uncached straight from the origin, and the terms ask users not to
-burden the interface. The defaults are deliberately conservative; the learner tightens
-them only if the site proves it can take it. `fetch --limit N` caps a test run and
+There is no way to crawl faster than the 200 ms courtesy minimum: `--document-floor`
+refuses anything lower, because those requests are served uncached straight from the
+origin and the terms ask users not to burden the interface. The learner only reaches the
+floor if the site proves it can take it. `fetch --limit N` caps a test run and
 `--batch N` sizes the pending window.
 
 ## Recovery
@@ -271,11 +280,13 @@ If `meta/kv` is lost or suspect, in this exact order:
 go test ./...
 ```
 
-Covering: pacing guarantees, **the adaptive learner** (step-down after a clean window,
-doubling on throttle, floor/ceiling clamps, pinned buckets ignoring all feedback),
-live learner integration against a throttling fake server, flag parsing on either side
-of the subcommand, 429/`Retry-After` backoff, gzip handling, non-retryable errors, UA
-identity, context cancellation, ELI path↔archive-path mapping (including
+Covering: the pacing **constants** and the document-floor guard, pacing guarantees,
+**the adaptive learner** (step-down after a clean window, doubling on throttle,
+floor/ceiling clamps, pinned buckets ignoring all feedback, `Retry-After` applied to the
+bucket and clamped), live learner integration against a throttling fake server,
+one-request-per-call throttle handling, flag parsing on either side
+of the subcommand, gzip handling, non-retryable errors, UA
+identity, context cancellation (including a cancelled throttle wait), ELI path↔archive-path mapping (including
 path-traversal rejection), Badger round-trips and pending/limit semantics, harvest
 checkpointing, XML parsing against **three genuine fixture schemas**, the log/bar
 writer gate (a record must erase the frame, and never add a clear of its own),
@@ -297,7 +308,7 @@ reports while issuing zero requests.
 - **An HTML page counted as a retryable failure.** Some catalogue URIs have no XML
   representation: requesting `/xml` answers **HTTP 200 with the website's own page**.
   That was classified as a parse failure, so those resources were re-requested on
-  every pass up to `--max-attempts` — harmless once, wasteful for years of daily
+  every pass, up to five times each — harmless once, wasteful for years of daily
   updates. Now detected by payload and recorded as `gone`, alongside real 404s.
   Found in the first live run, not in tests: the fixture corpus had no example of it.
 - **A progress bar that rendered nothing at all.** The bar library latches its

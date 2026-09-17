@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	mrand "math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,7 +40,6 @@ type Client struct {
 
 	Requests atomic.Int64
 	Throttle atomic.Int64 // number of 429/503 responses seen
-	jitter   *mrand.Rand
 }
 
 // New builds a client. Exactly one Client should be shared per process so the
@@ -64,7 +62,6 @@ func New(cfg config.Config, lim *limiter.Limiter) *Client {
 		cfg:       cfg,
 		limiter:   lim,
 		userAgent: cfg.UserAgent,
-		jitter:    mrand.New(mrand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -89,135 +86,94 @@ func (c *Client) PostJSON(ctx context.Context, bucket, url string, body []byte) 
 	return io.ReadAll(resp.Body)
 }
 
-// do issues a request with pacing, retry, and throttle-aware backoff.
+// do issues exactly one paced request. A failure is returned rather than retried
+// here: the adaptive learner is the mirror's only throttle response, and a failed
+// resource is re-selected on a later sweep of the crawl, bounded by the store's
+// attempt limit. Two independent backoff ladders on one request only made the
+// effective pace impossible to reason about.
 func (c *Client) do(ctx context.Context, bucket, method, url, accept string, body []byte) (*http.Response, error) {
-	var lastErr error
-	for attempt := 0; attempt <= c.cfg.MaxRetries; attempt++ {
-		if attempt > 0 {
-			if err := c.sleep(ctx, c.backoff(attempt)); err != nil {
-				return nil, err
-			}
-		}
-		if err := c.limiter.Wait(ctx, bucket); err != nil {
-			return nil, err
-		}
-
-		var rdr io.Reader
-		if body != nil {
-			rdr = strings.NewReader(string(body))
-		}
-		req, err := http.NewRequestWithContext(ctx, method, url, rdr)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("User-Agent", c.userAgent)
-		if accept != "" {
-			req.Header.Set("Accept", accept)
-		}
-		if body != nil {
-			req.Header.Set("Content-Type", "application/json")
-		}
-		// Deliberately do NOT set Accept-Encoding. Go's transport adds gzip
-		// itself and transparently decompresses the result; setting the header
-		// by hand disables that and hands callers raw gzip bytes, which fails
-		// XML/JSON decoding with misleading syntax errors.
-
-		resp, err := c.http.Do(req)
-		if err != nil {
-			// Transport-level failure says nothing about pacing: the request may
-			// never have reached the service. Neutral keeps the learner honest,
-			// while still breaking a success streak so learning only happens on
-			// clean windows.
-			c.limiter.Feedback(bucket, limiter.OutcomeNeutral)
-			lastErr = fmt.Errorf("%s %s: %w", method, url, err)
-			slog.Warn("request failed", "url", url, "attempt", attempt, "err", err)
-			continue
-		}
-		c.Requests.Add(1)
-
-		switch {
-		case resp.StatusCode >= 200 && resp.StatusCode < 300:
-			c.limiter.Feedback(bucket, limiter.OutcomeOK)
-			return resp, nil
-
-		case resp.StatusCode == http.StatusTooManyRequests ||
-			resp.StatusCode == http.StatusServiceUnavailable ||
-			resp.StatusCode == http.StatusGatewayTimeout:
-			// The harvesting service publishes a 1-per-10s limit and answers 429
-			// when exceeded. Treat any 429 as authoritative: honour Retry-After
-			// and never resume at the previous pace.
-			c.Throttle.Add(1)
-			c.limiter.Feedback(bucket, limiter.OutcomeThrottled)
-			wait := respRetryAfter(resp, c.cfg.BackoffBase)
-			drain(resp)
-			lastErr = &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url, RetryAfter: wait}
-			slog.Warn("throttled by server", "url", url, "status", resp.StatusCode, "backoff", wait.String(), "attempt", attempt)
-			if err := c.sleep(ctx, wait); err != nil {
-				return nil, err
-			}
-			// Push the bucket forward so the very next request is also delayed.
-			continue
-
-		case resp.StatusCode >= 500:
-			// A server fault is a load signal even without a 429, so treat it as
-			// throttling: staying polite after a 5xx is the safe reading.
-			c.limiter.Feedback(bucket, limiter.OutcomeThrottled)
-			drain(resp)
-			lastErr = &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url}
-			slog.Warn("server error", "url", url, "status", resp.StatusCode, "attempt", attempt)
-			continue
-
-		default:
-			// Other 4xx are permanent answers, not capacity signals: a 404 means
-			// the server handled the request fine, so it counts as success and
-			// must not slow the crawl. Not retried, since pacing cannot fix it.
-			c.limiter.Feedback(bucket, limiter.OutcomeOK)
-			snippet := readSnippet(resp, 512)
-			return nil, &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url, Body: snippet}
-		}
+	if err := c.limiter.Wait(ctx, bucket); err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("%s %s: giving up after %d attempts: %w", method, url, c.cfg.MaxRetries+1, lastErr)
-}
 
-// backoff grows exponentially from BackoffBase to BackoffMax with jitter.
-func (c *Client) backoff(attempt int) time.Duration {
-	base := c.cfg.BackoffBase
-	max := c.cfg.BackoffMax
-	d := base
-	for i := 1; i < attempt && d < max; i++ {
-		d *= 2
+	var rdr io.Reader
+	if body != nil {
+		rdr = strings.NewReader(string(body))
 	}
-	if d > max {
-		d = max
+	req, err := http.NewRequestWithContext(ctx, method, url, rdr)
+	if err != nil {
+		return nil, err
 	}
-	j := c.cfg.BackoffJitter
-	if j > 0 {
-		// Jitter both ways so concurrent workers do not align their retries.
-		d += time.Duration((c.jitter.Float64()*2 - 1) * j * float64(d))
+	req.Header.Set("User-Agent", c.userAgent)
+	if accept != "" {
+		req.Header.Set("Accept", accept)
 	}
-	if d < time.Second {
-		d = time.Second
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
-	return d
-}
+	// Deliberately do NOT set Accept-Encoding. Go's transport adds gzip
+	// itself and transparently decompresses the result; setting the header
+	// by hand disables that and hands callers raw gzip bytes, which fails
+	// XML/JSON decoding with misleading syntax errors.
 
-func (c *Client) sleep(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
+	resp, err := c.http.Do(req)
+	if err != nil {
+		// Transport-level failure says nothing about pacing: the request may
+		// never have reached the service. Neutral keeps the learner honest,
+		// while still breaking a success streak so learning only happens on
+		// clean windows.
+		c.limiter.Feedback(bucket, limiter.OutcomeNeutral)
+		slog.Warn("request failed", "url", url, "err", err)
+		return nil, fmt.Errorf("%s %s: %w", method, url, err)
+	}
+	c.Requests.Add(1)
+
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		c.limiter.Feedback(bucket, limiter.OutcomeOK)
+		return resp, nil
+
+	case resp.StatusCode == http.StatusTooManyRequests ||
+		resp.StatusCode == http.StatusServiceUnavailable ||
+		resp.StatusCode == http.StatusGatewayTimeout:
+		// Any 429 is authoritative: the adaptive bucket doubles its interval, and
+		// a Retry-After pushes the whole bucket out so the next request waits too.
+		c.Throttle.Add(1)
+		c.limiter.Feedback(bucket, limiter.OutcomeThrottled)
+		ra := retryAfter(resp)
+		drain(resp)
+		if applied := c.limiter.Delay(bucket, ra); ra > 0 && applied < ra {
+			slog.Warn("retry-after clamped to the pacing ceiling",
+				"url", url, "retry_after", ra.String(), "applied", applied.String())
+		}
+		slog.Warn("throttled by server", "url", url, "status", resp.StatusCode, "retry_after", ra.String())
+		return nil, &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url, RetryAfter: ra}
+
+	case resp.StatusCode >= 500:
+		// A server fault is a load signal even without a 429, so treat it as
+		// throttling: staying polite after a 5xx is the safe reading.
+		c.limiter.Feedback(bucket, limiter.OutcomeThrottled)
+		drain(resp)
+		slog.Warn("server error", "url", url, "status", resp.StatusCode)
+		return nil, &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url}
+
+	default:
+		// Other 4xx are permanent answers, not capacity signals: a 404 means
+		// the server handled the request fine, so it counts as success and
+		// must not slow the crawl.
+		c.limiter.Feedback(bucket, limiter.OutcomeOK)
+		snippet := readSnippet(resp, 512)
+		return nil, &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url, Body: snippet}
 	}
 }
 
-// respRetryAfter honours Retry-After in seconds or HTTP-date form, falling back
-// to base when absent or unparseable.
-func respRetryAfter(resp *http.Response, fallback time.Duration) time.Duration {
+// retryAfter reports a server's Retry-After in seconds or HTTP-date form, or zero
+// when it is absent or unparseable. Nothing replaces it: the adaptive bucket
+// already doubles on a throttle, which is the fallback.
+func retryAfter(resp *http.Response) time.Duration {
 	h := resp.Header.Get("Retry-After")
 	if h == "" {
-		return fallback
+		return 0
 	}
 	if secs, err := strconv.Atoi(strings.TrimSpace(h)); err == nil && secs >= 0 {
 		return time.Duration(secs) * time.Second
@@ -227,7 +183,7 @@ func respRetryAfter(resp *http.Response, fallback time.Duration) time.Duration {
 			return d
 		}
 	}
-	return fallback
+	return 0
 }
 
 // Limiter exposes the pacing state so status and logs can report the interval

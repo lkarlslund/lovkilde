@@ -17,7 +17,7 @@ func specs(start, floor, max time.Duration, pinned bool) map[string]Spec {
 // answers 429 beyond it, so the pacing guarantee needs a direct test.
 func TestWaitEnforcesMinimumInterval(t *testing.T) {
 	const interval = 150 * time.Millisecond
-	l := New(map[string]Spec{BucketDocument: {Start: interval, Floor: interval, Max: interval * 4}}, 1.5, 20, time.Minute)
+	l := NewTuned(map[string]Spec{BucketDocument: {Start: interval, Floor: interval, Max: interval * 4}}, 1.5, 20, time.Minute)
 	ctx := context.Background()
 
 	start := time.Now()
@@ -36,7 +36,7 @@ func TestWaitEnforcesMinimumInterval(t *testing.T) {
 // 2.8 day bootstrap into hours when the service tolerates it.
 func TestAdaptiveStepsDownAfterCleanWindow(t *testing.T) {
 	const start, floor = 1200 * time.Millisecond, 200 * time.Millisecond
-	l := New(specs(start, floor, 30*time.Second, false), 1.5, 5, 0)
+	l := NewTuned(specs(start, floor, 30*time.Second, false), 1.5, 5, 0)
 
 	// Fewer successes than the window must not change anything.
 	for i := 0; i < 4; i++ {
@@ -60,7 +60,7 @@ func TestAdaptiveStepsDownAfterCleanWindow(t *testing.T) {
 // Repeated clean windows must converge on the floor and then stop.
 func TestAdaptiveConvergesOnFloor(t *testing.T) {
 	const floor = 200 * time.Millisecond
-	l := New(specs(3*time.Second, floor, time.Minute, false), 1.5, 2, 0)
+	l := NewTuned(specs(3*time.Second, floor, time.Minute, false), 1.5, 2, 0)
 	for i := 0; i < 40; i++ {
 		l.Feedback(BucketDocument, OutcomeOK)
 		l.Feedback(BucketDocument, OutcomeOK)
@@ -81,7 +81,7 @@ func TestAdaptiveConvergesOnFloor(t *testing.T) {
 
 // Throttling must produce an immediate multiplicative slowdown.
 func TestThrottleDoublesInterval(t *testing.T) {
-	l := New(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 5, 0)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 5, 0)
 	l.Feedback(BucketDocument, OutcomeThrottled)
 	cur, _ := l.Current(BucketDocument)
 	if cur != 2400*time.Millisecond {
@@ -98,7 +98,7 @@ func TestThrottleDoublesInterval(t *testing.T) {
 // Growth must be capped so a bad patch cannot park a multi-day crawl.
 func TestThrottleGrowthIsCapped(t *testing.T) {
 	const max = 5 * time.Second
-	l := New(specs(1200*time.Millisecond, 200*time.Millisecond, max, false), 1.5, 5, 0)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, max, false), 1.5, 5, 0)
 	for i := 0; i < 10; i++ {
 		l.Feedback(BucketDocument, OutcomeThrottled)
 	}
@@ -110,7 +110,7 @@ func TestThrottleGrowthIsCapped(t *testing.T) {
 // A pinned bucket represents the published 10s obligation. Observations, good or
 // bad, must never move it.
 func TestPinnedBucketNeverAdapts(t *testing.T) {
-	l := New(specs(time.Second, 200*time.Millisecond, time.Hour, false), 1.5, 2, 0)
+	l := NewTuned(specs(time.Second, 200*time.Millisecond, time.Hour, false), 1.5, 2, 0)
 	for i := 0; i < 50; i++ {
 		l.Feedback(BucketHarvest, OutcomeOK)
 		l.Feedback(BucketHarvest, OutcomeThrottled)
@@ -127,7 +127,7 @@ func TestPinnedBucketNeverAdapts(t *testing.T) {
 // After being throttled, the learner must hold the safe interval for a cooldown
 // period rather than immediately probing faster and provoking another 429.
 func TestCooldownSuppressesStepDownAfterThrottle(t *testing.T) {
-	l := New(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 3, time.Hour)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 3, time.Hour)
 	l.Feedback(BucketDocument, OutcomeThrottled) // 1.2s -> 2.4s, marks throttledAt
 
 	for i := 0; i < 20; i++ {
@@ -143,7 +143,7 @@ func TestCooldownSuppressesStepDownAfterThrottle(t *testing.T) {
 // happens across genuinely clean windows. Without the reset, OK OK would complete
 // the window of 3 that the two pre-neutral successes had already started.
 func TestNeutralOutcomeBreaksStreak(t *testing.T) {
-	l := New(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 3, 0)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 3, 0)
 	l.Feedback(BucketDocument, OutcomeOK)
 	l.Feedback(BucketDocument, OutcomeOK) // streak is 2 of 3
 	l.Feedback(BucketDocument, OutcomeNeutral)
@@ -161,7 +161,7 @@ func TestNeutralOutcomeBreaksStreak(t *testing.T) {
 }
 
 func TestBucketsAreIndependent(t *testing.T) {
-	l := New(map[string]Spec{
+	l := NewTuned(map[string]Spec{
 		BucketDocument: {Start: 10 * time.Millisecond, Floor: 10 * time.Millisecond, Max: time.Second},
 		BucketHarvest:  {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute, Pinned: true},
 	}, 1.5, 20, time.Minute)
@@ -179,7 +179,7 @@ func TestBucketsAreIndependent(t *testing.T) {
 }
 
 func TestUnknownBucketFails(t *testing.T) {
-	l := New(map[string]Spec{BucketHarvest: {Start: time.Millisecond, Floor: time.Millisecond, Max: time.Second}}, 1.5, 20, time.Minute)
+	l := NewTuned(map[string]Spec{BucketHarvest: {Start: time.Millisecond, Floor: time.Millisecond, Max: time.Second}}, 1.5, 20, time.Minute)
 	if err := l.Wait(context.Background(), "nonsense"); err == nil {
 		t.Error("unknown bucket should error rather than run unpaced")
 	}
@@ -188,7 +188,7 @@ func TestUnknownBucketFails(t *testing.T) {
 }
 
 func TestWaitHonoursContextCancellation(t *testing.T) {
-	l := New(map[string]Spec{BucketHarvest: {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute, Pinned: true}}, 1.5, 20, time.Minute)
+	l := NewTuned(map[string]Spec{BucketHarvest: {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute, Pinned: true}}, 1.5, 20, time.Minute)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 	if err := l.Wait(ctx, BucketHarvest); err != nil { // consumes the free slot
@@ -200,7 +200,7 @@ func TestWaitHonoursContextCancellation(t *testing.T) {
 }
 
 func TestStatesSnapshot(t *testing.T) {
-	l := New(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 20, time.Minute)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 20, time.Minute)
 	states := l.States()
 	if len(states) != 2 {
 		t.Fatalf("States() returned %d entries, want 2", len(states))
@@ -217,7 +217,7 @@ func TestStatesSnapshot(t *testing.T) {
 
 // Defaults must protect against nonsense configuration.
 func TestNewNormalizesSaneSpecs(t *testing.T) {
-	l := New(map[string]Spec{
+	l := NewTuned(map[string]Spec{
 		// Floor above start, and max below start: both must be clamped, not
 		// inverted, or the limiter would pace backwards.
 		BucketDocument: {Start: 0, Floor: time.Hour, Max: 0},
@@ -231,5 +231,33 @@ func TestNewNormalizesSaneSpecs(t *testing.T) {
 	}
 	if cur > time.Hour {
 		t.Errorf("interval = %s, want clamped start", cur)
+	}
+}
+
+// Retry-After is honoured as pacing rather than a sleeping request, so the wait
+// protects the whole bucket instead of one call.
+func TestDelayPacesTheWholeBucket(t *testing.T) {
+	l := NewTuned(map[string]Spec{BucketDocument: {Start: time.Millisecond, Floor: time.Millisecond, Max: time.Minute}}, 1.5, 20, time.Minute)
+	if err := l.Wait(context.Background(), BucketDocument); err != nil {
+		t.Fatal(err)
+	}
+	applied := l.Delay(BucketDocument, 150*time.Millisecond)
+	start := time.Now()
+	if err := l.Wait(context.Background(), BucketDocument); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < 100*time.Millisecond {
+		t.Errorf("second Wait returned after %s, want roughly the %s delay", elapsed, applied)
+	}
+}
+
+func TestDelayBounds(t *testing.T) {
+	l := NewTuned(map[string]Spec{BucketDocument: {Start: time.Millisecond, Floor: time.Millisecond, Max: time.Minute}}, 1.5, 20, time.Minute)
+	if got := l.Delay(BucketDocument, 0); got != 0 {
+		t.Errorf("zero delay applied %s, want 0", got)
+	}
+	// A server asking for a day off must not stall a multi-day crawl indefinitely.
+	if got := l.Delay(BucketDocument, 24*time.Hour); got != MaxDelay {
+		t.Errorf("applied = %s, want the %s ceiling", got, MaxDelay)
 	}
 }

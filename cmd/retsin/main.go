@@ -106,15 +106,15 @@ Phases (each independent, resumable and idempotent):
 
 Pacing:
   The harvesting service is limited by its own documentation to one call per 10
-  seconds and answers HTTP 429 beyond that. Its request bucket is pinned and
-  validated at startup, so it can never be configured below the published limit.
+  seconds and answers HTTP 429 beyond that. That pace, and the sitemap's, are
+  constants: there is no flag that can lower them.
 
   Document requests have no published limit and are served uncached straight from
-  the origin, so their interval is learned rather than fixed. It starts at
-  --document-interval and steps down towards --document-floor while requests keep
-  succeeding, doubling back on any 429 or 5xx and holding that safer interval for
-  --adaptive-cooldown before probing faster again. Use --pinned-intervals to
-  disable learning and hold every interval exactly as configured.
+  the origin, so their interval is learned rather than fixed. It starts at 1.2s,
+  divides by 1.5 after every 20 consecutive successes, and doubles on any 429 or
+  5xx, holding the safer interval for 10 minutes before probing again. The only
+  pacing flag is --document-floor: how far that descent may go. It cannot be set
+  below the 200ms courtesy minimum, and learning starts over on every run.
 
 Data layout:
   <data-dir>/xml/<kind>/<year>/<id>.xml   canonical documents (the archive)
@@ -133,24 +133,11 @@ func registerFlags(pf *pflag.FlagSet, cfg *config.Config, logLevel, progress *st
 	pf.StringVar(&cfg.SiteBase, "site", cfg.SiteBase, "origin serving /eli and the document API")
 	pf.StringVar(&cfg.HarvestBase, "harvest-api", cfg.HarvestBase, "origin of the harvesting service")
 
-	pf.DurationVar(&cfg.HarvestInterval, "harvest-interval", cfg.HarvestInterval,
-		fmt.Sprintf("minimum gap between harvesting-service calls (cannot go below the published %s limit)", config.HarvestLimit))
-	pf.DurationVar(&cfg.DocumentStart, "document-interval", cfg.DocumentStart,
-		"starting minimum gap between document requests; the learner steps down to --document-floor while requests succeed")
+	// Pacing has one knob: how fast the learner is allowed to settle. The rest of
+	// the schedule is either a published obligation (harvest), a measurement
+	// (sitemap), or the learner's own shape, all of them constants.
 	pf.DurationVar(&cfg.DocumentFloor, "document-floor", cfg.DocumentFloor,
 		fmt.Sprintf("fastest document interval the learner may settle at (courtesy minimum %s)", config.DocumentFloor))
-	pf.DurationVar(&cfg.DocumentMax, "document-max-interval", cfg.DocumentMax,
-		"slowest document interval backoff may reach after throttling")
-	pf.DurationVar(&cfg.SitemapInterval, "sitemap-interval", cfg.SitemapInterval, "minimum gap between sitemap requests")
-	pf.BoolVar(&cfg.PinnedIntervals, "pinned-intervals", cfg.PinnedIntervals,
-		"disable adaptive pacing and hold every interval at its configured value")
-
-	pf.Float64Var(&cfg.AdaptiveStepDown, "adaptive-step-down", cfg.AdaptiveStepDown,
-		"divide the interval by this after a clean window (must be > 1)")
-	pf.IntVar(&cfg.AdaptiveWindow, "adaptive-window", cfg.AdaptiveWindow,
-		"consecutive successful requests required before stepping down")
-	pf.DurationVar(&cfg.AdaptiveCooldown, "adaptive-cooldown", cfg.AdaptiveCooldown,
-		"hold the current interval this long after being throttled before probing faster")
 
 	pf.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "timeout for a single HTTP request")
 	pf.StringVar(logLevel, "log-level", "info", "log level: debug, info, warn, error")
@@ -191,18 +178,15 @@ func reportPacingOutcome(a *app, lim *limiter.Limiter) {
 }
 
 // logPacing states the schedule up front, so an unexpectedly aggressive or timid
-// run is visible in the very first log line.
+// run is visible in the very first log line. Only the document floor is
+// configurable; the other two buckets are constants.
 func logPacing(cfg config.Config, cmd string) {
 	slog.Info("retsin starting",
 		"command", cmd,
 		"data_dir", cfg.DataDir,
-		"harvest_interval", cfg.HarvestInterval.String(),
-		"harvest_pinned", true,
-		"document_interval_start", cfg.DocumentStart.String(),
 		"document_floor", cfg.DocumentFloor.String(),
-		"adaptive", !cfg.PinnedIntervals,
-		"adaptive_window", cfg.AdaptiveWindow,
-		"adaptive_step_down", cfg.AdaptiveStepDown)
+		"harvest_interval", config.HarvestInterval.String(),
+		"sitemap_interval", config.SitemapInterval.String())
 }
 
 func setLogger(level string) {

@@ -52,28 +52,27 @@ func newApp(cfg config.Config) (*app, *limiter.Limiter, error) {
 	//
 	// Document and sitemap buckets are adaptive: the service publishes no limit for
 	// them and sends no Retry-After header, so the safe interval can only be found
-	// by probing, and must back off the moment it is told to slow down.
+	// by probing, and must back off the moment it is told to slow down. Only their
+	// floors come from the caller; the learner's shape is fixed in the limiter.
 	specs := map[string]limiter.Spec{
 		limiter.BucketHarvest: {
-			Start:  cfg.HarvestInterval,
-			Floor:  cfg.HarvestInterval,
-			Max:    cfg.HarvestInterval,
+			Start:  config.HarvestInterval,
+			Floor:  config.HarvestInterval,
+			Max:    config.HarvestInterval,
 			Pinned: true,
 		},
 		limiter.BucketDocument: {
-			Start:  cfg.DocumentStart,
-			Floor:  cfg.DocumentFloor,
-			Max:    cfg.DocumentMax,
-			Pinned: cfg.PinnedIntervals,
+			Start: limiter.StartInterval,
+			Floor: cfg.DocumentFloor,
+			Max:   limiter.MaxInterval,
 		},
 		limiter.BucketSitemap: {
-			Start:  cfg.SitemapInterval,
-			Floor:  cfg.SitemapInterval,
-			Max:    cfg.SitemapInterval * 8,
-			Pinned: cfg.PinnedIntervals,
+			Start: config.SitemapInterval,
+			Floor: config.SitemapInterval,
+			Max:   config.SitemapInterval * 8,
 		},
 	}
-	lim := limiter.New(specs, cfg.AdaptiveStepDown, cfg.AdaptiveWindow, cfg.AdaptiveCooldown)
+	lim := limiter.New(specs)
 	client := rihttp.New(cfg, lim)
 
 	return &app{

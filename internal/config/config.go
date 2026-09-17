@@ -3,10 +3,11 @@
 // does is visible in the invocation that started it, and a stale file cannot
 // silently change a multi-day crawl.
 //
-// The important part is not the fields, it is Validate: it encodes the limits
-// Civilstyrelsen publishes as machine checks, so a mistyped interval fails at
-// startup instead of hammering a government service for three days and getting
-// the operator's IP blocked by Cloudflare.
+// Pacing is not configurable beyond one number: DocumentFloor. The learner that
+// approaches it is tuned by constants in internal/limiter, because every
+// measured run behaved the same way and extra knobs only invite a configuration
+// that breaches the terms. What the terms do constrain is a floor, so that is
+// the only pacing flag.
 package config
 
 import (
@@ -19,21 +20,28 @@ import (
 // lets the operator reach us instead of banning our address.
 const DefaultUserAgent = "retsin-mirror/0.1 (open-data mirror; contact: https://github.com/lkarlslund/retsinformation)"
 
-// Published and enforced limits.
+// Limits that are obligations or measurements, not options. They are constants
+// so they cannot be misconfigured from a shell history.
 const (
 	// HarvestLimit is the harvesting service's own documented ceiling: it may be
 	// called at most once per 10 seconds and answers HTTP 429 beyond that.
 	HarvestLimit = 10 * time.Second
-	// DocumentFloor is our own courtesy floor for document requests. They are
-	// served uncached straight from the origin, and the service publishes no
-	// limit for them, so we decline to probe below this.
+	// HarvestInterval is the pace we actually keep: the published limit plus a
+	// margin for clock skew. There is no flag for it because there is no
+	// configuration in which going faster is acceptable.
+	HarvestInterval = 12 * time.Second
+	// SitemapInterval paces the ~22 sitemap requests.
+	SitemapInterval = 2 * time.Second
+	// DocumentFloor is our own courtesy floor for document requests, and the
+	// default. They are served uncached straight from the origin, and the service
+	// publishes no limit for them, so we decline to probe below this.
 	DocumentFloor = 200 * time.Millisecond
 )
 
 // Config is the fully-resolved runtime configuration.
 type Config struct {
-	// DataDir holds the archive and the state store. 22 GB will not fit on a
-	// home partition, so this is the flag that matters most.
+	// DataDir holds the archive and the state store. The archive runs to several
+	// gigabytes, so this is the flag that matters most.
 	DataDir string
 
 	// SiteBase serves the ELI channels and document API; HarvestBase is the
@@ -44,38 +52,8 @@ type Config struct {
 	// UserAgent sent on every request.
 	UserAgent string
 
-	// HarvestInterval must never be below HarvestLimit.
-	HarvestInterval time.Duration
-
-	// DocumentStart is where the adaptive document bucket begins. It steps down
-	// towards DocumentFloor as long as requests keep succeeding.
-	DocumentStart time.Duration
-	// DocumentFloor is the fastest the adaptive bucket may settle at.
+	// DocumentFloor is the fastest the adaptive document bucket may settle at.
 	DocumentFloor time.Duration
-	// DocumentMax caps how far the bucket grows after being throttled.
-	DocumentMax time.Duration
-
-	// SitemapInterval paces the ~22 sitemap requests.
-	SitemapInterval time.Duration
-
-	// PinnedIntervals disables adaptive learning entirely, holding every bucket
-	// at its configured value. Useful for reproducing a known-safe pace.
-	PinnedIntervals bool
-
-	// AdaptiveStepDown divides the interval after a clean window (e.g. 1.5).
-	AdaptiveStepDown float64
-	// AdaptiveWindow is consecutive successful requests required to step down.
-	AdaptiveWindow int
-	// AdaptiveCooldown suppresses step-down attempts this long after a throttle.
-	AdaptiveCooldown time.Duration
-
-	// MaxRetries bounds attempts per request after throttling or failure.
-	MaxRetries int
-	// BackoffBase doubles from here on each retry, capped at BackoffMax.
-	BackoffBase time.Duration
-	BackoffMax  time.Duration
-	// BackoffJitter randomises retry delays so retries do not synchronise.
-	BackoffJitter float64
 
 	// RequestTimeout bounds a single HTTP request.
 	RequestTimeout time.Duration
@@ -84,24 +62,12 @@ type Config struct {
 // Default returns production-sane defaults built around the published limits.
 func Default() Config {
 	return Config{
-		DataDir:          "data",
-		SiteBase:         "https://www.retsinformation.dk",
-		HarvestBase:      "https://api.retsinformation.dk",
-		UserAgent:        DefaultUserAgent,
-		HarvestInterval:  12 * time.Second, // margin over the 10s published limit
-		DocumentStart:    1200 * time.Millisecond,
-		DocumentFloor:    DocumentFloor,
-		DocumentMax:      5 * time.Minute,
-		SitemapInterval:  2 * time.Second,
-		PinnedIntervals:  false,
-		AdaptiveStepDown: 1.5,
-		AdaptiveWindow:   20,
-		AdaptiveCooldown: 10 * time.Minute,
-		MaxRetries:       6,
-		BackoffBase:      10 * time.Second,
-		BackoffMax:       15 * time.Minute,
-		BackoffJitter:    0.3,
-		RequestTimeout:   60 * time.Second,
+		DataDir:        "data",
+		SiteBase:       "https://www.retsinformation.dk",
+		HarvestBase:    "https://api.retsinformation.dk",
+		UserAgent:      DefaultUserAgent,
+		DocumentFloor:  DocumentFloor,
+		RequestTimeout: 60 * time.Second,
 	}
 }
 
@@ -111,38 +77,15 @@ func (c Config) XMLDir() string { return c.DataDir + "/xml" }
 // StoreDir returns the directory holding the Badger state store.
 func (c Config) StoreDir() string { return c.DataDir + "/meta/kv" }
 
-// Validate refuses configurations that would breach the published terms, or that
-// are internally inconsistent enough to pace backwards.
+// Validate refuses the configurations that a flag can still get wrong. The
+// harvest obligation is not one of them: HarvestInterval is a constant at or
+// above HarvestLimit by construction, asserted in config_test.go.
 func (c Config) Validate() error {
 	if c.SiteBase == "" || c.HarvestBase == "" {
 		return fmt.Errorf("site_base and harvest_base must be set")
 	}
-	if c.HarvestInterval < HarvestLimit {
-		return fmt.Errorf("harvest interval %s breaches the published limit: the harvesting service allows at most one call per %s and answers HTTP 429 beyond that", c.HarvestInterval, HarvestLimit)
-	}
 	if c.DocumentFloor < DocumentFloor {
 		return fmt.Errorf("document floor %s is below the %s courtesy minimum: document responses are served uncached straight from the origin", c.DocumentFloor, DocumentFloor)
-	}
-	if c.DocumentStart < c.DocumentFloor {
-		return fmt.Errorf("document start %s is below its own floor %s", c.DocumentStart, c.DocumentFloor)
-	}
-	if c.DocumentMax < c.DocumentStart {
-		return fmt.Errorf("document max %s is below its start %s, which would make backoff speed the crawl up", c.DocumentMax, c.DocumentStart)
-	}
-	if c.SitemapInterval <= 0 {
-		return fmt.Errorf("sitemap interval must be positive")
-	}
-	if c.AdaptiveStepDown <= 1 {
-		return fmt.Errorf("adaptive step-down factor must be greater than 1 (e.g. 1.5)")
-	}
-	if c.AdaptiveWindow < 2 {
-		return fmt.Errorf("adaptive window must be at least 2 requests")
-	}
-	if c.BackoffJitter < 0 || c.BackoffJitter > 1 {
-		return fmt.Errorf("backoff jitter must be between 0 and 1")
-	}
-	if c.MaxRetries < 0 {
-		return fmt.Errorf("max retries must not be negative")
 	}
 	if c.RequestTimeout <= 0 {
 		return fmt.Errorf("request timeout must be positive")
