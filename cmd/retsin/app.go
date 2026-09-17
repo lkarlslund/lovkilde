@@ -13,6 +13,7 @@ import (
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/crawl"
 	"github.com/lkarlslund/retsinformation/internal/limiter"
+	"github.com/lkarlslund/retsinformation/internal/progress"
 	"github.com/lkarlslund/retsinformation/internal/rihttp"
 	"github.com/lkarlslund/retsinformation/internal/store"
 )
@@ -162,13 +163,63 @@ point and a second full pass after completion costs nothing.`,
 			}
 			defer a.Close()
 			return runWith(a, lim, func(ctx context.Context) error {
-				return a.crawl.Fetch(ctx, crawl.FetchOptions{Limit: limit, Batch: batch})
+				bar := newFetchBar(lim, progressModeValue)
+				defer bar.Finish()
+				var totalSet, barWarned bool
+				return a.crawl.Fetch(ctx, crawl.FetchOptions{
+					Limit: limit, Batch: batch,
+					OnProgress: func(st crawl.FetchStats) {
+						// The denominator must be in place before the first
+						// update: the library rejects any update while its max
+						// is unset, so setting the count first would discard
+						// every frame and leave a bar that never moves.
+						if !totalSet && st.Total > 0 {
+							bar.SetTotal(st.Total)
+							totalSet = true
+						}
+						if err := bar.Set(st.Attempted); err != nil && !barWarned {
+							// Once is enough: a bar that cannot render is not
+							// worth 200k warnings, but it is worth knowing about.
+							barWarned = true
+							slog.Warn("progress bar not updating", "err", err)
+						}
+						if bar.Enabled() {
+							// Show the pace actually in force: it is what tells
+							// the operator the learner is working, not idling.
+							bar.Describe(pacingLabel(lim))
+						}
+					},
+				})
 			})
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 0, "stop after N items (useful for a trial run)")
 	cmd.Flags().IntVar(&batch, "batch", 200, "pending rows to process per batch")
 	return cmd
+}
+
+// newFetchBar builds the live progress line for a fetch run, honouring
+// --progress. The label carries the interval currently in force, which is the
+// one number worth watching on a multi-day crawl: it shows the learner acting
+// on what the origin is actually accepting.
+func newFetchBar(lim *limiter.Limiter, mode progress.Mode) *progress.Bar {
+	bar := progress.NewBar(gate, "fetch", 0, mode)
+	if !bar.Enabled() {
+		return bar
+	}
+	if d, ok := lim.Current(limiter.BucketDocument); ok {
+		bar.Describe("fetch @" + d.Round(time.Millisecond).String())
+	}
+	return bar
+}
+
+// pacingLabel is the bar's leading text, refreshed as the learner retunes.
+func pacingLabel(lim *limiter.Limiter) string {
+	d, ok := lim.Current(limiter.BucketDocument)
+	if !ok {
+		return "fetch"
+	}
+	return "fetch @" + d.Round(time.Millisecond).String()
 }
 
 func updateCmd(open openFunc) *cobra.Command {

@@ -189,7 +189,33 @@ exactly what a run will do. Run `retsin --help` for the full list. The important
 --site / --harvest-api    origins
 --request-timeout 1m      per-request timeout
 --log-level info          debug, info, warn, error
+--progress auto           live bar: auto (terminals only), always, or never
 ```
+
+### Progress bar
+
+`fetch` paints one line that stays put:
+
+```
+fetch @250ms  88% |██████████████████████████    | (22/25, 3 docs/s) [6s:0s]
+```
+
+The label carries the interval the learner is enforcing *right now*, so the bar
+doubles as the pacing readout; the count, docs/sec and ETA come from the bar
+library. Three properties were non-negotiable:
+
+- **It never corrupts the log.** The bar and the structured log share stderr, and
+  a bar frame ends without a newline — so a log record would otherwise be
+  appended to the tail of a frame. `internal/progress.Gate` serializes both
+  writers and erases the frame before each record.
+- **It disappears by itself.** Off a terminal, the library's invisible mode
+  short-circuits before any formatting, so cron runs and redirected output contain
+  no escape sequences and pay nothing.
+- **A stall is visible.** The crawl reports every resource, including failures, so
+  a bar that stops moving means the crawl stopped, not that the bar broke.
+
+The bar is `github.com/schollz/progressbar/v3` (from awesome-go's list); this
+repository only adds the gate and guards around the library's rough edges.
 
 Subcommands: `inventory`, `harvest`, `fetch`, `update`, `status`, `rebuild`.
 
@@ -251,7 +277,11 @@ live learner integration against a throttling fake server, flag parsing on eithe
 of the subcommand, 429/`Retry-After` backoff, gzip handling, non-retryable errors, UA
 identity, context cancellation, ELI path↔archive-path mapping (including
 path-traversal rejection), Badger round-trips and pending/limit semantics, harvest
-checkpointing, and XML parsing against **three genuine fixture schemas**.
+checkpointing, XML parsing against **three genuine fixture schemas**, the log/bar
+writer gate (a record must erase the frame, and never add a clear of its own),
+bar modes including silent-off-a-terminal, and end-to-end `Fetch` progress
+reporting: one report per resource, correct totals, and a resume pass that
+reports while issuing zero requests.
 
 ### Bugs the tests caught
 
@@ -264,6 +294,14 @@ checkpointing, and XML parsing against **three genuine fixture schemas**.
   field *empty with no error*, so every document looked like it had no accession.
 - **Flags after the subcommand were silently ignored** — `fetch -limit 3` ran uncapped.
   Now parsed per-subcommand, and misplaced global flags error out.
+- **A progress bar that rendered nothing at all.** The bar library latches its
+  `finished` state the first time it renders while its max is still 0 — which is
+  how `fetch` starts, since the pending count arrives with the first report. Setting
+  the label triggers a render, so the very first label update killed the bar for the
+  rest of the run, with no error and no output. `progress.Bar` now refuses to paint
+  anything until a real total is known. `OptionClearOnFinish` was the second trap:
+  it suppresses the completed frame, so a crawl that reaches its last document shows
+  nothing.
 
 ## Notes and limitations
 

@@ -1,6 +1,21 @@
 package crawl
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/lkarlslund/retsinformation/internal/archive"
+	"github.com/lkarlslund/retsinformation/internal/config"
+	"github.com/lkarlslund/retsinformation/internal/limiter"
+	"github.com/lkarlslund/retsinformation/internal/rihttp"
+	"github.com/lkarlslund/retsinformation/internal/store"
+)
 
 func TestELIKind(t *testing.T) {
 	cases := map[string]string{
@@ -52,5 +67,141 @@ func TestNormalizeDate(t *testing.T) {
 		if got := normalizeDate(in); got != want {
 			t.Errorf("normalizeDate(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Fetch reports progress once per resource, including the resources that fail:
+// a bar that silently stops advancing is worse than no bar, because it looks
+// like the crawl stalled. Every exit path in the loop has to report.
+func TestFetchReportsProgressEveryResource(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "docapi", "testdata", "fob-lok53.xml"))
+	if err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// One deliberately missing resource, to cover the "gone" path.
+		if strings.Contains(r.URL.Path, "/2023/300") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write(body)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dir
+	cfg.SiteBase = srv.URL
+	cfg.RequestTimeout = 5 * time.Second
+
+	st, err := store.Open(filepath.Join(dir, "meta", "kv"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+	ar, err := archive.Open(dir)
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	// Pacing collapsed to microseconds: this is a correctness test, and the
+	// limiter has its own suite for pacing behaviour.
+	lim := limiter.New(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
+	}, 1.5, 2, time.Millisecond)
+	c := New(cfg, st, ar, rihttp.New(cfg, lim))
+
+	ctx := context.Background()
+	eli := []string{
+		"https://www.retsinformation.dk/eli/lta/2021/100",
+		"https://www.retsinformation.dk/eli/lta/2022/200",
+		"https://www.retsinformation.dk/eli/lta/2023/300", // served as 404
+		"https://www.retsinformation.dk/eli/lta/2024/400",
+	}
+	for _, u := range eli {
+		if err := st.PutInventory(ctx, store.Inventory{ELIURL: u, LastMod: "2024-01-01", Kind: "lta", State: store.StatePending}); err != nil {
+			t.Fatalf("seed %s: %v", u, err)
+		}
+	}
+
+	var calls int
+	var last FetchStats
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 2,
+		OnProgress: func(s FetchStats) { calls++; last = s }}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	if calls != len(eli) {
+		t.Errorf("progress called %d times, want %d (one per resource)", calls, len(eli))
+	}
+	if last.Attempted != int64(len(eli)) {
+		t.Errorf("attempted %d, want %d", last.Attempted, len(eli))
+	}
+	if last.Stored != 3 {
+		t.Errorf("stored %d, want 3", last.Stored)
+	}
+	if last.Failed != 0 {
+		t.Errorf("failed %d, want 0: a 404 is a definitive answer, not a failure", last.Failed)
+	}
+	if last.Total != int64(len(eli)) {
+		t.Errorf("total %d, want %d", last.Total, len(eli))
+	}
+	if last.Bytes <= 0 {
+		t.Errorf("bytes %d, want > 0", last.Bytes)
+	}
+}
+
+// A second pass must report progress while closing every resource from disk,
+// which is the resume path a multi-day crawl takes most often.
+func TestFetchReportsProgressOnResumeWithoutRequests(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		_, _ = w.Write([]byte("<Dokument/>"))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dir
+	cfg.SiteBase = srv.URL
+	cfg.RequestTimeout = 5 * time.Second
+	u := "https://www.retsinformation.dk/eli/lta/2021/100"
+
+	st, err := store.Open(filepath.Join(dir, "meta", "kv"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+	ar, err := archive.Open(dir)
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	if _, _, _, err := ar.Put(u, []byte("<Dokument/>")); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	ctx := context.Background()
+	if err := st.PutInventory(ctx, store.Inventory{ELIURL: u, LastMod: "2024-01-01", Kind: "lta", State: store.StatePending}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	lim := limiter.New(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
+	}, 1.5, 2, time.Millisecond)
+	c := New(cfg, st, ar, rihttp.New(cfg, lim))
+
+	var last FetchStats
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 2,
+		OnProgress: func(s FetchStats) { last = s }}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	if requests != 0 {
+		t.Errorf("issued %d requests for a document already on disk", requests)
+	}
+	if last.Skipped != 1 {
+		t.Errorf("skipped %d, want 1", last.Skipped)
 	}
 }

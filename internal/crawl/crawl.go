@@ -170,6 +170,22 @@ type FetchOptions struct {
 	Batch int
 	// MaxAttempts bounds retries for a single resource.
 	MaxAttempts int
+	// OnProgress, when set, is called after every resource with running
+	// totals. It runs on the crawl goroutine, so it must not block: it exists
+	// to drive a progress bar, not to do work.
+	OnProgress func(FetchStats)
+}
+
+// FetchStats are the running totals handed to FetchOptions.OnProgress.
+type FetchStats struct {
+	Attempted int64
+	Stored    int64
+	Skipped   int64
+	Failed    int64
+	Bytes     int64
+	// Total is the denominator: resources this run is expected to work
+	// through, 0 when it could not be estimated.
+	Total int64
 }
 
 // Fetch downloads canonical XML for every resource not already on disk.
@@ -187,6 +203,29 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 	}
 	var attempted, stored, skippedDup, failed, bytes int64
 	start := time.Now()
+
+	// The denominator comes from the state store rather than the batch loop, so
+	// the bar can show a percentage from the first document. It counts pending
+	// and retryable-failed rows without re-checking their attempt counts, which
+	// is an estimate that errs slightly high and only affects the percentage.
+	counts, _, err := c.store.CountByState(ctx)
+	if err != nil {
+		return err
+	}
+	totalPending := counts[store.StatePending] + counts[store.StateFailed]
+	if opt.Limit > 0 && int64(opt.Limit) < totalPending {
+		totalPending = int64(opt.Limit)
+	}
+
+	report := func() {
+		if opt.OnProgress == nil {
+			return
+		}
+		opt.OnProgress(FetchStats{
+			Attempted: attempted, Stored: stored, Skipped: skippedDup,
+			Failed: failed, Bytes: bytes, Total: totalPending,
+		})
+	}
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -223,6 +262,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 					return err
 				}
 				skippedDup++
+				report()
 				continue
 			}
 
@@ -231,6 +271,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				if err := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateSkipped, Attempts: row.Attempts + 1, Error: "not an ELI resource URL"}); err != nil {
 					return err
 				}
+				report()
 				continue
 			}
 
@@ -242,6 +283,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 					if err := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateGone, Attempts: row.Attempts + 1, Error: sc.Status}); err != nil {
 						return err
 					}
+					report()
 					continue
 				}
 				failed++
@@ -249,6 +291,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateFailed, Attempts: row.Attempts + 1, Error: err.Error()}); perr != nil {
 					return perr
 				}
+				report()
 				continue
 			}
 
@@ -259,6 +302,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateFailed, Attempts: row.Attempts + 1, Error: err.Error()}); perr != nil {
 					return perr
 				}
+				report()
 				continue
 			}
 
@@ -304,6 +348,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 					"document_interval", interval.String(),
 					"interval_changes", c.client.Limiter().Steps())
 			}
+			report()
 		}
 
 		if opt.Limit > 0 && int(attempted) >= opt.Limit {

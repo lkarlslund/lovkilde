@@ -21,18 +21,29 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/limiter"
+	"github.com/lkarlslund/retsinformation/internal/progress"
 )
 
 // version is reported by --version and identifies the tool.
 const version = "0.1"
 
+// gate serializes progress frames and log records, which share stderr. It is
+// package-level because slog's default logger is: every writer in the process,
+// including the ones below, has to go through the same gate or the guarantee is
+// void.
+var gate = progress.NewGate(os.Stderr)
+
+// progressModeValue is the validated --progress setting, resolved when the
+// runtime opens. It defaults to auto, which renders only on a terminal.
+var progressModeValue = progress.ModeAuto
+
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
 		if errors.Is(err, context.Canceled) {
-			fmt.Fprintln(os.Stderr, "interrupted; state is saved, re-run to resume")
+			fmt.Fprintln(gate.LogWriter(), "interrupted; state is saved, re-run to resume")
 			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintf(gate.LogWriter(), "error: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -42,9 +53,10 @@ func main() {
 func newRootCmd() *cobra.Command {
 	cfg := config.Default()
 	var logLevel string
+	var progressMode string
 
 	root := rootShell()
-	registerFlags(root.PersistentFlags(), &cfg, &logLevel)
+	registerFlags(root.PersistentFlags(), &cfg, &logLevel, &progressMode)
 
 	// The runtime is opened lazily by each command, so --help and flag validation
 	// never create directories or open the state store.
@@ -52,6 +64,11 @@ func newRootCmd() *cobra.Command {
 		if err := cfg.Validate(); err != nil {
 			return nil, nil, err
 		}
+		mode, err := progress.ParseMode(progressMode)
+		if err != nil {
+			return nil, nil, err
+		}
+		progressModeValue = mode
 		setLogger(logLevel)
 		a, lim, err := newApp(cfg)
 		if err != nil {
@@ -110,7 +127,7 @@ Data layout:
 // registerFlags declares every setting as a flag. Flags write straight into cfg,
 // which the caller pre-filled with defaults, so --help shows real defaults and
 // there is exactly one source of truth.
-func registerFlags(pf *pflag.FlagSet, cfg *config.Config, logLevel *string) {
+func registerFlags(pf *pflag.FlagSet, cfg *config.Config, logLevel, progress *string) {
 	pf.StringVar(&cfg.DataDir, "data-dir", cfg.DataDir, "data directory holding the archive and the state store")
 	pf.StringVar(&cfg.UserAgent, "user-agent", cfg.UserAgent, "User-Agent sent on every request; keep a contact address so the operator can reach us instead of blocking us")
 	pf.StringVar(&cfg.SiteBase, "site", cfg.SiteBase, "origin serving /eli and the document API")
@@ -137,6 +154,8 @@ func registerFlags(pf *pflag.FlagSet, cfg *config.Config, logLevel *string) {
 
 	pf.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "timeout for a single HTTP request")
 	pf.StringVar(logLevel, "log-level", "info", "log level: debug, info, warn, error")
+	pf.StringVar(progress, "progress", "auto",
+		"show a live progress bar with docs/sec and ETA: auto (terminals only), always, or never")
 }
 
 // runWith is the shared body for commands needing the runtime and a cancellable
@@ -198,5 +217,6 @@ func setLogger(level string) {
 	default:
 		lv = slog.LevelInfo
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lv})))
+	// Through the gate, so a record never lands in the middle of a bar frame.
+	slog.SetDefault(slog.New(slog.NewTextHandler(gate.LogWriter(), &slog.HandlerOptions{Level: lv})))
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/lkarlslund/retsinformation/internal/config"
+	"github.com/lkarlslund/retsinformation/internal/limiter"
+	"github.com/lkarlslund/retsinformation/internal/progress"
 )
 
 // testTree builds the same flag registration as the real CLI but attaches a probe
@@ -24,9 +27,10 @@ func testTree(t *testing.T, p *parsed) *cobra.Command {
 	t.Helper()
 	cfg := config.Default()
 	var logLevel string
+	var progressMode string
 
 	root := rootShell()
-	registerFlags(root.PersistentFlags(), &cfg, &logLevel)
+	registerFlags(root.PersistentFlags(), &cfg, &logLevel, &progressMode)
 
 	probe := &cobra.Command{
 		Use:  "probe",
@@ -83,6 +87,8 @@ func TestFlagsBindOnEitherSideOfSubcommand(t *testing.T) {
 		{"both sides at once", []string{"--data-dir", "/tmp/y", "probe", "--limit", "7"}, "limit", "7"},
 		{"adaptive flag before command", []string{"--adaptive-window", "4", "probe"}, "adaptive-window", "4"},
 		{"duration with unit after command", []string{"probe", "--document-floor", "300ms"}, "document-floor", "300ms"},
+		{"progress mode after command", []string{"probe", "--progress", "never"}, "progress", "never"},
+		{"progress mode before command", []string{"--progress", "always", "probe"}, "progress", "always"},
 	}
 	for _, c := range cases {
 		var p parsed
@@ -223,5 +229,45 @@ func TestConfigSafety(t *testing.T) {
 	inverted.DocumentMax = inverted.DocumentStart / 2
 	if err := inverted.Validate(); err == nil {
 		t.Error("document max below start was accepted, which would make backoff accelerate")
+	}
+}
+
+// The fetch bar must actually paint, not just be configured. This mirrors the
+// CLI path exactly -- gate swap, newFetchBar, then the same call order the
+// OnProgress callback uses -- because a bar that silently renders nothing is
+// indistinguishable from a stalled crawl.
+func TestFetchBarPaints(t *testing.T) {
+	var buf bytes.Buffer
+	orig := gate
+	gate = progress.NewGate(&buf)
+	defer func() { gate = orig }()
+
+	lim := limiter.New(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: 300 * time.Millisecond, Floor: 200 * time.Millisecond, Max: time.Minute},
+	}, 1.5, 4, time.Minute)
+
+	bar := newFetchBar(lim, progress.ModeAlways)
+	if !bar.Enabled() {
+		t.Fatal("bar disabled in always mode")
+	}
+
+	// The same call order the fetch loop uses: total first, then the count,
+	// spaced further apart than the redraw throttle.
+	bar.SetTotal(8)
+	for i := int64(1); i <= 8; i++ {
+		if err := bar.Set(i); err != nil {
+			t.Fatalf("Set(%d): %v", i, err)
+		}
+		bar.Describe(pacingLabel(lim))
+		time.Sleep(200 * time.Millisecond)
+	}
+	bar.Finish()
+
+	out := buf.String()
+	if !strings.Contains(out, "8/8") {
+		t.Fatalf("bar never reached its final count: %q", out)
+	}
+	if !strings.Contains(out, "fetch @") {
+		t.Errorf("pacing label missing from the bar: %q", out)
 	}
 }
