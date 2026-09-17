@@ -47,10 +47,6 @@ type Config struct {
 
 	// UserAgent sent on every request.
 	UserAgent string `json:"user_agent"`
-
-	// FetchJSON additionally stores the site's JSON representation (full HTML
-	// plus rich metadata) for documents whose content actually changed.
-	FetchJSON bool `json:"fetch_json"`
 }
 
 // Default returns production-sane defaults built around the published limits.
@@ -67,7 +63,6 @@ func Default() Config {
 		BackoffJitter:    0.3,
 		RequestTimeout:   Duration{60 * time.Second},
 		UserAgent:        DefaultUserAgent,
-		FetchJSON:        true,
 	}
 }
 

@@ -211,8 +211,9 @@ checkpointing, and XML parsing against **three genuine fixture schemas**.
   be repaired via `inventory`, which the tool warns about explicitly.
 - `inventory` reports ingested rows including any cross-page duplicates; unique
   resources are ~201,600 (Badger is keyed by ELI URL, so duplicates collapse).
-- `fetch_json` is plumbed but the JSON sidecar pass is not implemented; XML is a
-  superset for practical purposes.
+- Only the XML pass is implemented. `docapi.FetchJSON` exists as a working client for
+  the site's JSON representation, but there is no sidecar crawl; XML is a superset for
+  practical purposes.
 - **Environment quirk:** this machine's `go` env file and module sumdb path are
   read-only, so adding dependencies needs `GOSUMDB=off`. All deps are already vendored
   into `go.sum`.
