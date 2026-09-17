@@ -4,10 +4,11 @@
 // silently change a multi-day crawl.
 //
 // Pacing is not configurable beyond one number: DocumentFloor. The learner that
-// approaches it is tuned by constants in internal/limiter, because every
-// measured run behaved the same way and extra knobs only invite a configuration
-// that breaches the terms. What the terms do constrain is a floor, so that is
-// the only pacing flag.
+// approaches it is tuned by constants in internal/limiter, because every measured
+// run behaved the same way and extra knobs would only offer more ways to
+// misconfigure a crawl. The floor itself is a default rather than a limit — the
+// one pace the terms actually impose (one harvest call per 10 s) is a constant
+// with no flag at all.
 package config
 
 import (
@@ -32,10 +33,13 @@ const (
 	HarvestInterval = 12 * time.Second
 	// SitemapInterval paces the ~22 sitemap requests.
 	SitemapInterval = 2 * time.Second
-	// DocumentFloor is our own courtesy floor for document requests, and the
-	// default. They are served uncached straight from the origin, and the service
-	// publishes no limit for them, so we decline to probe below this.
-	DocumentFloor = 200 * time.Millisecond
+	// DefaultDocumentFloor is where the document bucket is allowed to settle by
+	// default. Document responses are served uncached straight from the origin, so
+	// this is a judgement about a considerate pace, not a limit we enforce: an
+	// operator who sets --document-floor lower has chosen that themselves, and the
+	// adaptive learner will pursue it. The service answers a real 429 if the choice
+	// was wrong, and the learner slows down on its own when that happens.
+	DefaultDocumentFloor = 200 * time.Millisecond
 )
 
 // Config is the fully-resolved runtime configuration.
@@ -53,6 +57,9 @@ type Config struct {
 	UserAgent string
 
 	// DocumentFloor is the fastest the adaptive document bucket may settle at.
+	// It defaults to DefaultDocumentFloor, but any positive value is honoured: the
+	// pace is the operator's choice, and the service's own 429 is what says so if
+	// the choice was too ambitious.
 	DocumentFloor time.Duration
 
 	// RequestTimeout bounds a single HTTP request.
@@ -66,7 +73,7 @@ func Default() Config {
 		SiteBase:       "https://www.retsinformation.dk",
 		HarvestBase:    "https://api.retsinformation.dk",
 		UserAgent:      DefaultUserAgent,
-		DocumentFloor:  DocumentFloor,
+		DocumentFloor:  DefaultDocumentFloor,
 		RequestTimeout: 60 * time.Second,
 	}
 }
@@ -77,15 +84,15 @@ func (c Config) XMLDir() string { return c.DataDir + "/xml" }
 // StoreDir returns the directory holding the Badger state store.
 func (c Config) StoreDir() string { return c.DataDir + "/meta/kv" }
 
-// Validate refuses the configurations that a flag can still get wrong. The
-// harvest obligation is not one of them: HarvestInterval is a constant at or
-// above HarvestLimit by construction, asserted in config_test.go.
+// Validate refuses configurations that cannot mean anything. It deliberately does
+// not police the document floor: how fast to ask for uncached documents is the
+// operator's call, and the service itself answers 429 if the answer was wrong.
 func (c Config) Validate() error {
 	if c.SiteBase == "" || c.HarvestBase == "" {
 		return fmt.Errorf("site_base and harvest_base must be set")
 	}
-	if c.DocumentFloor < DocumentFloor {
-		return fmt.Errorf("document floor %s is below the %s courtesy minimum: document responses are served uncached straight from the origin", c.DocumentFloor, DocumentFloor)
+	if c.DocumentFloor <= 0 {
+		return fmt.Errorf("document floor must be a positive duration; zero would leave documents unpaced")
 	}
 	if c.RequestTimeout <= 0 {
 		return fmt.Errorf("request timeout must be positive")

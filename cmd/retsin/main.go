@@ -113,8 +113,9 @@ Pacing:
   the origin, so their interval is learned rather than fixed. It starts at 1.2s,
   divides by 1.5 after every 20 consecutive successes, and doubles on any 429 or
   5xx, holding the safer interval for 10 minutes before probing again. The only
-  pacing flag is --document-floor: how far that descent may go. It cannot be set
-  below the 200ms courtesy minimum, and learning starts over on every run.
+  pacing flag is --document-floor: how far that descent may go. 200ms is the
+  considerate default rather than a limit — set it lower and the learner will
+  pursue it until the service pushes back. Learning starts over on every run.
 
 Data layout:
   <data-dir>/xml/<kind>/<year>/<id>.xml   canonical documents (the archive)
@@ -137,7 +138,7 @@ func registerFlags(pf *pflag.FlagSet, cfg *config.Config, logLevel, progress *st
 	// the schedule is either a published obligation (harvest), a measurement
 	// (sitemap), or the learner's own shape, all of them constants.
 	pf.DurationVar(&cfg.DocumentFloor, "document-floor", cfg.DocumentFloor,
-		fmt.Sprintf("fastest document interval the learner may settle at (courtesy minimum %s)", config.DocumentFloor))
+		fmt.Sprintf("fastest document interval the learner may settle at; %s is the considerate default, and anything lower is honoured at the risk of a 429", config.DefaultDocumentFloor))
 
 	pf.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "timeout for a single HTTP request")
 	pf.StringVar(logLevel, "log-level", "info", "log level: debug, info, warn, error")

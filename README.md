@@ -73,7 +73,7 @@ flowchart LR
     S["status / rebuild"]
   end
   subgraph PACE["internal/limiter — process-global, self-learning"]
-    B["harvest 12s PINNED<br/>document 1.2s → floor 200ms<br/>sitemap 2s → floor 250ms"]
+    B["harvest 12s PINNED<br/>document 1.2s → floor 200ms (settable)<br/>sitemap 2s, may double"]
   end
   C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>reports outcome → learner<br/>one request per call · Retry-After → bucket delay"]
   H --> RI["retsininformation.dk"]
@@ -143,8 +143,12 @@ its own ceiling — a TCP-AIMD style controller:
 
 Only the **floor** is a flag. Every other number above is a constant, because every
 measured run behaved the same way: five step-downs from 1.2 s down to the floor, and
-nothing to react to. More knobs would only be more ways to configure a crawl the terms
-do not allow.
+nothing to react to. More knobs would only be more ways to misconfigure a crawl.
+
+The floor is a default, not a limit. 200 ms is what a considerate pace looks like for
+requests served uncached straight from the origin, but lowering it is honoured rather
+than refused — the feedback then comes from the service itself as a 429, which the
+learner answers by doubling the interval on its own.
 
 Learning restarts each run — deliberate, because the site's capacity changes and a
 persisted fast interval would begin the next run already presumptuous.
@@ -186,6 +190,7 @@ exactly what a run will do. Run `retsin --help` for the full list. The important
 ```
 --data-dir DIR           archive + state location (default ./data)
 --document-floor 200ms   the ONE pacing knob: fastest the learner may settle at
+                         (a default, not a limit: lower is honoured)
 --user-agent STRING      keep a contact address in it
 --site / --harvest-api   origins
 --request-timeout 1m     per-request timeout
@@ -255,11 +260,11 @@ near **7 GB** — not the 22 GB an early estimate assumed from the larger JSON
 representation. Daily updates afterwards are ~1 harvest call plus a few hundred
 documents.
 
-There is no way to crawl faster than the 200 ms courtesy minimum: `--document-floor`
-refuses anything lower, because those requests are served uncached straight from the
-origin and the terms ask users not to burden the interface. The learner only reaches the
-floor if the site proves it can take it. `fetch --limit N` caps a test run and
-`--batch N` sizes the pending window.
+To crawl faster, lower `--document-floor`: the tool honours it and leaves the judgement
+to the site. Those requests are served uncached straight from the origin, and the terms
+ask users not to burden the interface — which is why 200 ms is the default, not why it
+would be a wall. The learner only reaches the floor if the site proves it can take it.
+`fetch --limit N` caps a test run and `--batch N` sizes the pending window.
 
 ## Recovery
 
@@ -280,7 +285,7 @@ If `meta/kv` is lost or suspect, in this exact order:
 go test ./...
 ```
 
-Covering: the pacing **constants** and the document-floor guard, pacing guarantees,
+Covering: the pacing **constants** and the document-floor default, pacing guarantees,
 **the adaptive learner** (step-down after a clean window, doubling on throttle,
 floor/ceiling clamps, pinned buckets ignoring all feedback, `Retry-After` applied to the
 bucket and clamped), live learner integration against a throttling fake server,
@@ -322,8 +327,10 @@ reports while issuing zero requests.
 
 ## Notes and limitations
 
-- `internal/config.Validate()` enforces the 10 s harvest floor and a 200 ms document
-  floor; you cannot accidentally configure an aggressive crawl.
+- The 12 s harvest pace is a constant with no flag, so the published 1 call / 10 s
+  obligation cannot be configured away. The 200 ms document floor is a **default**, not
+  a limit: `Validate()` only refuses a non-positive value, and pushing it lower is a
+  deliberate operator choice answered by the service's own 429.
 - The harvest feed only covers a rolling 10 days. An outage longer than that can only
   be repaired via `inventory`, which the tool warns about explicitly.
 - `inventory` reports ingested rows including any cross-page duplicates; unique

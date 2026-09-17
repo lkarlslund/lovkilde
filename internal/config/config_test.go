@@ -12,8 +12,8 @@ func TestPublishedLimitsHold(t *testing.T) {
 	if HarvestInterval < HarvestLimit {
 		t.Errorf("harvest interval %s breaches the published %s limit", HarvestInterval, HarvestLimit)
 	}
-	if DocumentFloor <= 0 {
-		t.Error("document floor must be positive")
+	if DefaultDocumentFloor <= 0 {
+		t.Error("default document floor must be positive")
 	}
 	if SitemapInterval <= 0 {
 		t.Error("sitemap interval must be positive")
@@ -26,11 +26,24 @@ func TestDefaultsValidate(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsTooFastDocuments(t *testing.T) {
+func TestDocumentFloorIsADefaultNotALimit(t *testing.T) {
+	if Default().DocumentFloor != DefaultDocumentFloor {
+		t.Errorf("default floor = %s, want %s", Default().DocumentFloor, DefaultDocumentFloor)
+	}
+	// Anything the operator asks for is honoured; the service's own 429 is the
+	// feedback, and the learner slows down on it.
+	for _, d := range []time.Duration{time.Millisecond, 50 * time.Millisecond, time.Second} {
+		c := Default()
+		c.DocumentFloor = d
+		if err := c.Validate(); err != nil {
+			t.Errorf("floor %s rejected: %v", d, err)
+		}
+	}
+	// A floor that would leave requests unpaced is a typo, not a choice.
 	c := Default()
-	c.DocumentFloor = time.Millisecond
+	c.DocumentFloor = 0
 	if err := c.Validate(); err == nil {
-		t.Fatal("a document floor below the courtesy minimum must be rejected")
+		t.Error("a zero document floor must be rejected")
 	}
 }
 

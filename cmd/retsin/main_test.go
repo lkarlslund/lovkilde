@@ -226,10 +226,12 @@ func TestConfigSafety(t *testing.T) {
 		t.Error("--document-floor is the one pacing knob and must exist")
 	}
 
-	tooFast := config.Default()
-	tooFast.DocumentFloor = 10 * time.Millisecond
-	if err := tooFast.Validate(); err == nil {
-		t.Error("document floor below the courtesy minimum was accepted")
+	// The floor itself is not policed — only a value that would leave requests
+	// unpaced, which cannot be what anyone meant.
+	unpaced := config.Default()
+	unpaced.DocumentFloor = 0
+	if err := unpaced.Validate(); err == nil {
+		t.Error("a zero document floor was accepted, which would disable pacing")
 	}
 }
 
