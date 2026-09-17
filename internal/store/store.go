@@ -40,7 +40,7 @@ const (
 	StateFetched State = "fetched"
 	StateFailed  State = "failed"
 	StateSkipped State = "skipped" // duplicate body already stored under another URL
-	StateGone    State = "gone"    // server reports the resource is gone
+	StateGone    State = "gone"    // no representation available: 404, or HTML served where XML was expected
 )
 
 // Key prefixes. Single-character prefixes keep the keyspace small and make

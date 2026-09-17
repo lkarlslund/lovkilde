@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -114,12 +115,31 @@ type Meta struct {
 	Title        string `xml:"Titel"`
 }
 
+// ErrNotXML marks a payload that is an HTML page rather than canonical XML.
+//
+// Some catalogue URIs have no XML representation: requesting /xml on them answers
+// HTTP 200 with the website's own page. That is a permanent property of the
+// resource, not a transient fault, so callers must not spend the polite request
+// budget retrying it. xml.Unmarshal alone cannot express the difference — it
+// reports "expected element type <Dokument> but have <html>" the same way it
+// would report a genuinely corrupt document.
+var ErrNotXML = errors.New("server returned HTML where ELI XML was expected")
+
+// IsHTMLPayload reports whether a response body is a web page rather than XML.
+func IsHTMLPayload(raw []byte) bool {
+	s := strings.ToLower(strings.TrimSpace(string(raw)))
+	return strings.HasPrefix(s, "<!doctype html") || strings.HasPrefix(s, "<html")
+}
+
 // ParseXMLMeta extracts identity metadata from canonical ELI XML without
 // validating the whole document against the XSD.
 func ParseXMLMeta(raw []byte) (*Meta, error) {
 	var m struct {
 		XMLName xml.Name `xml:"Dokument"`
 		Meta    Meta     `xml:"Meta"`
+	}
+	if IsHTMLPayload(raw) {
+		return nil, fmt.Errorf("%w (%d bytes)", ErrNotXML, len(raw))
 	}
 	if err := xml.Unmarshal(raw, &m); err != nil {
 		return nil, fmt.Errorf("decode eli xml: %w", err)

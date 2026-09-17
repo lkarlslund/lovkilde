@@ -297,6 +297,18 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 
 			meta, err := docapi.ParseXMLMeta(body)
 			if err != nil {
+				// An HTML answer to an /xml ELI path is definitive: the resource
+				// has no XML representation, so another attempt can only repeat
+				// the same result. Record it like a 404, otherwise a fixed set of
+				// dead representations gets re-requested on every future pass.
+				if errors.Is(err, docapi.ErrNotXML) {
+					slog.Warn("no xml representation", "eli", row.ELIURL, "bytes", len(body))
+					if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateGone, Attempts: row.Attempts + 1, Error: err.Error()}); perr != nil {
+						return perr
+					}
+					report()
+					continue
+				}
 				failed++
 				slog.Warn("unparseable xml", "eli", row.ELIURL, "err", err)
 				if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateFailed, Attempts: row.Attempts + 1, Error: err.Error()}); perr != nil {

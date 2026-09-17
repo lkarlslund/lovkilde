@@ -1,6 +1,7 @@
 package docapi
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,5 +100,37 @@ func TestParseJSONSiteDocument(t *testing.T) {
 	}
 	if d.AccessionNumber == "" || d.DocumentHTML == "" {
 		t.Errorf("site document missing content: %+v", d)
+	}
+}
+
+// The site answers HTTP 200 with its own web page for URIs that have no XML
+// representation. That must be recognisable as such, or the crawler treats a
+// permanent property of the resource as a transient failure and retries it.
+func TestParseXMLMetaDetectsHTMLPayload(t *testing.T) {
+	pages := []string{
+		"<html><body>Den fulde tekst</body></html>",
+		"<!DOCTYPE html><html lang=\"da\">...</html>",
+		"\n\n  <HTML>\n",
+	}
+	for _, p := range pages {
+		if !IsHTMLPayload([]byte(p)) {
+			t.Errorf("IsHTMLPayload(%q) = false, want true", p[:min(len(p), 30)])
+		}
+		if _, err := ParseXMLMeta([]byte(p)); !errors.Is(err, ErrNotXML) {
+			t.Errorf("ParseXMLMeta on HTML gave %v, want ErrNotXML", err)
+		}
+	}
+
+	// Real canonical XML must not be caught by the check, including when it is
+	// preceded by whitespace or an XML declaration.
+	good, err := os.ReadFile(filepath.Join("testdata", "ken-afg.xml"))
+	if err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	if IsHTMLPayload(good) {
+		t.Error("canonical ELI XML misclassified as HTML")
+	}
+	if IsHTMLPayload([]byte("<?xml version=\"1.0\"?>\n<Dokument><Meta><AccessionNumber>A1</AccessionNumber></Meta></Dokument>")) {
+		t.Error("XML declaration misclassified as HTML")
 	}
 }

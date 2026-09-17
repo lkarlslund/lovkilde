@@ -1,4 +1,4 @@
 data/
-inventory/
+/retsin
 *.sqlite
 /tmp/

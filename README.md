@@ -294,6 +294,12 @@ reports while issuing zero requests.
   field *empty with no error*, so every document looked like it had no accession.
 - **Flags after the subcommand were silently ignored** — `fetch -limit 3` ran uncapped.
   Now parsed per-subcommand, and misplaced global flags error out.
+- **An HTML page counted as a retryable failure.** Some catalogue URIs have no XML
+  representation: requesting `/xml` answers **HTTP 200 with the website's own page**.
+  That was classified as a parse failure, so those resources were re-requested on
+  every pass up to `--max-attempts` — harmless once, wasteful for years of daily
+  updates. Now detected by payload and recorded as `gone`, alongside real 404s.
+  Found in the first live run, not in tests: the fixture corpus had no example of it.
 - **A progress bar that rendered nothing at all.** The bar library latches its
   `finished` state the first time it renders while its max is still 0 — which is
   how `fetch` starts, since the pending count arrives with the first report. Setting

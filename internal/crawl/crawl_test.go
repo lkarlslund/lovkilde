@@ -205,3 +205,72 @@ func TestFetchReportsProgressOnResumeWithoutRequests(t *testing.T) {
 		t.Errorf("skipped %d, want 1", last.Skipped)
 	}
 }
+
+// A resource the site serves as an HTML page must be closed definitively:
+// retried on the next pass it can only fail the same way, and a daily-update
+// crawl would keep paying for it forever.
+func TestFetchClosesHTMLResponseWithoutRetrying(t *testing.T) {
+	var requests int
+	page := "<!DOCTYPE html><html><body>Den fulde tekst</body></html>"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(page))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Default()
+	cfg.DataDir = dir
+	cfg.SiteBase = srv.URL
+	cfg.RequestTimeout = 5 * time.Second
+	u := "https://www.retsinformation.dk/eli/fob/2009/1-1"
+
+	st, err := store.Open(filepath.Join(dir, "meta", "kv"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+	ar, err := archive.Open(dir)
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	ctx := context.Background()
+	if err := st.PutInventory(ctx, store.Inventory{ELIURL: u, LastMod: "2024-01-01", Kind: "fob", State: store.StatePending}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	lim := limiter.New(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: time.Microsecond, Floor: time.Microsecond, Max: time.Millisecond},
+	}, 1.5, 2, time.Millisecond)
+	c := New(cfg, st, ar, rihttp.New(cfg, lim))
+
+	opt := FetchOptions{Batch: 10, MaxAttempts: 5}
+	var first FetchStats
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 5,
+		OnProgress: func(s FetchStats) { first = s }}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if first.Failed != 0 {
+		t.Errorf("failed %d, want 0: an HTML answer is definitive, not a fault", first.Failed)
+	}
+	if requests != 1 {
+		t.Errorf("requests %d on first pass, want 1", requests)
+	}
+
+	row, found, err := st.GetInventory(ctx, u)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !found || row.State != store.StateGone {
+		t.Errorf("state %q, want %q", row.State, store.StateGone)
+	}
+
+	// Second pass must leave it alone entirely.
+	if err := c.Fetch(ctx, opt); err != nil {
+		t.Fatalf("Fetch second pass: %v", err)
+	}
+	if requests != 1 {
+		t.Errorf("requests %d after a second pass, want still 1", requests)
+	}
+}
