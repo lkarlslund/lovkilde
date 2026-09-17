@@ -21,10 +21,12 @@ func testClient(t *testing.T, h http.Handler, tune func(*config.Config)) (*Clien
 	t.Helper()
 	cfg := config.Default()
 	// Keep tests fast: the pacing under test is verified by its own package test.
-	cfg.DocumentInterval = config.Duration{Duration: 200 * time.Millisecond}
-	cfg.HarvestInterval = config.Duration{Duration: 10 * time.Second}
-	cfg.BackoffBase = config.Duration{Duration: 20 * time.Millisecond}
-	cfg.BackoffMax = config.Duration{Duration: 80 * time.Millisecond}
+	cfg.DocumentStart = 200 * time.Millisecond
+	cfg.DocumentFloor = 200 * time.Millisecond
+	cfg.DocumentMax = time.Minute
+	cfg.HarvestInterval = 10 * time.Second
+	cfg.BackoffBase = 20 * time.Millisecond
+	cfg.BackoffMax = 80 * time.Millisecond
 	cfg.MaxRetries = 3
 	if tune != nil {
 		tune(&cfg)
@@ -34,11 +36,13 @@ func testClient(t *testing.T, h http.Handler, tune func(*config.Config)) (*Clien
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	lim := limiter.New(map[string]time.Duration{
-		limiter.BucketDocument: cfg.DocumentInterval.D(),
-		limiter.BucketHarvest:  cfg.HarvestInterval.D(),
-		limiter.BucketSitemap:  cfg.DocumentInterval.D(),
-	})
+	lim := limiter.New(map[string]limiter.Spec{
+		// Pinned so pacing tests measure the client's retry behaviour rather than
+		// the adaptive learner moving intervals underneath them.
+		limiter.BucketDocument: {Start: cfg.DocumentStart, Floor: cfg.DocumentStart, Max: cfg.DocumentMax, Pinned: true},
+		limiter.BucketHarvest:  {Start: cfg.HarvestInterval, Floor: cfg.HarvestInterval, Max: cfg.HarvestInterval, Pinned: true},
+		limiter.BucketSitemap:  {Start: cfg.SitemapInterval, Floor: cfg.SitemapInterval, Max: cfg.SitemapInterval, Pinned: true},
+	}, cfg.AdaptiveStepDown, cfg.AdaptiveWindow, cfg.AdaptiveCooldown)
 	return New(cfg, lim), srv.URL
 }
 
@@ -180,4 +184,82 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// adaptiveClient builds a client whose document bucket is adaptive, to prove the
+// client actually reports outcomes to the learner rather than only pacing from a
+// fixed schedule.
+func adaptiveClient(t *testing.T, h http.Handler) (*Client, string, *limiter.Limiter) {
+	t.Helper()
+	cfg := config.Default()
+	cfg.DocumentStart = 600 * time.Millisecond
+	cfg.DocumentFloor = 200 * time.Millisecond
+	cfg.DocumentMax = 30 * time.Second
+	cfg.AdaptiveWindow = 3
+	cfg.AdaptiveStepDown = 1.5
+	cfg.AdaptiveCooldown = 0
+	cfg.BackoffBase = 10 * time.Millisecond
+	cfg.BackoffMax = 20 * time.Millisecond
+	cfg.MaxRetries = 1
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	lim := limiter.New(map[string]limiter.Spec{
+		limiter.BucketDocument: {Start: cfg.DocumentStart, Floor: cfg.DocumentFloor, Max: cfg.DocumentMax},
+	}, cfg.AdaptiveStepDown, cfg.AdaptiveWindow, cfg.AdaptiveCooldown)
+	return New(cfg, lim), srv.URL, lim
+}
+
+// A 429 must make the adaptive bucket slower for subsequent requests, not just
+// for the current retry chain.
+func TestClientLearnsToSlowDownFrom429(t *testing.T) {
+	var throttle atomic.Bool
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if throttle.Load() {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = io.WriteString(w, "ok")
+	})
+	c, url, lim := adaptiveClient(t, h)
+	ctx := context.Background()
+
+	if _, err := c.GetJSON(ctx, limiter.BucketDocument, url+"/x", "text/plain"); err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := lim.Current(limiter.BucketDocument); cur != 600*time.Millisecond {
+		t.Fatalf("clean start: interval = %s, want 600ms", cur)
+	}
+
+	throttle.Store(true)
+	// Retry-After is absent from the real service, so the client must learn the
+	// slowdown itself.
+	_, _ = c.GetJSON(ctx, limiter.BucketDocument, url+"/x", "text/plain")
+
+	// MaxRetries=1 means the initial attempt plus one retry, both throttled, so
+	// the learner should have doubled twice: 600ms -> 1.2s -> 2.4s.
+	cur, _ := lim.Current(limiter.BucketDocument)
+	if cur != 2400*time.Millisecond {
+		t.Errorf("after two throttled attempts: interval = %s, want 2.4s (client did not report the throttle to the learner)", cur)
+	}
+}
+
+// A window of clean successes must make the next requests faster. 404 counts as a
+// clean success: a missing document is not a capacity signal.
+func TestClientLearnsToSpeedUpFromCleanWindow(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	c, url, lim := adaptiveClient(t, h)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		_, _ = c.GetJSON(ctx, limiter.BucketDocument, url+"/missing", "text/plain")
+	}
+	cur, _ := lim.Current(limiter.BucketDocument)
+	if cur >= 600*time.Millisecond {
+		t.Errorf("after a clean window of 3 (window=3): interval = %s, want it to have stepped down", cur)
+	}
 }

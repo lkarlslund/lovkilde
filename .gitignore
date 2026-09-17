@@ -1,3 +1,4 @@
 data/
+inventory/
 *.sqlite
 /tmp/

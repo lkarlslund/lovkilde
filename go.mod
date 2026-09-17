@@ -2,7 +2,11 @@ module github.com/lkarlslund/retsinformation
 
 go 1.27
 
-require github.com/dgraph-io/badger/v4 v4.9.6
+require (
+	github.com/dgraph-io/badger/v4 v4.9.6
+	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.9
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -11,6 +15,7 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.41.0 // indirect

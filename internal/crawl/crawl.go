@@ -30,6 +30,7 @@ import (
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/docapi"
 	"github.com/lkarlslund/retsinformation/internal/harvest"
+	"github.com/lkarlslund/retsinformation/internal/limiter"
 	"github.com/lkarlslund/retsinformation/internal/rihttp"
 	"github.com/lkarlslund/retsinformation/internal/sitemap"
 	"github.com/lkarlslund/retsinformation/internal/store"
@@ -291,11 +292,17 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				}
 			}
 
+			// Every 50th document, report the interval actually in force: on a
+			// multi-day crawl this is how you see the learner tightening or easing
+			// the schedule rather than guessing from throughput.
 			if attempted%50 == 0 {
 				el := time.Since(start)
+				interval, _ := c.client.Limiter().Current(limiter.BucketDocument)
 				slog.Info("fetch progress", "attempted", attempted, "stored", stored, "already_held", skippedDup,
 					"bytes", archive.SizeHint(bytes), "elapsed", el.Round(time.Second).String(),
-					"rate", fmt.Sprintf("%.1f req/s", float64(attempted)/el.Seconds()))
+					"rate", fmt.Sprintf("%.1f req/s", float64(attempted)/el.Seconds()),
+					"document_interval", interval.String(),
+					"interval_changes", c.client.Limiter().Steps())
 			}
 		}
 

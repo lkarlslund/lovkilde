@@ -72,10 +72,10 @@ flowchart LR
     U["update = inventory+harvest+fetch"]
     S["status / rebuild"]
   end
-  subgraph PACE["internal/limiter — process-global"]
-    B["harvest 12s | document 1.2s | sitemap 2s"]
+  subgraph PACE["internal/limiter — process-global, self-learning"]
+    B["harvest 12s PINNED<br/>document 1.2s → floor 200ms<br/>sitemap 2s → floor 250ms"]
   end
-  C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>429 → Retry-After + exp backoff+jitter"]
+  C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>reports outcome → learner<br/>429 → Retry-After + exp backoff+jitter"]
   H --> RI["retsininformation.dk"]
   PACE --> RI2["api.retsinformation.dk"]
   H --> RI2
@@ -118,14 +118,45 @@ H|<YYYY-MM-DD>            "1"    fully-harvested day checkpoint
 
 Example: `xml/fob/1980/100.xml`, `xml/retsinfo/2026/10019.xml`.
 
+## Pacing: one hard rule, everything else learned
+
+There are exactly two kinds of limit here, and the tool treats them differently.
+
+**Pinned — proven obligations.** The harvesting service publishes a 1 call / 10 s
+limit and returns a real `429` when exceeded, with no `Retry-After` header to be
+polite about. That interval is a contract, not an observation, so it is **fixed** and
+`config.Validate()` refuses to start if `--harvest-interval` is below 10 s. Pass
+`--pinned-intervals` to pin any other bucket the same way.
+
+**Adaptive — everything unpublished.** There is no published limit for document or
+sitemap requests, so guessing one is the wrong move: too fast risks an IP-wide
+Cloudflare block, too slow wastes the bootstrap. Instead the learner measures the site
+and finds its own ceiling — a TCP-AIMD style controller:
+
+| Event | Action |
+|---|---|
+| `--adaptive-window` consecutive successes | shorten the interval by `/--adaptive-step-down` (1.5×) |
+| any `429`/`5xx`/transport failure | **double** the interval immediately, then cool down |
+| settled interval | clamped to `[--document-floor, --document-max-interval]` |
+
+It starts conservative (1.2 s) and only tightens on evidence, so it is fast when the
+origin is healthy and backs off the instant it isn't. Learning restarts each run —
+deliberate, because the site's capacity changes and a persisted fast interval would
+begin the next run already presumptuous.
+
+Measured against production: starting at 900 ms with a 250 ms floor, the learner
+tightened **900 → 600 → 400 → 267 → 250 ms** across 25 documents, with zero throttles.
+
 ## Anti-blocking measures
 
-1. **Process-global token buckets.** The 10 s harvesting limit is structural — no
-   caller can bypass it, and `config.Validate()` refuses to start if
-   `harvest_interval < 10s`.
+1. **Process-global token buckets.** Every request in the process passes one gate per
+   bucket, so no phase or caller can bypass pacing, and the pinned 10 s harvest floor
+   is enforced at startup by `config.Validate()`.
 2. **Throttle-aware backoff.** Any 429/503/504 honours `Retry-After`, then backs off
    exponentially 10 s → 15 min **with jitter**, and pushes the bucket forward so the
-   *next* request is delayed too. Jitter prevents retry synchronisation.
+   *next* request is delayed too. Jitter prevents retry synchronisation. The learner
+   doubles the interval on the same signal, so backoff survives past the single
+   request that triggered it.
 3. **Conservative transport.** 1–2 connections per host, HTTP/2, no worker pool. Extra
    concurrency would only raise block risk without finishing sooner, since pacing is
    the bottleneck.
@@ -134,9 +165,33 @@ Example: `xml/fob/1980/100.xml`, `xml/retsinfo/2026/10019.xml`.
 5. **Idempotent, resumable phases.** A resource already on disk is closed with **no
    request at all**, so a multi-day crawl can be interrupted freely and a second pass
    costs nothing.
-6. **Bounded retries.** Resources failing `MaxAttempts` times stop being retried
+6. **Bounded retries.** Resources failing `--max-attempts` times stop being retried
    instead of consuming the polite budget forever; non-retryable 4xx never retries.
 7. **Run-end warning** if the server throttled us at all during the run.
+
+## Configuration
+
+Flags only — no config file and no environment overrides, so `ps` and a cron line show
+exactly what a run will do. Run `retsin --help` for the full list. The important ones:
+
+```
+--data-dir DIR            archive + state location (default ./data)
+--harvest-interval 12s    pinned; cannot go below the published 10s
+--document-interval 1.2s  starting document pace
+--document-floor 200ms    fastest the learner may settle at
+--document-max-interval 5m slowest backoff may reach after throttling
+--sitemap-interval 2s     starting pace for sitemap pages
+--adaptive-window 20      consecutive successes before a step down
+--adaptive-step-down 1.5  divisor per step
+--adaptive-cooldown 10m   hold after being throttled before probing faster
+--pinned-intervals        freeze buckets instead of learning
+--user-agent STRING       keep a contact address in it
+--site / --harvest-api    origins
+--request-timeout 1m      per-request timeout
+--log-level info          debug, info, warn, error
+```
+
+Subcommands: `inventory`, `harvest`, `fetch`, `update`, `status`, `rebuild`.
 
 ## Running it
 
@@ -144,37 +199,41 @@ Example: `xml/fob/1980/100.xml`, `xml/retsinfo/2026/10019.xml`.
 go build -o retsin ./cmd/retsin
 
 # 1. Full catalogue — ~22 requests, ~50 seconds, ~203k resources
-./retsin -config example-config.json inventory
+./retsin --data-dir /storage/retsinformation inventory
 
 # 2. Official change feed — 10 days × 12s ≈ 2 minutes
-./retsin -config example-config.json harvest
+./retsin --data-dir /storage/retsinformation harvest
 
-# 3. Documents — 1 request per document, ~2.8 days at the default 1.2s
-./retsin -config example-config.json fetch
+# 3. Documents — 1 request per document
+./retsin --data-dir /storage/retsinformation fetch
 
 # Daily thereafter (cron):
-./retsin -config example-config.json update
+./retsin --data-dir /storage/retsinformation update
 ```
+
+Flags go before or after the subcommand, either form works.
 
 `update` = inventory + harvest + fetch and is safe to run on any schedule: unchanged
 documents are never re-requested.
 
-**Estimated bootstrap:** 203,152 resources at 1.2 s pacing ≈ **2.8 days**, ≈22 GB raw.
+**Estimated bootstrap:** 203,152 resources ≈ **2.8 days** at the 1.2 s default, less if
+the learner finds headroom — at the 200 ms floor it is under 12 hours. About 22 GB raw.
 Daily updates afterwards are ~1 harvest call plus a few hundred documents.
 
-To go faster, lower `document_interval` — but note those requests are served uncached
-straight from the origin, and the terms ask users not to burden the interface. The
-first pass deliberately uses a conservative default; tighten it only if the run shows
-headroom. Flags: `fetch -limit N` caps a test run, `-batch N` sizes the pending window.
+To explore faster, lower `--document-interval` or `--document-floor` — but note those
+requests are served uncached straight from the origin, and the terms ask users not to
+burden the interface. The defaults are deliberately conservative; the learner tightens
+them only if the site proves it can take it. `fetch --limit N` caps a test run and
+`--batch N` sizes the pending window.
 
 ## Recovery
 
 If `meta/kv` is lost or suspect, in this exact order:
 
 ```bash
-./retsin -config example-config.json rebuild     # relink on-disk XML → zero requests
-./retsin -config example-config.json inventory   # re-discover the catalogue (~22 req)
-./retsin -config example-config.json fetch       # resume; already-held docs are skipped
+./retsin --data-dir /storage/retsinformation rebuild     # relink on-disk XML → zero requests
+./retsin --data-dir /storage/retsinformation inventory   # re-discover the catalogue (~22 req)
+./retsin --data-dir /storage/retsinformation fetch       # resume; already-held docs are skipped
 ```
 
 `rebuild` alone recovers only what is on disk; the catalogue comes back from the cheap
@@ -186,8 +245,11 @@ If `meta/kv` is lost or suspect, in this exact order:
 go test ./...
 ```
 
-Covering: pacing guarantees, 429/`Retry-After` backoff, gzip handling, non-retryable
-errors, UA identity, context cancellation, ELI path↔archive-path mapping (including
+Covering: pacing guarantees, **the adaptive learner** (step-down after a clean window,
+doubling on throttle, floor/ceiling clamps, pinned buckets ignoring all feedback),
+live learner integration against a throttling fake server, flag parsing on either side
+of the subcommand, 429/`Retry-After` backoff, gzip handling, non-retryable errors, UA
+identity, context cancellation, ELI path↔archive-path mapping (including
 path-traversal rejection), Badger round-trips and pending/limit semantics, harvest
 checkpointing, and XML parsing against **three genuine fixture schemas**.
 

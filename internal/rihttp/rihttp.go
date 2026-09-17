@@ -49,7 +49,7 @@ type Client struct {
 func New(cfg config.Config, lim *limiter.Limiter) *Client {
 	return &Client{
 		http: &http.Client{
-			Timeout: cfg.RequestTimeout.D(),
+			Timeout: cfg.RequestTimeout,
 			Transport: &http.Transport{
 				// Deliberately conservative: one connection per host, no
 				// multiplexed bursts. Slower in theory, far less likely to look
@@ -124,8 +124,11 @@ func (c *Client) do(ctx context.Context, bucket, method, url, accept string, bod
 
 		resp, err := c.http.Do(req)
 		if err != nil {
-			// Transport-level failure: worth retrying, but count it as a
-			// signal to slow down.
+			// Transport-level failure says nothing about pacing: the request may
+			// never have reached the service. Neutral keeps the learner honest,
+			// while still breaking a success streak so learning only happens on
+			// clean windows.
+			c.limiter.Feedback(bucket, limiter.OutcomeNeutral)
 			lastErr = fmt.Errorf("%s %s: %w", method, url, err)
 			slog.Warn("request failed", "url", url, "attempt", attempt, "err", err)
 			continue
@@ -134,6 +137,7 @@ func (c *Client) do(ctx context.Context, bucket, method, url, accept string, bod
 
 		switch {
 		case resp.StatusCode >= 200 && resp.StatusCode < 300:
+			c.limiter.Feedback(bucket, limiter.OutcomeOK)
 			return resp, nil
 
 		case resp.StatusCode == http.StatusTooManyRequests ||
@@ -143,7 +147,8 @@ func (c *Client) do(ctx context.Context, bucket, method, url, accept string, bod
 			// when exceeded. Treat any 429 as authoritative: honour Retry-After
 			// and never resume at the previous pace.
 			c.Throttle.Add(1)
-			wait := respRetryAfter(resp, c.cfg.BackoffBase.D())
+			c.limiter.Feedback(bucket, limiter.OutcomeThrottled)
+			wait := respRetryAfter(resp, c.cfg.BackoffBase)
 			drain(resp)
 			lastErr = &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url, RetryAfter: wait}
 			slog.Warn("throttled by server", "url", url, "status", resp.StatusCode, "backoff", wait.String(), "attempt", attempt)
@@ -154,13 +159,19 @@ func (c *Client) do(ctx context.Context, bucket, method, url, accept string, bod
 			continue
 
 		case resp.StatusCode >= 500:
+			// A server fault is a load signal even without a 429, so treat it as
+			// throttling: staying polite after a 5xx is the safe reading.
+			c.limiter.Feedback(bucket, limiter.OutcomeThrottled)
 			drain(resp)
 			lastErr = &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url}
 			slog.Warn("server error", "url", url, "status", resp.StatusCode, "attempt", attempt)
 			continue
 
 		default:
-			// 4xx other than 429: not retryable by pacing (bad URL, gone, ...).
+			// Other 4xx are permanent answers, not capacity signals: a 404 means
+			// the server handled the request fine, so it counts as success and
+			// must not slow the crawl. Not retried, since pacing cannot fix it.
+			c.limiter.Feedback(bucket, limiter.OutcomeOK)
 			snippet := readSnippet(resp, 512)
 			return nil, &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url, Body: snippet}
 		}
@@ -170,8 +181,8 @@ func (c *Client) do(ctx context.Context, bucket, method, url, accept string, bod
 
 // backoff grows exponentially from BackoffBase to BackoffMax with jitter.
 func (c *Client) backoff(attempt int) time.Duration {
-	base := c.cfg.BackoffBase.D()
-	max := c.cfg.BackoffMax.D()
+	base := c.cfg.BackoffBase
+	max := c.cfg.BackoffMax
 	d := base
 	for i := 1; i < attempt && d < max; i++ {
 		d *= 2
@@ -218,6 +229,10 @@ func respRetryAfter(resp *http.Response, fallback time.Duration) time.Duration {
 	}
 	return fallback
 }
+
+// Limiter exposes the pacing state so status and logs can report the interval
+// actually in force rather than the one requested at startup.
+func (c *Client) Limiter() *limiter.Limiter { return c.limiter }
 
 func drain(resp *http.Response) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
