@@ -184,6 +184,17 @@ func TestModelContentParityOnCorpus(t *testing.T) {
 		newOrder, newTexts, newForce, newGroups := contentKeys(&m.Content)
 		groups += newGroups
 
+		// Every rubric the document prints must survive somewhere in the model: a division
+		// heading, a provision's own rubric, or text inside a provision. Losing them is what made
+		// "Overskriften før § 3 ophæves" unanswerable, and the unit-by-unit comparison below
+		// cannot see it, because the flat list gives a paragraph group no entry of its own.
+		have := lexdoc.MatchText(modelText(&m.Content))
+		for _, r := range allRubrics(doc.Root) {
+			if !strings.Contains(have, lexdoc.MatchText(r)) {
+				t.Errorf("%s: the model has no trace of the rubric %q", f, r)
+			}
+		}
+
 		// Entry-into-force material: the flag the flat list carried and the field the model
 		// has must name the same provisions.
 		if strings.Join(oldForce, "\n") != strings.Join(newForce, "\n") {
@@ -410,3 +421,84 @@ const fixtureStructured = `<?xml version="1.0" encoding="utf-8"?>
     </Bilag>
   </DokumentIndhold>
 </Dokument>`
+
+// allRubrics returns every rubric the document prints, recognised by rubric element name rather
+// than by container name: the corpus nests divisions under more container names than any list
+// holds, while a rubric is recognisable by what it is called.
+func allRubrics(n *Node) []string {
+	var out []string
+	n.Descendants(func(c *Node) {
+		switch c.Name {
+		case "Rubrica", "ParagrafOverskrift", "KapitelOverskrift":
+			if h := strings.TrimSpace(DisplayText(c)); h != "" {
+				out = append(out, h)
+			}
+		}
+	})
+	return out
+}
+
+// modelText renders everything the model holds, in reading order. It exists for this comparison:
+// the front-end renderer is a later task, and what is checked here is only that no words the
+// document prints went missing on the way in.
+func modelText(c *lexdoc.Content) string {
+	var b strings.Builder
+	var walk func(nodes []lexdoc.Node)
+	walk = func(nodes []lexdoc.Node) {
+		for _, n := range nodes {
+			switch {
+			case n.Part != nil:
+				b.WriteString(n.Part.Heading)
+				b.WriteString("\n")
+				walk(n.Part.Order)
+			case n.Provision != nil:
+				b.WriteString(n.Provision.Text())
+				b.WriteString("\n")
+			}
+		}
+	}
+	walk(c.Order)
+	b.WriteString(lexdoc.SegmentsText(c.Preamble))
+	b.WriteString(lexdoc.SegmentsText(c.Title))
+	b.WriteString(lexdoc.SegmentsText(c.Signature))
+	for i := range c.EntryIntoForce {
+		b.WriteString(c.EntryIntoForce[i].Text())
+		b.WriteString("\n")
+	}
+	for i := range c.Appendices {
+		b.WriteString(c.Appendices[i].Heading)
+		b.WriteString("\n")
+		walk(c.Appendices[i].Order)
+	}
+	// Unmapped is part of the answer: content the model has no concept for keeps its text here
+	// so that an incomplete model is visible per document rather than inferred from an average.
+	for _, u := range c.Unmapped {
+		b.WriteString(u.Text)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// TestRubricInsideParagraphGroupIsCarried guards a reader gap found through consolidation: the
+// register writes a group's rubric as Rubrica>Linea>Char, so the element's own text is only
+// whitespace. Reading direct text made every rubric empty, which cost the model the words and left
+// "Overskriften før § 3 ophæves" with nothing to remove.
+func TestRubricInsideParagraphGroupIsCarried(t *testing.T) {
+	const src = "<" + "?xml version=\"1.0\"?><Dokument><Meta>" +
+		"<DocumentTitle>Bekendtgørelse om zoner</DocumentTitle>" +
+		"<AccessionNumber>A20260000001</AccessionNumber></Meta>" +
+		"<ParagrafGruppe><Rubrica><Linea><Char>Definitioner</Char></Linea></Rubrica>" +
+		"<Paragraf><Explicatus>\u00a7 1.</Explicatus>" +
+		"<Stk><Exitus><Linea><Char>Der defineres her.</Char></Linea></Exitus></Stk></Paragraf>" +
+		"</ParagrafGruppe></Dokument>"
+	m := mustParse(t, src).Model()
+	var heading string
+	for _, n := range m.Content.Order {
+		if n.Part != nil && n.Part.Kind == lexdoc.PartGroup {
+			heading = n.Part.Heading
+		}
+	}
+	if heading != "Definitioner" {
+		t.Errorf("group rubric = %q, want %q", heading, "Definitioner")
+	}
+}

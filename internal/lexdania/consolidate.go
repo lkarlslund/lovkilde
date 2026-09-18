@@ -186,37 +186,19 @@ func LawAsOf(base *Document, asOf time.Time, open Opener) *View {
 		AsOf:      asOf,
 		Doc:       base.Clone(),
 	}
-	info := base.Accession()
-	for _, ver := range base.Versions() {
-		if ver.Effective.After(asOf) {
-			v.Chain = append(v.Chain, ver)
+	steps, bills, foreign := resolveChain(base, asOf, open)
+	for _, st := range steps {
+		v.Chain = append(v.Chain, st.Version)
+		if st.Missing != "" {
+			v.Unresolved = append(v.Unresolved, UnresolvedEdit{Reason: st.Missing})
 			continue
 		}
-		amender, path, ok := open(ver.Accession)
-		ver.Path = path
-		ver.Found = ok
-		v.Chain = append(v.Chain, ver)
-		if !ok {
-			v.Unresolved = append(v.Unresolved, UnresolvedEdit{
-				Reason: fmt.Sprintf("amending document %s is not in the archive", ver.Accession),
-			})
-			continue
-		}
-		if amender.IsBill() {
-			// A bill's amendment text is a proposal, not enacted law. This is not
-			// hypothetical: bills are archived next to the acts they became and can
-			// appear in a chain, and their markup looks identical to the enacted one.
-			v.SkippedBills++
-			continue
-		}
-		for _, e := range amender.Amendments() {
-			if !targetsLaw(e.Target, base.Meta, info) {
-				v.SkippedForeign++
-				continue
-			}
+		for _, e := range st.Edits {
 			v.applyOne(e)
 		}
 	}
+	v.SkippedBills = bills
+	v.SkippedForeign = foreign
 	return v
 }
 

@@ -123,9 +123,48 @@ var (
 // instead of a wrong consolidation.
 //
 // Noise it tolerates: "i lovens § 12", "jf. § 12", "bekendtgørelsens § 5".
+// blankQuoted replaces the runs between Danish quotation marks with spaces, keeping every other
+// character where it is so that positions still mean what they did. Unmatched marks are left
+// alone: half a quote is more likely prose than a passage.
+func blankQuoted(s string) string {
+	out := []rune(s)
+	runes := []rune(s)
+	for i := 0; i < len(runes); i++ {
+		var closer rune
+		switch runes[i] {
+		case '»':
+			closer = '«'
+		case '“':
+			closer = '”'
+		default:
+			continue
+		}
+		end := i
+		for j := i + 1; j < len(runes); j++ {
+			if runes[j] == closer {
+				end = j
+				break
+			}
+		}
+		if end == i {
+			continue
+		}
+		for j := i + 1; j < end; j++ {
+			out[j] = ' '
+		}
+		i = end
+	}
+	return string(out)
+}
+
 func ParseAddress(s string) Address {
 	a := Address{Raw: Squeeze(s)}
-	s = a.Raw
+	// The quoted passage a change reproduces is not an address. "I § 119 a, stk. 1, ændres
+	// »nr. 8« til: »nr. 9«" addresses § 119 a, stk. 1 and talks about the words "nr. 8"; if the
+	// quote is read as an address, the change is looked up as item 8 — which is the thing being
+	// rewritten, not where it is — and the change is refused against a provision that is sitting
+	// right there. Blanking quoted runs before scanning is what separates the two.
+	s = blankQuoted(a.Raw)
 
 	if m := reHeading.FindString(s); m != "" {
 		a.Heading = true

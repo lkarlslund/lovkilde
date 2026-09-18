@@ -443,8 +443,16 @@ func markNote(out *[]lexdoc.Segment, from int, id string) {
 // headingText reads the rubric printed above an element, which is what an amendment means by
 // "overskriften for § 12".
 func headingText(n *Node) string {
+	// DisplayText, not TextOrNull: the register puts a heading's words in Rubrica>Linea>Char, so
+	// the element's own text is only the whitespace between its children. Reading direct text
+	// made every rubric come back empty, which cost the model the text itself and left
+	// "Overskriften før § 3 ophæves" with nothing to remove.
 	for _, name := range []string{"Rubrica", "ParagrafOverskrift", "KapitelOverskrift"} {
-		if t := strings.TrimSpace(n.Elem(name).TextOrNull()); t != "" {
+		h := n.Elem(name)
+		if h == nil {
+			continue
+		}
+		if t := strings.TrimSpace(DisplayText(h)); t != "" {
 			return t
 		}
 	}

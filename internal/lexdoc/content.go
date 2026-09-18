@@ -1,6 +1,9 @@
 package lexdoc
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Content is a document's text in the mirror's own terms.
 //
@@ -350,6 +353,42 @@ func itoa(n int) string {
 // amendment's "§ 12, stk. 2" refers to the numbering that existed when it was written, so
 // applying edits out of order silently mis-targets every later edit. That rule belongs to
 // the model rather than to a reader, because it is about what a provision number means.
+// Occurrences returns where a passage actually sits: "§ 56, stk. 3", "§ 5, stk. 2, nr. 3", or
+// "§ 56" for text outside its numbered parts.
+//
+// This is the question a refused change raises. A refusal that says "the passage is not there" is
+// only honest if the passage is nowhere in the act; when it is present in a different subsection,
+// the amendment pointed at the wrong place and the reader deserves to be told where it points.
+func (c *Content) Occurrences(passage string) []string {
+	needle := MatchText(passage)
+	if needle == "" {
+		return nil
+	}
+	var found []string
+	for _, ref := range c.Provisions() {
+		p := ref.Provision
+		where := p.Number
+		inNumberedPart := false
+		for _, st := range p.Stykker {
+			at := where + fmt.Sprintf(", stk. %d", st.Nr)
+			if strings.Contains(MatchText(p.SpanText(st.Span)), needle) {
+				found = append(found, at)
+				inNumberedPart = true
+			}
+			for _, it := range st.Items {
+				if strings.Contains(MatchText(p.SpanText(it.Span)), needle) {
+					found = append(found, fmt.Sprintf("%s, nr. %d", at, it.Nr))
+					inNumberedPart = true
+				}
+			}
+		}
+		if !inNumberedPart && strings.Contains(p.Match(), needle) {
+			found = append(found, where)
+		}
+	}
+	return found
+}
+
 func (c *Content) Find(a Address) (Located, bool) {
 	if !a.Recognised {
 		return Located{}, false

@@ -160,11 +160,23 @@ func amendmentPreamble(par *Node) string {
 
 var (
 	// reTarget matches the preamble form "bekendtgørelse nr. 1399 af 12. december
-	// 2019". The month is a NAME in Danish practice, not a number: matching only a
-	// numeric month silently yields an empty hint, and an empty hint means
-	// "target unknown", which makes the engine apply a change aimed at a different
-	// law to the law it is reconstructing.
-	reTarget = regexp.MustCompile(`(?i)\b(?:lov|bekendtgørelse|cirkulære|anordning|bekg|bekendtgørelses)\b[^,.]{0,60}?nr\.?\s*([0-9]+)\s*af\s*([0-9]{1,2})[./]\s*([0-9]{1,2}|[a-zæøå]+)\s*([0-9]{4})`)
+	// 2019". Two things cost more than they look:
+	//
+	//   - The month is a NAME in Danish practice, not a number: matching only a numeric
+	//     month silently yields an empty hint, and an empty hint means "target unknown",
+	//     which makes the engine apply a change aimed at a different law to the law it is
+	//     reconstructing.
+	//   - The instrument is often a compound: "jf. lovbekendtgørelse nr. 295 af 7. marts
+	//     2022". Requiring a word boundary in front of "bekendtgørelse" fails to match
+	//     inside "lovbekendtgørelse", and an amending act that changes several laws then
+	//     has its election-law changes applied to the municipal government act. Measured:
+	//     of 117 changes kept for lov om kommunernes styrelse, the ones naming § 96 and
+	//     § 100 — paragraphs that act does not have — came from exactly this.
+	//
+	// Letters are therefore allowed on both sides of the instrument word, and the run up
+	// to "nr." may not cross a comma, so the reference to the instrument being amended is
+	// the one that is read rather than an earlier citation in the same sentence.
+	reTarget = regexp.MustCompile(`(?i)(?:^|[^\p{L}])[a-zæøå]*(?:lov|bekendtgørelse|cirkulære|anordning|forordning|bekg)[a-zæøå]*[^,.]{0,60}?nr\.?\s*([0-9]+)\s*af\s*([0-9]{1,2})[./]\s*([0-9]{1,2}|[a-zæøå]+)\s*([0-9]{4})`)
 )
 
 // parseTarget reads "bekendtgørelse nr. 1399 af 12. december 2019" out of a preamble.

@@ -327,6 +327,44 @@ func TestParseDanishDates(t *testing.T) {
 // package: a numeric-month regex silently produced an empty TargetHint, and an empty
 // hint is accepted as "target unknown", which would have applied a change meant for
 // another law to the law being reconstructed.
+// TestTargetHintParsesCompoundInstrument is the guard for a contamination bug found by the
+// model/tree parity gate: the instrument reference was matched only at a word boundary, so
+// "jf. lovbekendtgørelse nr. 295 af …" — the ordinary way of citing a consolidated law — yielded
+// an empty hint. An empty hint is accepted for every law, which put an election act's changes
+// (§ 96, § 100) into the municipal government act that has neither paragraph.
+func TestTargetHintParsesCompoundInstrument(t *testing.T) {
+	got := parseTarget("I lov om kommunale og regionale valg, jf. lovbekendtgørelse nr. 295 af 7. marts 2022, foretages følgende ændringer:")
+	if got.Number != 295 {
+		t.Fatalf("Number = %d, want 295 (hint %q)", got.Number, got.Raw)
+	}
+	want := time.Date(2022, 3, 7, 0, 0, 0, 0, time.UTC)
+	if !got.Date.Equal(want) {
+		t.Errorf("Date = %v, want %v", got.Date, want)
+	}
+
+	// The hint must then be able to say no. The base here is bekendtgørelse nr. 1329, whose
+	// changes these are not.
+	styrelsesloven := Meta{Number: 1329}
+	if targetsLaw(got, styrelsesloven, AccessionInfo{}) {
+		t.Error("an election act's changes were accepted for bekendtgørelse nr. 1329")
+	}
+	electionLaw := Meta{Number: 295}
+	if !targetsLaw(got, electionLaw, AccessionInfo{}) {
+		t.Error("the election act's own changes were rejected")
+	}
+
+	for _, form := range []string{
+		"I anordning nr. 44 af 22. februar 2021 om …",
+		"I forordning nr. 712 af 3. april 2020 …",
+		"I cirkulære nr. 12 af 9. oktober 1998 …",
+		"I lov nr. 102 af 24. januar 2024 …",
+	} {
+		if h := parseTarget(form); h.Empty() {
+			t.Errorf("hint for %q came back empty", form)
+		}
+	}
+}
+
 func TestTargetHintParsesDanishMonth(t *testing.T) {
 	got := parseTarget("I bekendtgørelse nr. 1399 af 12. december 2019 om bygningsreglement 2018 (BR18), som senest ændret ved bekendtgørelse nr. 1397 af 2. december 2024, foretages følgende ændringer:")
 	if got.Number != 1399 {
