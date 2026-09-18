@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/retsinformation/internal/crawl"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 )
 
@@ -206,4 +207,68 @@ func writeFixtureArtifact(t *testing.T, a *lexdania.Archive, skip ...string) str
 		t.Fatal(err)
 	}
 	return path
+}
+
+// A collection pass that ran after the artifact was compiled leaves the mirror holding documents
+// the artifact has never seen. The server refuses that at startup, and a server that booted before
+// it happened has to catch it per answer, because the crawl finishes at night and the server does
+// not restart.
+func TestServingRefusesAnArtifactOlderThanTheMirror(t *testing.T) {
+	s := newTestServer(t)
+	artPath := writeFixtureArtifact(t, s.archive)
+
+	stampPath := filepath.Join(t.TempDir(), "sweep.record")
+	pulled := time.Now().Add(time.Hour)
+	if err := crawl.PublishSweepRecord(stampPath, crawl.SweepRecord{PulledAt: pulled, IssuesKnown: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := New(s.archive, "https://www.retsinformation.dk/", "test")
+	fresh.SweepStampPath = stampPath
+	err := fresh.UseArtifact(artPath, 1<<20)
+	if err == nil || !strings.Contains(err.Error(), "older than the mirror") {
+		t.Fatalf("an artifact older than the mirror was accepted: %v", err)
+	}
+	if !strings.Contains(err.Error(), "retsin artifact build") {
+		t.Errorf("the refusal does not say what to rebuild: %v", err)
+	}
+
+	// Booting with no collection record is legitimate — and then the pass runs while the server is
+	// up. The answer that reads the old compiled text is the thing that has to say so.
+	if err := s.UseArtifact(artPath, 1<<20); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Lookup(LookupRequest{Document: accCanon})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) != 0 {
+		t.Fatalf("a server with no collection record warned about staleness: %q", res.Warnings)
+	}
+
+	s.SweepStampPath = stampPath
+	res, err = s.Lookup(LookupRequest{Document: accCanon})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var warned string
+	for _, w := range res.Warnings {
+		if strings.Contains(w, "compiled text") {
+			warned = w
+		}
+	}
+	if warned == "" {
+		t.Fatalf("no staleness warning among %q", res.Warnings)
+	}
+	for _, want := range []string{"retsin artifact build", "collection pass"} {
+		if !strings.Contains(warned, want) {
+			t.Errorf("the warning does not name %q: %s", want, warned)
+		}
+	}
+
+	// The status line carries the artifact's own date, so an operator comparing it against the pull
+	// date does not have to open the file to find out which is which.
+	if !strings.Contains(s.textSource(), "built") {
+		t.Errorf("the status line does not date the artifact: %q", s.textSource())
+	}
 }

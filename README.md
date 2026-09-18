@@ -1326,6 +1326,12 @@ edited and not committed. A mismatch names the side that is out of date, using t
 own timestamp against the binary's commit date, because the operator can rebuild either one and
 only the file says which needs it.
 
+The other way a compiled file goes wrong is data, not code: a crawl that finishes after the
+artifact was built leaves the mirror holding documents the artifact has never seen. An artifact
+older than the last recorded collection pass is refused at startup, and one that went stale while
+the server was running says so in every answer it is read for — the crawl finishes at night and
+the server does not restart, so the answer that is affected is where the fact belongs.
+
 Measured in one run over the same 1,000 documents, both paths, same machine and file cache
 (`internal/mcpserver/testdata/serve-baseline-20260918.txt`):
 

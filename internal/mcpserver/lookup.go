@@ -104,6 +104,9 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 	}
 	res.Path = path
 	res.provenance(m)
+	if w := s.artifactStaleness(); w != "" {
+		res.Warnings = append(res.Warnings, w)
+	}
 	res.noteAmendments(m, s.horizon().Now)
 
 	// The text comes from the model, so an answer can say what the thing it found *is*: a

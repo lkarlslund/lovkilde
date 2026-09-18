@@ -79,6 +79,21 @@ func readBuildInfo() (BuildStamp, bool) {
 	return out, out.Revision != ""
 }
 
+// CheckNotOlderThan refuses an artifact compiled before the data it is being offered as.
+//
+// The build pin catches code moving underneath an artifact; this catches the other half, which is
+// that a compiled file is a statement about a corpus at a moment. A crawl that ran after the
+// artifact was built leaves the mirror holding documents the artifact has never seen, and an answer
+// that says "369 of 1,000 documents" while reading a file from before them is a coverage claim the
+// reader cannot check. The remedy is a rebuild, not an argument.
+func (a *Artifact) CheckNotOlderThan(when time.Time, what string) error {
+	if when.IsZero() || !a.Header.Created.Before(when) {
+		return nil
+	}
+	return fmt.Errorf("%s is older than the mirror it would be served from: it was compiled %s, and %s happened %s. Rebuild it with `retsin artifact build`",
+		a.path, a.Header.Created.Format(time.RFC3339), what, when.Format(time.RFC3339))
+}
+
 // CheckCurrentBuild refuses an artifact this binary cannot be trusted to serve, and says which side
 // is out of date rather than only that they disagree: the remedy differs, and the reader is the one
 // who has to run it.

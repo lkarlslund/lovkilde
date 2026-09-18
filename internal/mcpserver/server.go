@@ -109,7 +109,8 @@ func (s *Server) textSource() string {
 	if s.docs == nil {
 		return "text by parsing XML (run `retsin artifact build` and restart to serve from the compiled artifact)"
 	}
-	return fmt.Sprintf("text from the compiled artifact at %s", s.docs.Artifact().Path())
+	art := s.docs.Artifact()
+	return fmt.Sprintf("text from the compiled artifact at %s (built %s)", art.Path(), art.Header.Created.Format("2006-01-02 15:04:05Z07:00"))
 }
 
 // DefaultArtifactCacheBytes is how much payload the serving cache may hold. The bound is in bytes
@@ -137,8 +138,36 @@ func (s *Server) UseArtifact(path string, cacheBytes int64) error {
 		c.Close()
 		return err
 	}
+	// The other way an artifact can be wrong: right build, old data. The collection pass publishes
+	// when it last pulled, so a server that booted against an artifact from before that would be
+	// answering from a corpus that no longer exists.
+	if h := s.horizon(); h.Known {
+		if err := c.Artifact().CheckNotOlderThan(h.PulledAt, "the last recorded collection pass"); err != nil {
+			c.Close()
+			return err
+		}
+	}
 	s.docs = c
 	return nil
+}
+
+// artifactStaleness is the same check as the one at startup, re-asked per answer: a server that
+// booted against a current artifact will still be running tomorrow night when the crawl finishes,
+// and from that moment its compiled text describes a mirror it no longer holds. That is not a
+// reason to stop answering — the text it holds is still the register's text for the documents it
+// holds — but it is a reason to say so in the answer that is affected rather than in a log line
+// nobody reads.
+func (s *Server) artifactStaleness() string {
+	if s.docs == nil {
+		return ""
+	}
+	art := s.docs.Artifact()
+	h := s.horizon()
+	if !h.Known || !art.Header.Created.Before(h.PulledAt) {
+		return ""
+	}
+	return fmt.Sprintf("the compiled text this answer is read from was built %s, before the last collection pass (%s), so documents that arrived since are not in it; rebuild the artifact with `retsin artifact build`",
+		art.Header.Created.Format("2006-01-02 15:04:05Z07:00"), h.PulledAt.Format("2006-01-02 15:04:05Z07:00"))
 }
 
 // unitSource is where a search hit's text comes from: the artifact when serving has one, and the
