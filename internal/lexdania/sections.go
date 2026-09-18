@@ -144,7 +144,14 @@ func sectionsIn(root *Node) []*Section {
 					if stk.Stk == 0 {
 						stk.Stk = stkIdx
 					}
-					sec.Runs = append(sec.Runs, stk.Runs...)
+					// sec.Runs already holds every run in this provision's subtree, in
+					// document order, because newSection collected them recursively. The
+					// stykke and item lists must not be appended on top of that: doing so
+					// repeated each descendant run two or three times, which made the
+					// concatenation splice searched a garbled copy of the provision, and its
+					// write-back then restored the unedited copy over the edited one. An
+					// amendment quoting a passage inside "stk. 1, nr. 2" reported itself
+					// applied while the text stayed exactly as it was.
 
 					// Nr elements are numbered the same way, and the Explicatus of a
 					// numbered paragraph often carries it ("2)"), which is why the
@@ -164,8 +171,6 @@ func sectionsIn(root *Node) []*Section {
 							nr.Nr = nrIdx
 						}
 						nr.Stk = stk.Stk
-						stk.Runs = append(stk.Runs, nr.Runs...)
-						sec.Runs = append(sec.Runs, nr.Runs...)
 						out = append(out, nr)
 					}
 					out = append(out, stk)
@@ -292,15 +297,25 @@ func numberedIndentation(n *Node) bool {
 	return num != 0 || litra != ""
 }
 
-// collectRuns records every text run in document order.
+// collectRuns records every text run in document order, using the same traversal PlainText
+// renders with: Runs[0] precedes Elems[0], and the run after each child follows it.
+//
+// It has to be the same traversal, not merely a walk. splice turns a located match back into
+// offsets in this list, so a list ordered differently from the displayed text points those
+// offsets at the wrong characters — and its write-back then overwrites the untouched copy of a
+// run with the edited one. Collecting a node's own runs before its children's did exactly that
+// for any provision with an inline element in its prose, which is most of them: an inline
+// <Char>, <Ref> or <Nota> pushed the marker to the end of the concatenated text instead of
+// leaving it where the page puts it.
 func collectRuns(n *Node, out *[]TextRun) {
-	for i := range n.Runs {
-		if n.Runs[i] != "" {
-			*out = append(*out, TextRun{Node: n, Idx: i})
-		}
+	if n.Runs[0] != "" {
+		*out = append(*out, TextRun{Node: n, Idx: 0})
 	}
-	for _, c := range n.Elems {
+	for i, c := range n.Elems {
 		collectRuns(c, out)
+		if i+1 < len(n.Runs) && n.Runs[i+1] != "" {
+			*out = append(*out, TextRun{Node: n, Idx: i + 1})
+		}
 	}
 }
 

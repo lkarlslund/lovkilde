@@ -117,6 +117,45 @@ func TestSubsectionNumberingIsPositional(t *testing.T) {
 	}
 }
 
+// TestRestatedEditIsCounted covers the edit that finds its quoted passage and writes back text
+// identical to what was already there: an amendment that restates existing law. It stays
+// applied, but the view has to be able to say how many of its edits changed nothing, because the
+// alternative is an engine that reports amendments applied while leaving the law alone — which is
+// what it did, undetectably, until the run list was fixed.
+func TestRestatedEditIsCounted(t *testing.T) {
+	doc := mustParse(t, fixtureLaw)
+	v := &View{Doc: doc.Clone()}
+	before := Find(v.Doc.Sections(), ParseAddress("§ 2, stk. 1")).Display()
+
+	// A passage inside one text run, so that writing the same words back really does
+	// leave the document alone. A passage that straddles runs cannot: the replacement
+	// lands in the first run touched and empties the others, which drops any inline
+	// markup inside the span. That is inherent to a text splice — the register's new
+	// text is plain prose, with no markup to put back — and the model behaves the same.
+	v.applyOne(Edit{Kind: EditReplaceText, Address: ParseAddress("§ 2, stk. 1"),
+		Old: "Selskabet", New: "Selskabet"})
+
+	if len(v.Applied) != 1 {
+		t.Fatalf("a passage that is present was not applied: %+v", v.Unresolved)
+	}
+	if v.NoOpEdits != 1 {
+		t.Errorf("an edit that changed nothing was not counted: NoOpEdits = %d", v.NoOpEdits)
+	}
+	if after := Find(v.Doc.Sections(), ParseAddress("§ 2, stk. 1")).Display(); after != before {
+		t.Errorf("restating an edit changed the provision:\n before %q\n  after %q", before, after)
+	}
+
+	// And the same address with real new text must not be counted as a no-op.
+	v.applyOne(Edit{Kind: EditReplaceText, Address: ParseAddress("§ 2, stk. 1"),
+		Old: "anmode om tilladelse før", New: "søge om tilladelse før"})
+	if v.NoOpEdits != 1 {
+		t.Errorf("an edit that changed text was counted as a no-op: NoOpEdits = %d", v.NoOpEdits)
+	}
+	if changed := Find(v.Doc.Sections(), ParseAddress("§ 2, stk. 1")).Display(); changed == before {
+		t.Error("a real edit left the provision unchanged")
+	}
+}
+
 // TestSpliceAcrossFormattingRuns is the guard for the index map in matchRunes. The
 // passage being replaced straddles three <Char> runs with an italic run in the middle,
 // so byte offsets from a normalised string cannot address it directly. Without the
@@ -127,7 +166,7 @@ func TestSpliceAcrossFormattingRuns(t *testing.T) {
 	if sec == nil {
 		t.Fatal("§ 2, stk. 1 not found")
 	}
-	if !sec.splice("anmode om tilladelse før", "søge om tilladelse før") {
+	if found, _ := sec.splice("anmode om tilladelse før", "søge om tilladelse før"); !found {
 		t.Fatal("splice failed to locate a passage that is present")
 	}
 
@@ -150,7 +189,7 @@ func TestSpliceAcrossFormattingRuns(t *testing.T) {
 	}
 
 	// A passage that is not there must fail rather than corrupt anything.
-	if sec.splice("this wording does not exist", "x") {
+	if found, _ := sec.splice("this wording does not exist", "x"); found {
 		t.Error("splice claimed to replace text that is absent")
 	}
 	if err := doc.Root.checkInvariant(""); err != nil {

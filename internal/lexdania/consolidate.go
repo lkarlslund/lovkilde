@@ -100,6 +100,15 @@ type View struct {
 	// promulgated acts, and whose proposed text was therefore not applied. A bill
 	// describes what someone wanted changed; only the enacted act changes the law.
 	SkippedBills int
+
+	// NoOpEdits counts text edits that found their quoted passage and wrote back text
+	// identical to what was there. Legitimately these are amendments restating existing
+	// law, and they are still reported as applied. They are counted because "applied"
+	// must never mean "nothing changed": the run list used to repeat runs and order them
+	// differently from the displayed text, which made every splice of a provision with
+	// numbered items write the unedited copy back over the edit — reported as applied,
+	// with no effect, and no way to notice from the outside.
+	NoOpEdits int
 }
 
 // Applied reports how many chain documents were applied.
@@ -290,18 +299,33 @@ func (v *View) applyOne(e Edit) {
 			return
 		}
 		for _, t := range targets {
-			if !t.splice(old, e.New) {
+			found, changed := t.splice(old, e.New)
+			if !found {
 				v.reject(e, fmt.Sprintf("quoted passage not present in %s", describe(t)))
 				return
+			}
+			if !changed {
+				// The passage was found and "replaced" with text identical to it. That is
+				// usually harmless — the amendment restates what the law already says, most
+				// often because the base document we reconstructed already carries the
+				// change. It is worth counting because the alternative is worse: an edit
+				// recorded as applied that left nothing different. Two real defects in the
+				// run list used to produce exactly that, silently, for every provision with
+				// numbered items.
+				v.NoOpEdits++
 			}
 			v.Applied = append(v.Applied, AppliedEdit{Edit: e, Section: describe(t)})
 		}
 	case EditDeleteText:
 		old := QuoteStrip(e.Old)
 		for _, t := range targets {
-			if !t.splice(old, "") {
+			found, changed := t.splice(old, "")
+			if !found {
 				v.reject(e, fmt.Sprintf("passage to delete not present in %s", describe(t)))
 				return
+			}
+			if !changed {
+				v.NoOpEdits++
 			}
 			v.Applied = append(v.Applied, AppliedEdit{Edit: e, Section: describe(t)})
 		}
@@ -710,32 +734,37 @@ func (d *Document) Clone() *Document {
 // splice replaces one located passage with new text, editing the text runs in place
 // so formatting outside the replaced span survives.
 //
+// It reports whether the passage was found and whether any run ended up different. The two
+// answers are not the same: a passage that straddles runs moves into the first run touched and
+// empties the others, so restating identical words still drops inline markup inside the span.
+// That is not fixable at this level — the register's replacement text is plain prose, with no
+// markup to put back — and the model's Provision.ReplaceSpan behaves identically.
+//
 // Replacement happens through the index map from matchRunes: the match is located in
 // normalised space, and the map turns those offsets back into positions in the
 // original runs. Rewriting the whole provision instead would flatten italic runs and
 // quotation typography, which is a visible corruption of legal text.
-func (s *Section) splice(old, new string) bool {
+func (s *Section) splice(old, new string) (found, changed bool) {
 	if len(s.Runs) == 0 {
-		return false
+		return false, false
 	}
+	// This relies on s.Runs being each run in the subtree exactly once, in document order:
+	// the concatenation below has to be the same text Display shows, or the located match is
+	// a position in a text that does not exist. TestSectionRunsAreTheSectionText pins it.
 	var text []rune
-	owner := make([]int, 0, 64)
 	runes := make([][]rune, len(s.Runs))
 	start := make([]int, len(s.Runs))
 	for i, r := range s.Runs {
 		runes[i] = []rune(r.Node.Runs[r.Idx])
 		start[i] = len(text)
 		text = append(text, runes[i]...)
-		for range runes[i] {
-			owner = append(owner, i)
-		}
 	}
 
 	norm, idx := matchRunes(string(text))
 	needle, _ := matchRunes(QuoteStrip(old))
 	pos := runeIndex(norm, needle)
 	if pos < 0 || len(idx) <= pos+len(needle)-1 {
-		return false
+		return false, false
 	}
 	lo, hi := idx[pos], idx[pos+len(needle)-1]+1 // rune range in text
 
@@ -760,9 +789,12 @@ func (s *Section) splice(old, new string) bool {
 		runes[i] = out
 	}
 	for i, r := range s.Runs {
+		if string(runes[i]) != r.Node.Runs[r.Idx] {
+			changed = true
+		}
 		r.Node.Runs[r.Idx] = string(runes[i])
 	}
-	return true
+	return true, changed
 }
 
 // appendText adds text to the end of a provision. Used only for insertions the
