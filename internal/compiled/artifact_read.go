@@ -171,35 +171,58 @@ func (a *Artifact) Ref(accession string) (DocRef, bool) {
 // new way to be quietly incomplete, and an answer that came back empty would look like a law that
 // does not exist rather than a dataset that does not hold it.
 func (a *Artifact) Document(accession string) (*lexdoc.Document, error) {
-	r, ok := a.refs[accession]
-	if !ok {
-		return nil, fmt.Errorf("%s: %s is not in this artifact (%d documents, built %s): rebuild the artifact from the mirror",
-			a.path, accession, len(a.order), a.Header.Created.Format("2006-01-02"))
+	raw, err := a.Payload(accession)
+	if err != nil {
+		return nil, err
 	}
 	var doc lexdoc.Document
-	if err := a.readJSONFrame(r.Offset, r.Offset+r.Length, &doc); err != nil {
+	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("%s: %s: %w", a.path, accession, err)
 	}
 	return &doc, nil
 }
 
-// readJSONFrame decodes exactly the bytes between two offsets and unmarshals them.
-func (a *Artifact) readJSONFrame(from, to uint64, out any) error {
+// Payload returns a document's decompressed JSON.
+//
+// Split out because the byte-bounded cache in front of this reader caches exactly these bytes: a
+// decoded document is mutable, so it cannot be shared between concurrent requests, while a payload
+// can be and its length is exactly what it costs to keep.
+func (a *Artifact) Payload(accession string) ([]byte, error) {
+	r, ok := a.refs[accession]
+	if !ok {
+		return nil, fmt.Errorf("%s: %s is not in this artifact (%d documents, built %s): rebuild the artifact from the mirror",
+			a.path, accession, len(a.order), a.Header.Created.Format("2006-01-02"))
+	}
+	raw, err := a.frameBytes(r.Offset, r.Offset+r.Length)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %s: %w", a.path, accession, err)
+	}
+	return raw, nil
+}
+
+// frameBytes reads and decompresses exactly the bytes between two offsets.
+func (a *Artifact) frameBytes(from, to uint64) ([]byte, error) {
 	if to <= from {
-		return fmt.Errorf("frame from %d to %d is empty", from, to)
+		return nil, fmt.Errorf("frame from %d to %d is empty", from, to)
 	}
 	raw := make([]byte, to-from)
 	if _, err := a.file.ReadAt(raw, int64(from)); err != nil && !errors.Is(err, io.EOF) {
-		return err
+		return nil, err
 	}
 	plain, err := a.decoder.DecodeAll(raw, nil)
 	if err != nil {
-		return fmt.Errorf("frame at %d: %w", from, err)
+		return nil, fmt.Errorf("frame at %d: %w", from, err)
 	}
-	if err := json.Unmarshal(plain, out); err != nil {
-		return fmt.Errorf("frame at %d: %w", from, err)
+	return plain, nil
+}
+
+// readJSONFrame decodes exactly the bytes between two offsets and unmarshals them.
+func (a *Artifact) readJSONFrame(from, to uint64, out any) error {
+	plain, err := a.frameBytes(from, to)
+	if err != nil {
+		return err
 	}
-	return nil
+	return json.Unmarshal(plain, out)
 }
 
 func (a *Artifact) Close() error {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -486,4 +487,146 @@ func mustMarshalRefs(t *testing.T, a *Artifact) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// TestCacheStaysInsideItsBytes checks the two promises the cache makes: the bound is in bytes and
+// is actually held, and a document handed to one caller cannot be changed by another. The second one
+// is the reason the cache stores payloads rather than decoded models, so it is tested rather than
+// stated: consolidation mutates a document in place, and an answer that quietly shared one would
+// let two concurrent lookups edit each other's law.
+func TestCacheStaysInsideItsBytes(t *testing.T) {
+	var docs []ArtifactDoc
+	for i := range 4 {
+		d := fixtureDocument()
+		acc := fmt.Sprintf("A2026000000%d", i)
+		d.Identity.Accession = acc
+		// Different content per document, so the payloads differ in size and eviction has a
+		// preference to reveal.
+		d.Content.Unmapped = []lexdoc.Unmapped{{Concept: "remarks", Text: strings.Repeat("x", 200*i)}}
+		docs = append(docs, ArtifactDoc{Accession: acc, Document: d})
+	}
+	path := filepath.Join(t.TempDir(), "artifact.bin")
+	if err := writeArtifactFile(t, path, "/mirror", docs); err != nil {
+		t.Fatal(err)
+	}
+	base, err := OpenArtifact(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer base.Close()
+	sizes := map[string]int{}
+	for _, d := range docs {
+		raw, err := base.Payload(d.Accession)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sizes[d.Accession] = len(raw)
+	}
+
+	c, err := OpenCached(path, int64(sizes[docs[0].Accession]*2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	// Reading every document once must leave at most two payloads held, and never over the bound.
+	for _, d := range docs {
+		if _, err := c.Document(d.Accession); err != nil {
+			t.Fatal(err)
+		}
+		if st := c.Stats(); st.UsedBytes > st.Budget {
+			t.Fatalf("cache holds %d bytes over a budget of %d", st.UsedBytes, st.Budget)
+		}
+	}
+	st := c.Stats()
+	if st.Misses != int64(len(docs)) || st.Hits != 0 {
+		t.Errorf("first pass over a cold cache: %d hits, %d misses", st.Hits, st.Misses)
+	}
+	if st.Entries > 2 {
+		t.Errorf("budget of %d holds %d entries, which is more than its bytes allow (smallest payload %d)",
+			st.Budget, st.Entries, sizes[docs[0].Accession])
+	}
+	// The last read must be the one still held: eviction is least-recently-used, not insertion order.
+	if _, err := c.Document(docs[len(docs)-1].Accession); err != nil {
+		t.Fatal(err)
+	}
+	if c.Stats().Hits != 1 {
+		t.Errorf("the most recent document was not still cached: %+v", c.Stats())
+	}
+
+	// Mutating an answer must not reach the next reader of the same document.
+	first, err := c.Document(docs[len(docs)-1].Accession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Identity.Title = "edited by this caller"
+	first.Content.Unmapped[0].Text = "edited"
+	second, err := c.Document(docs[len(docs)-1].Accession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Identity.Title == "edited by this caller" || second.Content.Unmapped[0].Text == "edited" {
+		t.Error("a cached document was shared between two readers")
+	}
+
+	// A document that cannot fit the budget is counted rather than silently never cached.
+	tiny, err := OpenCached(path, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tiny.Close()
+	if _, err := tiny.Document(docs[0].Accession); err != nil {
+		t.Fatal(err)
+	}
+	if tiny.Stats().Drops == 0 {
+		t.Errorf("a 10-byte budget reported no drops for a %d byte document: %+v", sizes[docs[0].Accession], tiny.Stats())
+	}
+	if tiny.Stats().Entries != 0 {
+		t.Error("the 10-byte budget holds something")
+	}
+}
+
+// TestCacheConcurrentReads exists because -race is what notices that a lock was in the wrong place,
+// and because the cache's cold path deliberately reads outside the lock.
+func TestCacheConcurrentReads(t *testing.T) {
+	var docs []ArtifactDoc
+	for i := range 6 {
+		d := fixtureDocument()
+		acc := fmt.Sprintf("A202600001%d", i)
+		d.Identity.Accession = acc
+		docs = append(docs, ArtifactDoc{Accession: acc, Document: d})
+	}
+	path := filepath.Join(t.TempDir(), "artifact.bin")
+	if err := writeArtifactFile(t, path, "/mirror", docs); err != nil {
+		t.Fatal(err)
+	}
+	c, err := OpenCached(path, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	var wg sync.WaitGroup
+	for worker := range 8 {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for round := range 20 {
+				acc := docs[(worker+round)%len(docs)].Accession
+				doc, err := c.Document(acc)
+				if err != nil {
+					t.Errorf("%s: %v", acc, err)
+					return
+				}
+				if doc.Identity.Accession != acc {
+					t.Errorf("asked for %s, got %s", acc, doc.Identity.Accession)
+					return
+				}
+			}
+		}(worker)
+	}
+	wg.Wait()
+	if st := c.Stats(); st.UsedBytes > st.Budget {
+		t.Errorf("concurrent reads pushed the cache to %d of %d bytes", st.UsedBytes, st.Budget)
+	}
 }

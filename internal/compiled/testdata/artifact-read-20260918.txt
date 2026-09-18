@@ -1,0 +1,12 @@
+# artifact read path measurement
+# generated: 2026-09-18 17:00:44
+# reproduce: RETSIN_ARTIFACT_PARITY=1 go test ./internal/compiled -run TestArtifactReadCosts -v
+# sample: 84 documents from all media, 1466125 bytes of publisher XML, artifact 230870 bytes
+
+  publisher xml parse:      219.394µs per lookup  (the path this replaces)
+  artifact read, cold:      52.822µs per lookup  (4.2x faster than parsing)
+  artifact read, cached:    35.37µs per lookup  (6.2x faster than parsing)
+  cache: budget 67108864 bytes, holding 863337 bytes in 84 entries, 84 hits, 84 misses, 0 drops
+  note: a cached lookup still unmarshals, because a decoded document is mutable
+  and may not be shared between concurrent requests; what caching skips is the
+  seek, the frame and the decompression.
