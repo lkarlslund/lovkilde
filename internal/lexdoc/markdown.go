@@ -163,16 +163,15 @@ func writeProvisionBody(b *strings.Builder, p *Provision) {
 		}
 	}
 
+	// A footnote is deliberately not marked here. Its text sits where the mark sits, which is
+	// often inside a sentence, and the block rules already separate it: anything more would
+	// either split that sentence further or insert characters into the provision's own text.
+	// What the model carries — the note's identifier — stays out of the answer entirely, since
+	// "Par1_Stk1_Not1" and the uuids beside it are the publisher's bookkeeping, and the
+	// document's own marker ("1)") is already in the text.
 	for i, s := range p.Segments {
 		if boundary[i] {
 			b.WriteByte('\n')
-		}
-		if s.Note != "" {
-			// A footnote begins here. The document's own marker ("1)") is already the segment's
-			// text, so the only thing the renderer adds is a paragraph break: the note then reads
-			// as the separate block it is, while the identifier the model carries — "Par1_Stk1_Not1"
-			// or a uuid the publisher generated — stays out of what a reader is shown.
-			b.WriteString("\n\n")
 		}
 		b.WriteString(s.Text)
 		if s.Break {
@@ -234,7 +233,8 @@ func writeSegments(b *strings.Builder, segs []Segment, sep string) {
 	b.WriteString("\n\n")
 }
 
-// collapse keeps the document's paragraphs apart and nothing else. Blocks each end with a blank
+// collapse keeps the document's paragraphs apart and nothing else, and starts the answer on its
+// first line rather than on a blank one. Blocks each end with a blank
 // line, so runs of breaks pile up wherever two blocks meet; markdown reads three newlines the same
 // way as two, but a reader comparing this text against the register should not have to.
 func collapse(rendered string) string {
@@ -256,5 +256,5 @@ func collapse(rendered string) string {
 		b.WriteByte(rendered[i])
 		i++
 	}
-	return strings.TrimRight(b.String(), "\n") + "\n"
+	return strings.Trim(b.String(), "\n") + "\n"
 }

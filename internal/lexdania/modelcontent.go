@@ -93,6 +93,12 @@ var concepts = map[string]concept{
 	"AendringDefinition":   {kind: conceptUnmapped, word: "proposed text"},
 
 	// Content the model has no concept for yet, in the mirror's own words.
+	//
+	// Meta is the identity block in the publisher's own files, and counting it without its text is
+	// not tidiness: the whole header is already held as identity, and once the answer started
+	// showing what the model has no concept for, every whole-document answer printed the accession,
+	// the title and the status again as content — measured in 200 of 200 sampled documents.
+	"Meta":                     {kind: conceptUnmapped, word: "metadata", noText: true},
 	"Table":                    {kind: conceptUnmapped, word: "table"},
 	"DokumentHoved":            {kind: conceptUnmapped, word: "metadata", noText: true},
 	"Bemaerkninger":            {kind: conceptUnmapped, word: "remarks"},
@@ -138,6 +144,12 @@ type contentBuilder struct {
 	watch     map[*Node]bool
 	spanStart map[*Node]int
 	spanEnd   map[*Node]int
+
+	// labelled records the child element whose words became a parent's heading, so that the
+	// same words are not then walked again as content. A chapter that prints its own heading
+	// element was both a second chapter and a paragraph of prose; a provision's rubric was
+	// printed inside its own text as well as above it.
+	labelled map[*Node]*Node
 }
 
 // walk classifies the children of n, recursing through containers. Structure is not stable
@@ -155,6 +167,9 @@ type walkCtx struct {
 
 func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
 	for _, c := range n.Elems {
+		if b.labelled[n] == c {
+			continue // its words are this element's heading, not a piece of content
+		}
 		con, known := concepts[c.Name]
 		if !known {
 			con = concept{kind: conceptContainer}
@@ -197,7 +212,7 @@ func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
 					part.Number = r
 				}
 			}
-			part.Heading = headingText(c)
+			part.Heading = b.label(c)
 			b.walk(&part.Order, c, ctx)
 			*order = append(*order, lexdoc.Node{Part: part})
 
@@ -247,7 +262,7 @@ func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
 func (b *contentBuilder) appendix(n *Node) {
 	ap := &lexdoc.Appendix{}
 	ap.Number = lexdoc.FirstNumber(n.Attrs["localId"])
-	ap.Heading = headingText(n)
+	ap.Heading = b.label(n)
 	ap.Label = strings.TrimSpace(n.Elem("Explicatus").TextOrNull())
 	if ap.Label == "" {
 		ap.Label = strings.TrimSpace(n.Elem("Rubrica").TextOrNull())
@@ -268,7 +283,7 @@ func (b *contentBuilder) appendix(n *Node) {
 func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
 	p := lexdoc.Provision{
 		Printed: strings.TrimSpace(n.Elem("Explicatus").TextOrNull()),
-		Heading: headingText(n),
+		Heading: b.label(n),
 	}
 	p.Number = lexdoc.FirstNumber(n.Attrs["localId"])
 	if p.Number == "" {
@@ -279,6 +294,10 @@ func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
 	var segs []lexdoc.Segment
 	segs = appendRun(segs, n.Runs[0])
 	for i, c := range n.Elems {
+		if b.labelled[n] == c {
+			segs = appendRun(segs, n.Runs[i+1])
+			continue // the rubric is this provision's heading, not the first line of its text
+		}
 		if c.Name == "Stk" {
 			items := numberedItems(c)
 			for _, it := range items {
@@ -342,6 +361,10 @@ func (b *contentBuilder) render(out []lexdoc.Segment, n *Node, block bool) []lex
 	}
 	out = appendRun(out, n.Runs[0])
 	for i, c := range n.Elems {
+		if b.labelled[n] == c {
+			out = appendRun(out, n.Runs[i+1])
+			continue // the provision's rubric is its heading, not the first line of its text
+		}
 		if c.Name == "Nota" {
 			// A footnote's text stays where it sits and the segment that begins it carries
 			// the note's id, so the reference and its note cannot drift apart.
@@ -442,7 +465,19 @@ func markNote(out *[]lexdoc.Segment, from int, id string) {
 
 // headingText reads the rubric printed above an element, which is what an amendment means by
 // "overskriften for § 12".
-func headingText(n *Node) string {
+// label reads the rubric printed above n and records which element it came from, so the walk can
+// leave that element alone: its words are the parent's heading now, not content of their own.
+func (b *contentBuilder) label(n *Node) string {
+	t, h := headingText(n)
+	if b.labelled == nil {
+		b.labelled = map[*Node]*Node{}
+	}
+	b.labelled[n] = h
+	return t
+}
+
+// headingText reads the rubric and reports the element it read it from.
+func headingText(n *Node) (string, *Node) {
 	// DisplayText, not TextOrNull: the register puts a heading's words in Rubrica>Linea>Char, so
 	// the element's own text is only the whitespace between its children. Reading direct text
 	// made every rubric come back empty, which cost the model the text itself and left
@@ -453,10 +488,10 @@ func headingText(n *Node) string {
 			continue
 		}
 		if t := strings.TrimSpace(DisplayText(h)); t != "" {
-			return t
+			return t, h
 		}
 	}
-	return ""
+	return "", nil
 }
 
 // knownConceptBelow reports whether a subtree contains anything the model addresses. It is

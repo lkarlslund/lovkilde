@@ -448,10 +448,14 @@ func modelText(c *lexdoc.Content) string {
 		for _, n := range nodes {
 			switch {
 			case n.Part != nil:
+				b.WriteString(n.Part.Printed)
+				b.WriteString(" ")
 				b.WriteString(n.Part.Heading)
 				b.WriteString("\n")
 				walk(n.Part.Order)
 			case n.Provision != nil:
+				b.WriteString(n.Provision.Heading)
+				b.WriteString("\n")
 				b.WriteString(n.Provision.Text())
 				b.WriteString("\n")
 			}
@@ -462,11 +466,17 @@ func modelText(c *lexdoc.Content) string {
 	b.WriteString(lexdoc.SegmentsText(c.Title))
 	b.WriteString(lexdoc.SegmentsText(c.Signature))
 	for i := range c.EntryIntoForce {
+		b.WriteString(c.EntryIntoForce[i].Heading)
+		b.WriteString("\n")
 		b.WriteString(c.EntryIntoForce[i].Text())
 		b.WriteString("\n")
 	}
 	for i := range c.Appendices {
+		b.WriteString(c.Appendices[i].Label)
+		b.WriteString(" ")
 		b.WriteString(c.Appendices[i].Heading)
+		b.WriteString("\n")
+		b.WriteString(lexdoc.SegmentsText(c.Appendices[i].Segments))
 		b.WriteString("\n")
 		walk(c.Appendices[i].Order)
 	}

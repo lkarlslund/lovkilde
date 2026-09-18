@@ -98,8 +98,8 @@ func TestMarkdownKeepsFootnoteInPlace(t *testing.T) {
 	if strings.Contains(got, "Par1_Stk1_Not1") {
 		t.Errorf("the rendering shows the register's internal anchor id:\n%s", got)
 	}
-	if !strings.Contains(got, "Loven gælder her\n\n1) Jf. lovbekendtgørelsens § 4.") {
-		t.Errorf("the note is not separated as its own block:\n%s", got)
+	if !strings.Contains(got, "Loven gælder her1) Jf. lovbekendtgørelsens § 4.") {
+		t.Errorf("the note is not where the document put it:\n%s", got)
 	}
 }
 

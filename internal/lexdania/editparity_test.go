@@ -25,7 +25,7 @@ func TestModelEditParityOnCorpus(t *testing.T) {
 	dir := corpusDir(t)
 	files := sampleFiles(t, dir, 120)
 
-	var cases, applied, refusedBoth, textCompared int
+	var cases, applied, refusedBoth, textCompared, labelCarried int
 	var diffs []string
 	report := func(f, key, what string) {
 		if len(diffs) < 12 {
@@ -108,6 +108,7 @@ func TestModelEditParityOnCorpus(t *testing.T) {
 			// kind of difference this gate must not confuse with a real one.
 			bModel := b.Model()
 			bUnits := singleUnits(&bModel.Content)
+			labels := modelLabels(&bModel.Content)
 			bU, ok := bUnits[key]
 			if !ok {
 				report(f, key, "unit vanished in the model on reparse")
@@ -154,6 +155,15 @@ func TestModelEditParityOnCorpus(t *testing.T) {
 				}
 				for i := range av {
 					textCompared++
+					if av[i] != bv[i] && labelOnlyDifference(av[i], bv[i], labels) {
+						// The two paths wrote the same words and disagree only about where a
+						// rubric lives: the tree reads a section's text out of its element, which
+						// includes the heading printed under it, and the model files those words as
+						// the section's label. Named and counted, because it is a difference in
+						// shape rather than in text — see labelOnlyDifference.
+						labelCarried++
+						continue
+					}
 					if av[i] != bv[i] {
 						report(f, k, fmt.Sprintf("text differs after editing %s at rune %d\n tree: …%s…\nmodel: …%s…",
 							key, firstDifference(av[i], bv[i]), around(av[i], firstDifference(av[i], bv[i])), around(bv[i], firstDifference(av[i], bv[i]))))
@@ -189,12 +199,21 @@ func TestModelEditParityOnCorpus(t *testing.T) {
 	if cases < 30 {
 		t.Fatalf("only %d edit cases across the corpus sample; the gate is not measuring anything", cases)
 	}
+	// 14 of 5,446 unit texts (0.26 %) differ by nothing but a rubric, measured over the sample on
+	// 2026-09-18. The bound is here so that a rise means something was noticed: this class is the
+	// model deliberately holding a heading where the page puts it, and if it starts covering
+	// disagreements about *words*, the number moves first and has to be read before it is allowed
+	// to rise again.
+	if labelCarried > 14 {
+		t.Errorf("the rubric difference grew beyond the 14 cases measured on 2026-09-18: %d. Either the two readers now disagree about more than where a heading lives, or the corpus really does have more of them, and the number has to be looked at before it is allowed to rise again.", labelCarried)
+	}
+
 	if len(diffs) > 0 {
 		t.Errorf("splice parity failed in %d of %d cases (%d applied, %d refused by both, %d unit texts compared):\n%s",
 			len(diffs), cases, applied, refusedBoth, textCompared, strings.Join(diffs, "\n"))
 	}
-	t.Logf("splice parity: %d cases, %d applied, %d refused identically, %d unit texts identical afterwards",
-		cases, applied, refusedBoth, textCompared)
+	t.Logf("splice parity: %d cases, %d applied, %d refused identically, %d unit texts compared (%d differed only by a rubric the model carries as a label)",
+		cases, applied, refusedBoth, textCompared, labelCarried)
 }
 
 // firstDifference is the rune offset where two texts part company, which is where a splice
@@ -380,4 +399,58 @@ func middlePassage(text string) string {
 		return ""
 	}
 	return passage
+}
+
+// modelLabels are the words the model carries as headings — a provision's rubric, a division's
+// rubric, an annex's label — as one set, normalised for comparison.
+func modelLabels(c *lexdoc.Content) map[string]bool {
+	out := map[string]bool{}
+	add := func(s string) {
+		if m := lexdoc.MatchText(strings.TrimSpace(s)); m != "" {
+			out[m] = true
+		}
+	}
+	var walk func(nodes []lexdoc.Node)
+	walk = func(nodes []lexdoc.Node) {
+		for _, n := range nodes {
+			switch {
+			case n.Part != nil:
+				add(n.Part.Heading)
+				add(n.Part.Printed)
+				walk(n.Part.Order)
+			case n.Provision != nil:
+				add(n.Provision.Heading)
+			}
+		}
+	}
+	walk(c.Order)
+	for i := range c.EntryIntoForce {
+		add(c.EntryIntoForce[i].Heading)
+	}
+	for i := range c.Appendices {
+		add(c.Appendices[i].Heading)
+		add(c.Appendices[i].Label)
+		walk(c.Appendices[i].Order)
+	}
+	return out
+}
+
+// labelOnlyDifference reports two unit texts that hold the same words and disagree only about
+// whether a rubric is part of the text or the thing's label.
+//
+// This is a difference the model change made on purpose: a rubric belongs above a section, which
+// is where the page puts it, and holding it as a label is what lets an amendment remove
+// "overskriften før § 3" and a renderer print it in the right place. It is checked rather than
+// ignored: the extra words must actually be a label this document's model carries, and the count
+// is bounded, so a disagreement about more than the rubric still fails the gate.
+func labelOnlyDifference(treeSide, modelSide string, labels map[string]bool) bool {
+	longer, shorter := strings.TrimSpace(treeSide), strings.TrimSpace(modelSide)
+	if len(modelSide) > len(treeSide) {
+		longer, shorter = shorter, longer
+	}
+	if !strings.HasPrefix(longer, shorter) {
+		return false
+	}
+	extra := strings.TrimSpace(strings.TrimPrefix(longer, shorter))
+	return extra != "" && labels[lexdoc.MatchText(extra)]
 }
