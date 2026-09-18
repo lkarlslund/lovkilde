@@ -102,3 +102,32 @@ func TestMarkdownKeepsFootnoteInPlace(t *testing.T) {
 		t.Errorf("the note is not separated as its own block:\n%s", got)
 	}
 }
+
+// An answer for a narrower address carries only that piece, with the section it belongs to above
+// it: a caller quoting "§ 2, stk. 2" is not asking to re-search the section.
+func TestMarkdownScopesToTheAddress(t *testing.T) {
+	c := sampleLaw()
+	two := mustFindProvision(t, c, "§ 2")
+	two.Heading = "Bemærkninger"
+	two.Printed = "§ 2."
+
+	got, ok := c.MarkdownProvisions(ParseAddress("§ 2, stk. 2"))
+	if !ok {
+		t.Fatal("§ 2, stk. 2 not rendered")
+	}
+	for _, want := range []string{"### § 2. Bemærkninger", "Andet stykke."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stykke answer is missing %q:\n%s", want, got)
+		}
+	}
+	for _, not := range []string{"Første stykke.", "Tredje stykke.", "Nr een."} {
+		if strings.Contains(got, not) {
+			t.Errorf("stykke answer carries more than was asked for (%q):\n%s", not, got)
+		}
+	}
+
+	got, ok = c.MarkdownProvisions(ParseAddress("§ 2, stk. 1, nr. 2"))
+	if !ok || !strings.Contains(got, "2) Nr to.") || strings.Contains(got, "1) Nr een.") {
+		t.Errorf("item answer wrong: ok=%v\n%s", ok, got)
+	}
+}

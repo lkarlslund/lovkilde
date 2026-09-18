@@ -283,7 +283,6 @@ func TestLookupResultRendersAnIdentifyingHeader(t *testing.T) {
 		"Dataset:",               // the answer states which dates it speaks for
 		"3 documents",            //
 		"### Text",               //
-		"```",                    // statute text is fenced so it cannot be re-read as markup
 		"Tekst læst ud af HTML.", // this fixture's provision is HTML-derived, so this is the text
 	} {
 		if !strings.Contains(text, want) {
@@ -292,6 +291,31 @@ func TestLookupResultRendersAnIdentifyingHeader(t *testing.T) {
 	}
 	if strings.HasPrefix(text, "KANONISK") {
 		t.Errorf("answer starts with raw statute text instead of a markdown heading:\n%s", text)
+	}
+	// The text is the model's own rendering, so it is shown as markdown rather than inside a
+	// code fence: the answer exists to show which piece is a chapter and which a provision,
+	// and a fence is how that used to be thrown away.
+	if strings.Contains(text, "```") {
+		t.Errorf("the model's markdown is fenced off from the client:\n%s", text)
+	}
+}
+
+// Statute text that could close the answer's formatting still gets fenced. The rendering is
+// markdown now, which makes this guard easier to lose and no less necessary: a law that quotes a
+// code fence would otherwise leak the rest of itself into the answer as markup.
+func TestLookupFencesTextThatCouldBreakOut(t *testing.T) {
+	s := newTestServer(t)
+	res, err := s.Lookup(LookupRequest{Document: "lta/1998/2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Text = "§ 1. Tekst\n\n```\nif (a) { }\n```\n"
+	rendered := res.String()
+	if !strings.Contains(rendered, "````") {
+		t.Errorf("text carrying a fence was not put in a longer one:\n%s", rendered)
+	}
+	if strings.Contains(textBlock("Stk. 1. Almindelig tekst."), "```") {
+		t.Error("ordinary statute text is still being fenced")
 	}
 }
 

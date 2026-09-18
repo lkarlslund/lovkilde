@@ -62,6 +62,16 @@ func (c *Content) MarkdownProvisions(a Address) (string, bool) {
 	}
 	var b strings.Builder
 	switch {
+	case loc.Item != nil:
+		// The narrowest answer wins: a caller asking for "§ 5, stk. 2, nr. 3" is quoting that
+		// entry, and getting the whole section back is an answer they have to search again.
+		// The provision's rubric goes above it anyway, since an entry without its section is
+		// not a citation.
+		writeProvisionHead(&b, loc.Provision)
+		fmt.Fprintf(&b, "%s\n\n", loc.Provision.SpanText(loc.Item.Span))
+	case loc.Stykke != nil:
+		writeProvisionHead(&b, loc.Provision)
+		fmt.Fprintf(&b, "%s\n\n", loc.Provision.SpanText(loc.Stykke.Span))
 	case loc.Part != nil:
 		writePart(&b, loc.Part)
 	case loc.Appendix != nil:
@@ -119,6 +129,13 @@ func writePart(b *strings.Builder, p *Part) {
 // "§ 2." is the first thing on the page — so a rubric is what earns a heading of its own, and a
 // provision without one is printed as it stands rather than with a duplicate number above it.
 func writeProvision(b *strings.Builder, p *Provision) {
+	writeProvisionHead(b, p)
+	writeProvisionBody(b, p)
+}
+
+// writeProvisionHead is the line a provision is cited by, so that a narrower answer can say what
+// it is a part of.
+func writeProvisionHead(b *strings.Builder, p *Provision) {
 	if p.Heading != "" {
 		head := strings.TrimSpace(p.Printed)
 		if head == "" {
@@ -126,7 +143,6 @@ func writeProvision(b *strings.Builder, p *Provision) {
 		}
 		fmt.Fprintf(b, "\n### %s %s\n\n", head, p.Heading)
 	}
-	writeProvisionBody(b, p)
 }
 
 // writeProvisionBody walks the provision's segments once and puts a paragraph break where the

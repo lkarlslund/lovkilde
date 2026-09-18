@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // DefaultMaxChars bounds one answer. An agent that asks for "the whole law" and gets
@@ -103,19 +104,23 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 	}
 	res.Path = path
 	res.provenance(doc, s.archive.Root)
-	res.noteAmendments(doc, s.horizon().Now)
+	res.noteAmendments(doc.Model(), s.horizon().Now)
 
-	secs := doc.Sections()
+	// The text comes from the model, so an answer can say what the thing it found *is*: a
+	// chapter, a provision, one subsection of it. The flat section list cannot tell those
+	// apart — it carries whatever the publisher's elements happened to be — and its
+	// subsection addressing is off by one in places, which is a citation error waiting to be
+	// quoted.
+	m := doc.Model()
 	if req.Address != "" {
-		addr := lexdania.ParseAddress(req.Address)
-		sec := lexdania.Find(secs, addr)
-		if sec == nil {
-			return nil, fmt.Errorf("%s: nothing matches %q among %d sections. Addresses are read in Danish citation form (§ 5, stk. 2); entry-into-force and transitional material is deliberately not addressable because its numbering restarts",
-				entry.Accession, req.Address, len(secs))
+		body, ok := m.Content.MarkdownProvisions(lexdoc.ParseAddress(req.Address))
+		if !ok {
+			return nil, fmt.Errorf("%s: nothing matches %q among %d provisions. Addresses are read in Danish citation form (§ 5, stk. 2); entry-into-force and transitional material is deliberately not addressable because its numbering restarts",
+				entry.Accession, req.Address, len(m.Content.Provisions()))
 		}
-		res.Text = lexdania.DisplayText(sec.Node)
+		res.Text = body
 	} else {
-		res.Text = documentText(doc)
+		res.Text = m.Content.Markdown()
 	}
 	res.Warnings = append(res.Warnings, doc.Warnings()...)
 	res.truncate(req.MaxChars)
@@ -165,20 +170,23 @@ func (s *Server) lookupAsOf(req LookupRequest, entry lexdania.Entry, res *Lookup
 // name the accessions that amend this document and the date each takes effect, so
 // the answer carries dates the mirror holds rather than a forecast of what may or
 // may not have happened since the mirror was crawled.
-func (r *LookupResult) noteAmendments(doc *lexdania.Document, now time.Time) {
+// The reference is read through the model, because the publisher's own name for a reference type
+// ("Change") is not something an answer should be matching on: it is one spelling in one format,
+// and the model already decided which references amend the document and from when.
+func (r *LookupResult) noteAmendments(m *lexdoc.Document, now time.Time) {
 	type later struct {
-		accn, eff string
+		cite lexdoc.Cite
 	}
 	var past, future []later
-	for _, ref := range doc.Meta.References {
-		if ref.Kind != "Change" || ref.Accn == "" {
+	for _, ref := range m.Identity.AmendedBy {
+		if ref.Accession == "" {
 			continue
 		}
-		item := later{accn: ref.Accn, eff: ref.Effective}
+		item := later{cite: ref}
 		// An amendment whose payload carries no date cannot be placed on a timeline,
 		// so it is treated as applicable: the register says something changed and the
 		// mirror cannot say when, which is the client's problem to know about.
-		if eff, ok := lexdania.ParseDate(ref.Effective); !ok || !eff.After(now) {
+		if ref.Effective.IsZero() || !ref.Effective.After(now) {
 			past = append(past, item)
 		} else {
 			future = append(future, item)
@@ -191,9 +199,9 @@ func (r *LookupResult) noteAmendments(doc *lexdania.Document, now time.Time) {
 				parts = append(parts, fmt.Sprintf("and %d more", len(past)-i))
 				break
 			}
-			field := l.accn
-			if l.eff != "" {
-				field += " eff. " + l.eff
+			field := l.cite.Accession
+			if !l.cite.Effective.IsZero() {
+				field += " eff. " + l.cite.Effective.Format("2006-01-02")
 			}
 			parts = append(parts, field)
 		}
@@ -207,7 +215,8 @@ func (r *LookupResult) noteAmendments(doc *lexdania.Document, now time.Time) {
 	if len(future) > 0 {
 		if len(past) == 0 {
 			r.Amendments = fmt.Sprintf("%d, all effective after %s (earliest %s) -- as of %s this accession is the operative text in this dataset",
-				len(future), now.Format("2006-01-02"), future[0].eff, now.Format("2006-01-02"))
+				len(future), now.Format("2006-01-02"),
+				future[0].cite.Effective.Format("2006-01-02"), now.Format("2006-01-02"))
 		}
 	}
 }
@@ -294,11 +303,25 @@ func (r *LookupResult) String() string {
 		fmt.Fprintf(&b, "- **Stored at:** `%s`\n", r.Path)
 	}
 
-	fmt.Fprintf(&b, "\n### Text\n\n%s\n", fenced(r.Text))
+	fmt.Fprintf(&b, "\n### Text\n\n%s\n", textBlock(r.Text))
 	if r.Truncated {
 		fmt.Fprintf(&b, "\n*[truncated at %d characters; ask again with a larger max_chars or a narrower address]*\n", DefaultMaxChars)
 	}
 	return b.String()
+}
+
+// textBlock places the text in the answer.
+//
+// It used to be fenced always. That stopped being right when the text became the model's own
+// rendering: the answer's whole job is to show which part is a chapter and which is a provision,
+// and a fence turns that back into a wall of characters. Statute text still gets fenced if it
+// carries a fence of its own, because a fence that closes early leaks the rest of a law into the
+// answer as markup.
+func textBlock(text string) string {
+	if strings.Contains(text, "```") {
+		return fenced(text)
+	}
+	return text
 }
 
 // fenced puts text in a code fence, lengthening the fence if the text contains one.
@@ -361,24 +384,6 @@ func citation(e lexdania.Entry) string {
 		return e.Title
 	}
 	return fmt.Sprintf("%s nr. %d af %s", e.DocumentType, e.Number, e.DiesSigni)
-}
-
-// documentText renders a whole document: each body element in order, with the front
-// matter and the signature block left in, because which of them matters depends on the
-// document type and the caller can ignore what it does not want.
-func documentText(doc *lexdania.Document) string {
-	var b strings.Builder
-	for _, part := range doc.Body {
-		t := lexdania.DisplayText(part)
-		if t == "" {
-			continue
-		}
-		if b.Len() > 0 {
-			b.WriteString("\n\n")
-		}
-		b.WriteString(t)
-	}
-	return b.String()
 }
 
 // countByKind backs the status text; it is computed once at startup.
