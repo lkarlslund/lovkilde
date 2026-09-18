@@ -1,0 +1,167 @@
+# retsin search index measurement
+# generated: 2026-09-18 22:25:20
+# reproduce: RETSIN_SEARCH_MEASURE=1 RETSIN_SEARCH_SAMPLE=200 go test ./internal/search -run TestMeasureIndex -v
+# corpus sample: 9237 documents, 151502 index units (65801 unaddressed, 43%), 173.1 MB of indexed text, sampled in 14.871s
+# sources: html=6553 none=4 xml=2680
+# served text: 174.9 MB; indexed text is 99% of it
+# word coverage over 500 documents: 99.6% of served words of six letters or more appear in a unit of the same document
+# baseline: brute-force substring scan over the same unit texts (grep-equivalent),
+# so recall below is recall against what grep would find, in the same normalised case.
+# caveat: recall@10 against a grep baseline measures ORDERING AGREEMENT where a query
+# has far more than ten matches. Both orderings can be correct. Read the match counts.
+
+## no-index baseline
+brute-force scan of the sample: 20.546s total, 790ms per query
+extrapolated to the full mirror (191394 documents): 16.374s per query, single process
+
+## variant raw
+build: 5.773s   write: 144ms   load: 65ms
+index size: 33.2 MB (0.19 bytes per indexed rune)
+extrapolated to the full mirror by document count: 686.9 MB. This is a per-document average,
+not a per-byte one, and folketingssager are over-represented per MB in the sample, so treat
+it as an order of magnitude rather than an estimate.
+terms: 314539   postings: 11206107
+
+query latency over 26 queries: p50 894µs, p95 31.241ms
+recall@10 by query group:
+  aa-spelling    0.700 over 2 queries, 31513 truth units matched (max 31126 for one query)  worst: aalborg (4/10 of 387 corpus matches)
+  citation       0.800 over 3 queries, 245 truth units matched (max 220 for one query)  worst: bekendtgørelse nr. 1399 (4/10 of 11 corpus matches)
+  compound-head  1.000 over 4 queries, 107317 truth units matched (max 54816 for one query)
+  inflected      1.000 over 5 queries, 25070 truth units matched (max 7463 for one query)
+  other-language 1.000 over 1 queries, 27 truth units matched (max 27 for one query)
+  phrase         1.000 over 3 queries, 2263 truth units matched (max 1552 for one query)  worst: ubetinget råderet (nothing in the sample to find)
+  term           1.000 over 5 queries, 5221 truth units matched (max 3498 for one query)
+  trap           0.550 over 2 queries, 12869 truth units matched (max 11162 for one query)  worst: mø (1/10 of 11162 corpus matches)
+phrase queries whose top 10 actually contain the words adjacent: 3 of 3
+(below 1.0 means term-AND ranks units where the phrase is not contiguous, which is what a
+ position-storing index would buy)
+
+boolean operators and proximity grading (grep truth over the same texts)
+  and     5 queries, 4642 truth units in the sample
+    recall@10 index-only 1.000 -> graded 1.000
+    median word gap in the top 10: 6 over 32 hits -> 3 over 32 hits  (6 text reads per query)
+    not measurable: uigenkaldelig AND pantehæftelse (nothing in the sample to find)
+  not     3 queries, 12271 truth units in the sample
+    recall@10 index-only 0.900 -> graded 0.900
+    median word gap in the top 10: none -> none  (10 text reads per query)
+  quoted  3 queries, 424 truth units in the sample
+    recall@10 index-only 0.667 -> graded 0.700
+    median word gap in the top 10: 1 over 30 hits -> 1 over 30 hits  (10 text reads per query)
+    quoted queries whose top 10 contains the words adjacent: 2 -> 3 of 3
+    not measurable: "ubetinget råderet" (nothing in the sample to find)
+
+## variant raw b=0.75
+build: 5.662s   write: 143ms   load: 72ms
+index size: 33.2 MB (0.19 bytes per indexed rune)
+extrapolated to the full mirror by document count: 686.9 MB. This is a per-document average,
+not a per-byte one, and folketingssager are over-represented per MB in the sample, so treat
+it as an order of magnitude rather than an estimate.
+terms: 314539   postings: 11206107
+
+query latency over 26 queries: p50 771µs, p95 33.649ms
+recall@10 by query group:
+  aa-spelling    0.600 over 2 queries, 31513 truth units matched (max 31126 for one query)  worst: aalborg (2/10 of 387 corpus matches)
+  citation       0.633 over 3 queries, 245 truth units matched (max 220 for one query)  worst: bekendtgørelse nr. 1399 (4/10 of 11 corpus matches)
+  compound-head  1.000 over 4 queries, 107317 truth units matched (max 54816 for one query)
+  inflected      1.000 over 5 queries, 25070 truth units matched (max 7463 for one query)
+  other-language 0.900 over 1 queries, 27 truth units matched (max 27 for one query)
+  phrase         1.000 over 3 queries, 2263 truth units matched (max 1552 for one query)  worst: ubetinget råderet (nothing in the sample to find)
+  term           1.000 over 5 queries, 5221 truth units matched (max 3498 for one query)
+  trap           0.550 over 2 queries, 12869 truth units matched (max 11162 for one query)  worst: mø (1/10 of 11162 corpus matches)
+phrase queries whose top 10 actually contain the words adjacent: 3 of 3
+(below 1.0 means term-AND ranks units where the phrase is not contiguous, which is what a
+ position-storing index would buy)
+
+boolean operators and proximity grading (grep truth over the same texts)
+  and     5 queries, 4642 truth units in the sample
+    recall@10 index-only 1.000 -> graded 1.000
+    median word gap in the top 10: 19 over 32 hits -> 9 over 32 hits  (6 text reads per query)
+    not measurable: uigenkaldelig AND pantehæftelse (nothing in the sample to find)
+  not     3 queries, 12271 truth units in the sample
+    recall@10 index-only 0.967 -> graded 0.967
+    median word gap in the top 10: none -> none  (10 text reads per query)
+  quoted  3 queries, 424 truth units in the sample
+    recall@10 index-only 0.700 -> graded 0.733
+    median word gap in the top 10: 1 over 30 hits -> 1 over 30 hits  (10 text reads per query)
+    quoted queries whose top 10 contains the words adjacent: 3 -> 3 of 3
+    not measurable: "ubetinget råderet" (nothing in the sample to find)
+
+## variant raw+folded
+build: 7.849s   write: 194ms   load: 97ms
+index size: 44.0 MB (0.25 bytes per indexed rune)
+extrapolated to the full mirror by document count: 911.3 MB. This is a per-document average,
+not a per-byte one, and folketingssager are over-represented per MB in the sample, so treat
+it as an order of magnitude rather than an estimate.
+terms: 435545   postings: 15160981
+
+query latency over 26 queries: p50 971µs, p95 32.837ms
+recall@10 by query group:
+  aa-spelling    0.700 over 2 queries, 31513 truth units matched (max 31126 for one query)  worst: aalborg (4/10 of 387 corpus matches)
+  citation       0.800 over 3 queries, 245 truth units matched (max 220 for one query)  worst: bekendtgørelse nr. 1399 (4/10 of 11 corpus matches)
+  compound-head  1.000 over 4 queries, 107317 truth units matched (max 54816 for one query)
+  inflected      1.000 over 5 queries, 25070 truth units matched (max 7463 for one query)
+  other-language 1.000 over 1 queries, 27 truth units matched (max 27 for one query)
+  phrase         1.000 over 3 queries, 2263 truth units matched (max 1552 for one query)  worst: ubetinget råderet (nothing in the sample to find)
+  term           1.000 over 5 queries, 5221 truth units matched (max 3498 for one query)
+  trap           0.550 over 2 queries, 12869 truth units matched (max 11162 for one query)  worst: mø (1/10 of 11162 corpus matches)
+phrase queries whose top 10 actually contain the words adjacent: 3 of 3
+(below 1.0 means term-AND ranks units where the phrase is not contiguous, which is what a
+ position-storing index would buy)
+
+boolean operators and proximity grading (grep truth over the same texts)
+  and     5 queries, 4642 truth units in the sample
+    recall@10 index-only 1.000 -> graded 1.000
+    median word gap in the top 10: 6 over 32 hits -> 3 over 32 hits  (6 text reads per query)
+    not measurable: uigenkaldelig AND pantehæftelse (nothing in the sample to find)
+  not     3 queries, 12271 truth units in the sample
+    recall@10 index-only 0.933 -> graded 0.933
+    median word gap in the top 10: none -> none  (10 text reads per query)
+  quoted  3 queries, 424 truth units in the sample
+    recall@10 index-only 0.667 -> graded 0.700
+    median word gap in the top 10: 1 over 30 hits -> 1 over 30 hits  (10 text reads per query)
+    quoted queries whose top 10 contains the words adjacent: 2 -> 3 of 3
+    not measurable: "ubetinget råderet" (nothing in the sample to find)
+
+## length-normalisation sweep (same index, scoring only)
+  b=0.75  citation 0.567 term 1.000 compound-head 1.000 phrase 1.000
+  b=0.45  citation 0.567 term 1.000 compound-head 1.000 phrase 1.000
+  b=0.20  citation 0.767 term 1.000 compound-head 1.000 phrase 1.000
+  b=0.00  citation 0.800 term 1.000 compound-head 1.000 phrase 1.000
+
+## answer parity: model units vs section units
+For each query, the answers the section index returned in its top 10, and whether the
+model's index returned that answer too (same words, either direction of containment, since
+the two cut passages of different sizes). "new content" counts answers whose words the
+section index did not hold anywhere in that document.
+  aa-spelling      10 old answers,    6 carried (0.600),    1 ranked elsewhere,    3 unreachable,    5 answers only the model's index can return
+      not carried: aalborg: fremsata199212k00198cl0069841114161992, meddelelse19921993-05-061993-05-061993-05-06valid1981folketingetnej, 1)abdessamad, 2)behzad
+      not carried: aalborg: fremsata199722k00030cl0084001111301997, meddelelse19971998-05-141998-05-141998-05-14valid302folketingetnej, 1)saadet, 2)hamdi
+      not carried: aalborg: fremsata199112k00002cl0023401108021991, meddelelse19911991-11-281991-11-281991-11-28valid21folketingetnej, 1)fatah, 2)naila
+  citation         30 old answers,   28 carried (0.933),    0 ranked elsewhere,    2 unreachable,   17 answers only the model's index can return
+      not carried: § 267: fremsata199112k00002cl0023401108021991, meddelelse19911991-11-281991-11-281991-11-28valid21folketingetnej, 1)fatah, 2)naila
+      not carried: § 267: fremsata199212k00198cl0069841114161992, meddelelse19921993-05-061993-05-061993-05-06valid1981folketingetnej, 1)abdessamad, 2)behzad
+  compound-head    40 old answers,   40 carried (1.000),    0 ranked elsewhere,    0 unreachable,   30 answers only the model's index can return
+  inflected        50 old answers,   48 carried (0.960),    2 ranked elsewhere,    0 unreachable,   37 answers only the model's index can return
+  other-language   10 old answers,    9 carried (0.900),    1 ranked elsewhere,    0 unreachable,    9 answers only the model's index can return
+  phrase           40 old answers,   40 carried (1.000),    0 ranked elsewhere,    0 unreachable,   31 answers only the model's index can return
+  term             50 old answers,   49 carried (0.980),    1 ranked elsewhere,    0 unreachable,   31 answers only the model's index can return
+  trap             20 old answers,   16 carried (0.800),    3 ranked elsewhere,    1 unreachable,    4 answers only the model's index can return
+      not carried: tænke: fremsata20001bb00187ax00282494453forslag, hjem20002001-04-062001-04-062001-04-06valid18712001-04-062001-05-182001-06-01erik, kjær, (kf).(1.beh)
+  TOTAL           250 old answers,  236 carried (0.944)
+
+## fold suffix audit
+candidate endings, measured over the sampled vocabulary:
+  -ernes  folds 23858 token occurrences; 1116 distinct folds that are themselves corpus words
+  -erede  folds 29262 token occurrences; 219 distinct folds that are themselves corpus words
+  -endes  folds 26129 token occurrences; 56 distinct folds that are themselves corpus words
+  -ernes  folds 23858 token occurrences; 1116 distinct folds that are themselves corpus words
+  -ende   folds 343893 token occurrences; 566 distinct folds that are themselves corpus words
+  -else   folds 460122 token occurrences; 253 distinct folds that are themselves corpus words
+  -ere    folds 156155 token occurrences; 609 distinct folds that are themselves corpus words
+  -ede    folds 143533 token occurrences; 653 distinct folds that are themselves corpus words
+  -et     folds 885796 token occurrences; 6536 distinct folds that are themselves corpus words
+  -en     folds 1047665 token occurrences; 12849 distinct folds that are themselves corpus words
+  -er     folds 1992494 token occurrences; 11073 distinct folds that are themselves corpus words
+  -es     folds 613346 token occurrences; 2218 distinct folds that are themselves corpus words
+  -te     folds 357444 token occurrences; 748 distinct folds that are themselves corpus words
+  -s      folds 1350184 token occurrences; 24572 distinct folds that are themselves corpus words

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lkarlslund/retsinformation/internal/lexdania"
 )
 
 // Query sets for the index measurement.
@@ -196,6 +198,13 @@ func TestMeasureIndex(t *testing.T) {
 	if len(docs) < 500 || len(units) < 2000 {
 		t.Fatalf("sample too small to measure: %d docs, %d units", len(docs), len(units))
 	}
+	// The unitisation is a measured dimension, not an assumed improvement: with
+	// RETSIN_UNITS=sections the same documents, queries and grep truth are used over the
+	// units this milestone replaces, so the two reports differ only in how a document was
+	// cut. The sample is seeded, so it reproduces unit for unit.
+	if os.Getenv("RETSIN_UNITS") == "sections" {
+		units = sectionsUnits(t, docs)
+	}
 	sampleText := time.Since(start)
 
 	var totalRunes int
@@ -208,12 +217,47 @@ func TestMeasureIndex(t *testing.T) {
 	}
 
 	var out strings.Builder
+	// How much of the index cannot say where it came from. Every unit here is findable;
+	// an unaddressed one just cites the document instead of a location inside it.
+	unaddressed := 0
+	for _, u := range units {
+		if u.Addr == "" {
+			unaddressed++
+		}
+	}
 	fmt.Fprintf(&out, "# retsin search index measurement\n")
 	fmt.Fprintf(&out, "# generated: %s\n", time.Now().Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(&out, "# reproduce: RETSIN_SEARCH_MEASURE=1 RETSIN_SEARCH_SAMPLE=%d go test ./internal/search -run TestMeasureIndex -v\n", perStratum)
-	fmt.Fprintf(&out, "# corpus sample: %d documents, %d index units, %.1f MB of indexed text, sampled in %s\n",
-		len(docs), len(units), float64(totalRunes)/1e6, sampleText.Round(time.Millisecond))
+	// The unit mode belongs in the reproduce line: the two reports differ only in it, and a
+	// reader who does not set it regenerates the wrong side of the comparison.
+	unitsEnv := ""
+	if os.Getenv("RETSIN_UNITS") == "sections" {
+		unitsEnv = "RETSIN_UNITS=sections "
+	}
+	fmt.Fprintf(&out, "# reproduce: %sRETSIN_SEARCH_MEASURE=1 RETSIN_SEARCH_SAMPLE=%d go test ./internal/search -run TestMeasureIndex -v\n", unitsEnv, perStratum)
+	fmt.Fprintf(&out, "# corpus sample: %d documents, %d index units (%d unaddressed, %.0f%%), %.1f MB of indexed text, sampled in %s\n",
+		len(docs), len(units), unaddressed, 100*float64(unaddressed)/float64(len(units)), float64(totalRunes)/1e6, sampleText.Round(time.Millisecond))
 	fmt.Fprintf(&out, "# sources: %s\n", joinCounts(bySource))
+	// The coverage bound, measured rather than assumed: an index must not know less than
+	// the text a reader is served, and the two are produced by different code — the
+	// unitiser and the renderer — so either can drift without the other noticing. Over
+	// 100% means the index holds the same words more than once, which is what a unit that
+	// contains another unit does.
+	servedRunes := 0
+	for _, d := range docs {
+		doc, err := lexdania.LoadWithBody(d.Path)
+		if err != nil {
+			continue
+		}
+		servedRunes += len([]rune(doc.Model().Content.PlainText()))
+	}
+	// The MB ratio above is crude in both directions: a unit that contains another unit
+	// inflates it, and text that is merely reworded deflates it. The word coverage below
+	// is the precise form: for each document, what fraction of the words a reader is
+	// served also appear in some unit of that same document.
+	fmt.Fprintf(&out, "# served text: %.1f MB; indexed text is %.0f%% of it\n",
+		float64(servedRunes)/1e6, 100*float64(totalRunes)/float64(servedRunes))
+	fmt.Fprintf(&out, "# word coverage over %d documents: %.1f%% of served words of six letters or more appear in a unit of the same document\n",
+		coverageDocs, 100*wordCoverage(t, docs, units, coverageDocs))
 	fmt.Fprintf(&out, "# baseline: brute-force substring scan over the same unit texts (grep-equivalent),\n")
 	fmt.Fprintf(&out, "# so recall below is recall against what grep would find, in the same normalised case.\n")
 	// The honest limit of this metric: when a query has far more than ten matches,
@@ -245,8 +289,15 @@ func TestMeasureIndex(t *testing.T) {
 	// that silently replaced the numbers somebody quoted would destroy the audit trail it is
 	// supposed to extend. RETSIN_MEASURE_OUT overrides the name.
 	dest := fmt.Sprintf("testdata/index-measurement-%s.txt", time.Now().UTC().Format("20060102"))
+	// The override names the file inside testdata, because that is where the evidence lives;
+	// a bare name here used to drop the report in the package directory instead, where it is
+	// neither committed nor compared. A value with a slash in it is taken as a path.
 	if env := os.Getenv("RETSIN_MEASURE_OUT"); env != "" {
-		dest = env
+		if strings.Contains(env, "/") {
+			dest = env
+		} else {
+			dest = "testdata/" + env
+		}
 	}
 	if _, err := os.Stat("internal/search/testdata"); err == nil {
 		dest = "internal/search/" + dest
@@ -268,16 +319,24 @@ func TestMeasureIndex(t *testing.T) {
 	variants := []struct {
 		name string
 		opts Options
+		b    float64
 	}{
-		{"raw", Options{}},
-		{"raw+folded", Options{Folded: true}},
+		{"raw", Options{}, 0},
+		// The length-penalty sweep belongs in the report, not in a README table: the shipped
+		// b=0 was decided when a document with no numbered sections was one long unit, and the
+		// units have changed. b travels in the file header, so setting it before Save is what
+		// the queries actually score with.
+		{"raw b=0.75", Options{}, 0.75},
+		{"raw+folded", Options{Folded: true}, 0},
 	}
 
 	type recallRow struct {
-		group string
-		sum   float64
-		n     int
-		miss  []string
+		group    string
+		sum      float64
+		n        int
+		truth    int
+		maxTruth int
+		miss     []string
 	}
 
 	for _, v := range variants {
@@ -286,6 +345,7 @@ func TestMeasureIndex(t *testing.T) {
 		if err != nil {
 			t.Fatalf("build %s: %v", v.name, err)
 		}
+		idx.B = v.b
 		buildTime := time.Since(buildStart)
 
 		path := t.TempDir() + "/index.bin"
@@ -335,6 +395,10 @@ func TestMeasureIndex(t *testing.T) {
 			if row == nil {
 				row = &recallRow{group: q.Group}
 				rows[q.Group] = row
+			}
+			row.truth += len(truth)
+			if len(truth) > row.maxTruth {
+				row.maxTruth = len(truth)
 			}
 			denom := len(truth)
 			if denom == 0 {
@@ -392,7 +456,8 @@ func TestMeasureIndex(t *testing.T) {
 				fmt.Fprintf(&out, "  %-14s (no measurable queries)\n", g)
 				continue
 			}
-			fmt.Fprintf(&out, "  %-14s %.3f over %d queries%s\n", g, r.sum/float64(r.n), r.n,
+			fmt.Fprintf(&out, "  %-14s %.3f over %d queries, %d truth units matched (max %d for one query)%s\n",
+				g, r.sum/float64(r.n), r.n, r.truth, r.maxTruth,
 				func() string {
 					if len(r.miss) == 0 {
 						return ""
@@ -530,6 +595,17 @@ func TestMeasureIndex(t *testing.T) {
 		}
 		out.WriteString("\n")
 		checkpoint()
+	}
+
+	// The parity question this milestone turns on, asked of the two systems rather than of
+	// a grep baseline. Comparing each unitisation's recall against grep compares each one's
+	// agreement with file order over a *different* set of units: indexing twice the words
+	// triples what a query matches, and two correct orderings then disagree more often
+	// without either system being worse for the reader. So this asks the reader's question
+	// instead: for the same query, does the model's cut still return the answers the
+	// section list returned, and what does it return that the old index never held?
+	if os.Getenv("RETSIN_UNITS") != "sections" {
+		paritySection(t, &out, docs, units, checkpoint)
 	}
 
 	fmt.Fprintf(&out, "## fold suffix audit\n")
@@ -711,4 +787,273 @@ func auditSuffixes(units []Unit) []string {
 			ending, v.folded, v.merged))
 	}
 	return lines
+}
+
+// sectionsUnits replays the unitisation this milestone replaces, over the same sampled
+// documents, so the measurement compares two ways of cutting a document rather than two
+// samples of the corpus. It reads the archived XML again rather than caching a copy: the
+// unitiser under test reads the same files, and a fixture here would drift from them.
+func sectionsUnits(t *testing.T, docs []DocMeta) []Unit {
+	out := make([]Unit, 0, len(docs)*12)
+	for docID, meta := range docs {
+		if strings.TrimSpace(meta.Title) != "" {
+			out = append(out, Unit{Doc: docID, Addr: "titel", Text: meta.Title})
+		}
+		// LoadWithBody, not Parse: the shipped sampler opens documents this way, and the
+		// HTML body is most of an html-sourced document. Replaying with bare Parse silently
+		// dropped half the indexed text and made the comparison measure a reader bug.
+		doc, err := lexdania.LoadWithBody(meta.Path)
+		if err != nil {
+			t.Fatalf("reopen %s for the sections comparison: %v", meta.Path, err)
+		}
+		secs := doc.Sections()
+		if len(secs) == 0 {
+			if text := strings.TrimSpace(lexdania.DisplayText(doc.Root)); text != "" {
+				out = append(out, Unit{Doc: docID, Addr: "", Text: text})
+			}
+			continue
+		}
+		for _, s := range secs {
+			text := strings.TrimSpace(s.Display())
+			if text == "" {
+				continue
+			}
+			out = append(out, Unit{Doc: docID, Addr: AddressOf(s), Text: text})
+		}
+	}
+	return out
+}
+
+// coverageDocs is how many documents the word-coverage measure walks. It is a subset
+// because it re-reads each document and compares word sets, which is quadratic in nothing
+// but still costs a full pass over the sample.
+const coverageDocs = 500
+
+// wordCoverage reports the fraction of served words that the document's own indexed units
+// also contain. Per document, so that a unit in one law cannot pay for a gap in another.
+func wordCoverage(t *testing.T, docs []DocMeta, units []Unit, limit int) float64 {
+	byDoc := make(map[int][]string, limit)
+	for _, u := range units {
+		byDoc[u.Doc] = append(byDoc[u.Doc], u.Text)
+	}
+	// Strided rather than the first N: the sample is grouped by stratum, so the first N
+	// documents are one kind of law and their coverage says nothing about the rest.
+	step := len(docs) / limit
+	if step < 1 {
+		step = 1
+	}
+	seen, hit, walked := 0, 0, 0
+	for id, meta := range docs {
+		if walked >= limit {
+			break
+		}
+		if id%step != 0 {
+			continue
+		}
+		doc, err := lexdania.LoadWithBody(meta.Path)
+		if err != nil {
+			continue
+		}
+		walked++
+		served := strings.ToLower(doc.Model().Content.PlainText())
+		indexed := strings.ToLower(strings.Join(byDoc[id], " "))
+		for _, w := range strings.Fields(served) {
+			if len(w) < 6 {
+				continue
+			}
+			seen++
+			if strings.Contains(indexed, w) {
+				hit++
+			}
+		}
+	}
+	if seen == 0 {
+		return 0
+	}
+	return float64(hit) / float64(seen)
+}
+
+// paritySection measures the shipped unitisation against the section list's, query for
+// query, on the same documents.
+func paritySection(t *testing.T, out *strings.Builder, docs []DocMeta, newUnits []Unit, checkpoint func()) {
+	oldUnits := sectionsUnits(t, docs)
+	oldIdx, err := Build(docs, oldUnits, Options{})
+	if err != nil {
+		t.Fatalf("build the sections index for the parity run: %v", err)
+	}
+	newIdx, err := Build(docs, newUnits, Options{})
+	if err != nil {
+		t.Fatalf("build the model index for the parity run: %v", err)
+	}
+	// What the old index held, per document, so a new answer can be called new only if the
+	// old index never had those words at all.
+	// Keyed by accession: a Hit carries the document itself, not an index into this sample.
+	newByDoc := make(map[string]string, len(docs))
+	for _, u := range newUnits {
+		newByDoc[docs[u.Doc].Accession] += " " + u.Text
+	}
+	for id := range newByDoc {
+		newByDoc[id] = normaliseForCompare(newByDoc[id])
+	}
+	oldByDoc := map[string]string{}
+	for _, u := range oldUnits {
+		oldByDoc[docs[u.Doc].Accession] += " " + u.Text
+	}
+	for id := range oldByDoc {
+		oldByDoc[id] = normaliseForCompare(oldByDoc[id])
+	}
+
+	type row struct {
+		old, carried, gained, newOnly int
+		moved                         int // its words are indexed, only ranked elsewhere
+		lost                          []string
+	}
+	rows := map[string]*row{}
+	for _, q := range measurementQueries {
+		if strings.ContainsAny(q.Text, `~"-`) || strings.Contains(q.Text, " AND ") {
+			continue // graded separately, against their own truth
+		}
+		r := rows[q.Group]
+		if r == nil {
+			r = &row{}
+			rows[q.Group] = r
+		}
+		oldHits := oldIdx.Search(Query{Text: q.Text, Limit: 10})
+		newHits := newIdx.Search(Query{Text: q.Text, Limit: 10})
+		newTexts := make([]string, 0, len(newHits))
+		for _, h := range newHits {
+			newTexts = append(newTexts, normaliseForCompare(newUnits[h.Unit].Text))
+		}
+		r.old += len(oldHits)
+		for _, h := range oldHits {
+			ot := normaliseForCompare(oldUnits[h.Unit].Text)
+			carried := false
+			for _, nt := range newTexts {
+				if sameAnswer(ot, nt) {
+					carried = true
+					break
+				}
+			}
+			if carried {
+				r.carried++
+				continue
+			}
+			// Not in the new top 10. That is a ranking difference unless the words are
+			// nowhere in the new index for that document, which is the only case worth
+			// calling a loss.
+			if wordsReachable(ot, newByDoc[h.Doc.Accession]) {
+				r.moved++
+				continue
+			}
+			if len(r.lost) < 3 {
+				// Name what is gone rather than the answer it came from: the difference
+				// between "a word is unfindable" and "a token the old index glued together
+				// out of two elements is spelled differently now" is the whole point of
+				// reporting an unreachable answer.
+				var gone []string
+				for _, w := range strings.Fields(ot) {
+					if len(w) < 5 || strings.Contains(newByDoc[h.Doc.Accession], w) {
+						continue
+					}
+					if len(gone) < 4 {
+						gone = append(gone, w)
+					}
+				}
+				r.lost = append(r.lost, q.Text+": "+strings.Join(gone, ", "))
+			}
+		}
+		for j, nt := range newTexts {
+			h := newHits[j]
+			oldText := oldByDoc[h.Doc.Accession]
+			if strings.Contains(oldText, nt) || (len(oldText) > 60 && strings.Contains(nt, oldText[:60])) {
+				continue
+			}
+			r.gained++
+		}
+		r.newOnly += len(newHits)
+	}
+	groups := make([]string, 0, len(rows))
+	for g := range rows {
+		groups = append(groups, g)
+	}
+	sort.Strings(groups)
+	fmt.Fprintf(out, "## answer parity: model units vs section units\n")
+	fmt.Fprintf(out, "For each query, the answers the section index returned in its top 10, and whether the\n")
+	fmt.Fprintf(out, "model's index returned that answer too (same words, either direction of containment, since\n")
+	fmt.Fprintf(out, "the two cut passages of different sizes). \u0022new content\u0022 counts answers whose words the\n")
+	fmt.Fprintf(out, "section index did not hold anywhere in that document.\n")
+	totOld, totCarried, totGained := 0, 0, 0
+	for _, g := range groups {
+		r := rows[g]
+		totOld += r.old
+		totCarried += r.carried
+		totGained += r.gained
+		fmt.Fprintf(out, "  %-14s %4d old answers, %4d carried (%.3f), %4d ranked elsewhere, %4d unreachable, %4d answers only the model's index can return\n",
+			g, r.old, r.carried, float64(r.carried)/float64(max(r.old, 1)), r.moved, r.old-r.carried-r.moved, r.gained)
+		for _, l := range r.lost {
+			fmt.Fprintf(out, "      not carried: %s\n", l)
+		}
+	}
+	fmt.Fprintf(out, "  TOTAL          %4d old answers, %4d carried (%.3f)\n", totOld, totCarried, float64(totCarried)/float64(max(totOld, 1)))
+	out.WriteString("\n")
+	checkpoint()
+}
+
+// wordsReachable reports whether an old answer's words are all still indexed for that
+// document. Substring containment is too strict to ask this: a section's unit text was
+// assembled by joining heading and body with different spacing than the renderer uses, so
+// the same words can sit in a different-shaped unit and still be findable. What a reader
+// can lose is a word, not a byte offset.
+func wordsReachable(answer, doc string) bool {
+	missing, seen := 0, 0
+	for _, w := range strings.Fields(answer) {
+		if len(w) < 5 {
+			continue
+		}
+		seen++
+		if !strings.Contains(doc, w) {
+			missing++
+		}
+	}
+	if seen == 0 {
+		return true
+	}
+	return float64(missing)/float64(seen) < 0.05
+}
+
+// normaliseForCompare folds away the differences that are not different answers: case,
+// repeated whitespace, and the citation a condition unit repeats.
+func normaliseForCompare(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, "\u00a0", " ")
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// sameAnswer reports whether two index units are the same passage for a reader: one
+// contains the other, or they share most of their words.
+func sameAnswer(a, b string) bool {
+	if a == b {
+		return true
+	}
+	if len(a) > 40 && len(b) > 40 {
+		if strings.Contains(a, b) || strings.Contains(b, a) {
+			return true
+		}
+	}
+	ta, tb := strings.Fields(a), strings.Fields(b)
+	if len(ta) == 0 || len(tb) == 0 {
+		return false
+	}
+	set := make(map[string]bool, len(ta))
+	for _, w := range ta {
+		set[w] = true
+	}
+	shared := 0
+	for _, w := range tb {
+		if set[w] {
+			shared++
+		}
+	}
+	smaller := min(len(ta), len(tb))
+	return float64(shared)/float64(smaller) > 0.6
 }

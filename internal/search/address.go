@@ -9,6 +9,11 @@ import (
 
 // AddressOf renders a section as the citation a caller can hand back to lookup.
 //
+// Nothing shipped uses it since the index units were cut from the model (see
+// modelunits.go). It survives because internal/search/measure_test.go replays the
+// retired unitisation to measure the new one against, and a baseline that drifts from
+// what it is supposed to be a baseline of is not evidence.
+//
 // It is written to be the inverse of lexdania.ParseAddress rather than a prettier
 // string: a hit whose address does not parse back to the same section is a hit the
 // user cannot open, and that is the failure mode this whole file exists to avoid.

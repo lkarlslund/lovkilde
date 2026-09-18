@@ -116,27 +116,11 @@ func Sample(root string, perStratum int) (docs []DocMeta, units []Unit, err erro
 			units = append(units, Unit{Doc: docID, Addr: "titel", Text: e.Title})
 		}
 
-		secs := doc.Sections()
-		if len(secs) == 0 {
-			// 20,870 documents build no section at all, and most of them are real text:
-			// folketingssager and short notices whose prose is not numbered. Dropping them
-			// would make the index quietly incomplete in exactly the way the census exists
-			// to detect, so they index as one unaddressed unit.
-			if text := strings.TrimSpace(lexdania.DisplayText(doc.Root)); text != "" {
-				units = append(units, Unit{Doc: docID, Addr: "", Text: text})
-			}
-			continue
-		}
-		for _, s := range secs {
-			text := strings.TrimSpace(s.Display())
-			if text == "" {
-				// 288,323 sections across the corpus are empty containers — a kapitel that
-				// only groups children, mostly. Indexing them costs postings and returns
-				// nothing, so they are skipped rather than counted as coverage.
-				continue
-			}
-			units = append(units, Unit{Doc: docID, Addr: AddressOf(s), Text: text})
-		}
+		// The model, not the section list: see modelunits.go for what each kind of unit is and
+		// why numbered conditions are not among them. Empty text is still skipped by the unit
+		// builder, which is where the 288,323 empty containers belong — a kapitel that only
+		// groups children has no text to index whatever representation it came from.
+		units = append(units, Units(docID, meta, doc.Model())...)
 	}
 	return docs, units, nil
 }

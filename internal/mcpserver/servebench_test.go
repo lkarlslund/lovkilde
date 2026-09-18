@@ -102,8 +102,13 @@ func TestServingBaselineCost(t *testing.T) {
 				Number: e.Number, Title: e.Title, Source: string(m.Provenance.Source), Path: path,
 			},
 		}
-		if sections := doc.Sections(); len(sections) > 0 {
-			f.address = search.AddressOf(sections[len(sections)/2])
+		// An address the shipped unitiser cites, not one this test invents: the gate below is
+		// about whether a search hit can be re-opened, so the sample has to be citations.
+		for _, u := range search.Units(0, f.meta, m) {
+			if u.Addr != "" {
+				f.address = u.Addr
+				break
+			}
 		}
 		if err := wr.Add(e.Accession, m); err != nil {
 			t.Fatal(err)

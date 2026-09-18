@@ -1,33 +1,33 @@
 # serving path cost: parsing the publisher's XML vs the compiled artifact
-# generated: 2026-09-18 21:04:17
+# generated: 2026-09-18 22:18:23
 # reproduce: RETSIN_SERVE_BENCH=1 RETSIN_SERVE_BENCH_DOCS=1000 go test ./internal/mcpserver -run TestServingBaselineCost -v
-# mirror: 191429 entries scanned in 1.493s; 1000 documents queried, 1000 answered text
+# mirror: 191429 entries scanned in 9.373s; 1000 documents queried, 1000 answered text
 
 ## by parse (the path serving had)
-  open+parse+model (the share the artifact removes): p50 432µs, p95 7.45ms, p99 23.943ms, mean 1.897ms (n=1000)
-  whole-document lookup:                            p50 453µs, p95 7.701ms, p99 24.037ms, mean 1.941ms (n=1000)
-  addressed lookup:                                 p50 613µs, p95 7.625ms, p99 24.024ms, mean 2.073ms (n=369)
-  one hit's unit text (snippet, proximity):         p50 618µs, p95 7.976ms, p99 24.975ms, mean 2.129ms (n=369)
+  open+parse+model (the share the artifact removes): p50 459µs, p95 7.982ms, p99 25.417ms, mean 1.996ms (n=1000)
+  whole-document lookup:                            p50 468µs, p95 7.968ms, p99 24.441ms, mean 2.001ms (n=1000)
+  addressed lookup:                                 p50 443µs, p95 8.065ms, p99 25.085ms, mean 1.976ms (n=1000)
+  one hit's unit text (snippet, proximity):         p50 442µs, p95 7.564ms, p99 24.493ms, mean 1.919ms (n=1000)
 
 ## by artifact (the path serving has when one is built)
-  whole-document lookup:                            p50 67µs, p95 667µs, p99 1.929ms, mean 186µs (n=1000)
-  addressed lookup:                                 p50 68µs, p95 833µs, p99 1.524ms, mean 175µs (n=369)
-  one hit's unit text, cold:                        p50 71µs, p95 804µs, p99 1.492ms, mean 178µs (n=369)
-  one hit's unit text, already read this query:     p50 71µs, p95 813µs, p99 1.518ms, mean 178µs (n=369)
-  artifact: 1000 documents, 7.6 MB, built in 2.457s; cache held 1000 payloads in 34.1 MB of 1048.6 MB, 1476 hits, 1000 misses, 0 drops
+  whole-document lookup:                            p50 75µs, p95 721µs, p99 2.199ms, mean 202µs (n=1000)
+  addressed lookup:                                 p50 52µs, p95 601µs, p99 1.962ms, mean 167µs (n=1000)
+  one hit's unit text, cold:                        p50 32µs, p95 401µs, p99 1.245ms, mean 105µs (n=1000)
+  one hit's unit text, already read this query:     p50 33µs, p95 401µs, p99 1.257ms, mean 106µs (n=1000)
+  artifact: 1000 documents, 7.6 MB, built in 2.495s; cache held 1000 payloads in 34.1 MB of 1048.6 MB, 4000 hits, 1000 misses, 0 drops
 
 ## the difference, same run and same sample
-  whole-document lookup: p50 454µs -> 67µs (6.8x), mean 1.941ms -> 186µs (10.4x)
-  addressed lookup:      p50 613µs -> 68µs (9.0x), mean 2.073ms -> 175µs (11.8x)
-  unit text per hit:     p50 618µs -> 71µs cold (8.7x), 71µs when the same document was already read this query
-  payload cache saves the seek and one frame decompression: 0.00µs of the 178µs an artifact read costs.
+  whole-document lookup: p50 469µs -> 76µs (6.2x), mean 2.001ms -> 202µs (9.9x)
+  addressed lookup:      p50 444µs -> 52µs (8.5x), mean 1.976ms -> 167µs (11.8x)
+  unit text per hit:     p50 443µs -> 32µs cold (13.8x), 33µs when the same document was already read this query
+  payload cache saves the seek and one frame decompression: -1.00µs of the 105µs an artifact read costs.
     On documents this size the win is over the XML parse, not over the cache.
-  answers differing between the two paths: 0 of 1369, snippets: 0 of 369
+  answers differing between the two paths: 0 of 2000, snippets: 0 of 1000
   not moved: an as_of answer still consolidates and parses, pending M012T011
 
 ## addresses the shipped unitiser cites
-  369 of 1000 queried documents yielded a cited address; 0 of those (0%) do not open through lookup, on either path
+  1000 of 1000 queried documents yielded a cited address; 0 of those (0%) do not open through lookup, on either path
 
-  startup index build is 1.493s over 191429 documents, which is why it is rebuilt
+  startup index build is 9.373s over 191429 documents, which is why it is rebuilt
   at boot rather than cached; the cost a query feels is the read, and that
   is what the artifact moved.

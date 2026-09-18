@@ -411,10 +411,13 @@ Measured after, by `TestHTMLBodyProvisionsGetNumbers` and the serving baseline
 payload-bodied documents still have no number (2.2 %)**, and the residual is the quoted shape —
 "§ 12, stk. 2, affattes således: …" inside a consolidated act, "§ 10, stk. 1, nr. 4: Mundtlig
 eksamen …" inside a ministry note — text that cites a provision rather than being one, which
-stays unnumbered on purpose. On the same 1,000-document serving sample the unitiser's citations
-went from 440 with 250 of them unopenable to **369 with none unopenable**, and the gate no
-longer carries an allowance: a cited address that cannot be re-opened is a defect from its first
-occurrence.
+stays unnumbered on purpose. On the same 1,000-document serving sample, citations that lookup
+can open went from 369 of 1,000 documents (section units, measured before the 179 refusals were
+added) to **1,000 of 1,000** under the model units, still with none unopenable, and the gate
+carries no allowance: a cited address that cannot be re-opened is a defect from its first
+occurrence. The count rose because a document the section list could not cite at all — the
+paragraphs of a folketingssag, an annex letter printed only in a heading — now yields a citation
+the model can name, or none rather than one invented.
 
 ### Older versions of a law are already in the archive
 
@@ -1213,30 +1216,70 @@ keep the crawl and the server from running at the same time, and SQLite was alre
 considered and rejected for the state store (see *Storage* above) for reasons that apply
 at least as strongly here.
 
-Measured on the whole mirror (2026-09-18): **191,393 documents → 5,505,907 units,
-4,345,622 terms, 938 MB, 11 m 18 s to build, 24.5 GB peak RSS**. Query latency on the
-sampled measurement was p50 0.2 ms / p95 3 ms; the brute-force baseline over the same
-text extrapolates to ~0.7 s per query, so the index is roughly three orders of magnitude
-faster and ranks — but grep is not hopeless, which is why the index stores no text and
-adds no dependency. The 24.5 GB peak is the in-memory term map: a two-pass sort-merge
-build is the known follow-up for smaller machines.
+Measured on the whole mirror, same day as the unit change: **191,429 documents →
+5,343,351 units, 4,493,745 terms, 863 MB, 9 m 39 s to build, 26.4 GB peak RSS** (21.3 GB
+peak heap). The index got *smaller* than the section-unit index it replaced — 938 MB,
+5,505,907 units, 4,345,622 terms — because the section list posted a paragraph once as
+itself, once inside its section and once inside its chapter, and those copies were most of
+what the postings carried. Query latency over the 26 measured queries: p50 0.8 ms, p95
+29 ms, the p95 being the widest query in the fixture (a compound-head query whose grep truth
+set is 54,816 units in the sample); the brute-force baseline over the same text extrapolates
+to ~0.7 s per query, so the index is two to three orders of magnitude faster and ranks —
+grep is not hopeless, which is why the index stores no text and adds no dependency. The peak
+RSS is the in-memory term map: a two-pass sort-merge build is the known follow-up for
+smaller machines.
 
-**The unit is the provision, not the document.** A hit in a 300-page act has to name
-"§ 267, stk. 3", and that address is produced by the same `AddressOf` that `lookup`
-parses back with `ParseAddress` — a round-trip guard runs over the fixture addresses,
-because a hit whose address cannot be re-opened is a hit the user cannot read. Title text
-is indexed as its own unit (`titel`): searching for a law by name is the most common
-legal query there is. Documents with no numbered sections (20,870 of them, mostly
-folketingssager) index as one whole-document unit rather than silently vanishing.
+**The unit is a passage, not the document.** A hit in a 300-page act has to name
+"§ 267, stk. 3". Units are cut from the model rather than from the publisher's element
+nesting: each section, each of its numbered conditions, the text the register prints
+*between* conditions (the section's own number, a lead-in line, a closing sentence),
+divisions, annexes, the title, the preamble, the signature block, and the content the model
+has no concept for, in runs capped at 2,000 runes. Each word is indexed exactly once. The
+section list nested its units inside each other, so a paragraph was posted three times — as
+itself, as part of its section, as part of its chapter — while the words it held were
+reachable only where that nesting happened to exist.
 
-Four decisions were made by measurement rather than by taste
-(`internal/search/testdata/index-measurement-20260917.txt`, reproduce line in its header):
+An address is kept only if the model's own lookup opens it back to the same content:
+`Content.Find(ParseAddress(addr))` must return the very provision, condition, division or
+annex the unit holds. An amendment act is why that check rather than a naming convention
+does the work — an act amending ten laws prints "§ 2" ten times, lookup answers the address
+with the first of them, and citing the other nine by it points a reader at the wrong
+provision. Those units keep their words and are cited as the document: imprecise rather
+than wrong.
+
+Measured against the unitisation this replaced, over the same 9,237-document sample
+(`internal/search/testdata/index-measurement-20260918-sections.txt` and
+`…-model.txt`, reproduce line in each header) and over 1,597 mirror documents in
+`RETSIN_SEARCH_UNITS=1 go test ./internal/search -run TestModelUnitsOverMirrorResolve`:
+
+| | section units | model units |
+|---|---|---|
+| of a document's served words, share the index can find | 45.6 % | **99.6 %** |
+| indexed text against the text the server renders | 93.0 MB of 174.9 MB (53 %) | 173.1 MB of 174.9 MB (99 %) |
+| citations that open text containing the words quoted | 89.6 % | **97.0 %** |
+| distinct places a reader can follow, over 1,597 documents | 9,739 | **8,296** — and every one of the 2,069 places the section list reaches that the model does not cite is classified: 1,177 item-level (the index stores no positions), 458 conditions the document prints no number for (cited as their section), 145 entry-into-force provisions (cited under the series' own locator), 289 cited but refused by the text check, which is M012T013 |
+| old answers still returned to the same query | — | 236 of 250; the 4 that are not are glued-run tokens (`fremsata199212k00198…`), not words |
+| answers only the new index can return | — | 165 of 250 top-10 hits |
+| units, index size (sample) | 111,969, 18.0 MB | 151,502, 33.2 MB |
+
+Two query classes came out *worse* on the recall@10-against-grep metric — aa-spelling 0.85
+to 0.70, prefix traps 1.00 to 0.55 — and both are classes whose grep truth set nearly
+tripled (10,777 to 31,513 and 4,357 to 12,869 matching units). That metric asks which ten
+of thousands of matches two correct orderings put first, so indexing half again as much of
+each document changes the argument by construction; the answer-parity row asks the two
+systems the reader's question instead, and moves the other way. Both numbers are in the
+reports, and neither is averaged into the other. The remaining 3 % of citations that do not
+open their own words are the glued run boundaries tracked as a separate milestone.
+
+Four decisions were made by measurement rather than by taste. The first two were taken
+against `index-measurement-20260917.txt`; the length penalty was re-measured after the unit
+change, in both reports of the pair above, because its rationale mentioned unit granularity:
 
 | candidate | result | decision |
 |---|---|---|
 | reversed terms (compound heads: *afgift* → *ejendomsafgift*) | +62 % size, recall **fell**: aa-spelling 0.75→0.25, citation 0.50→0.05 | **deleted** — reversed terms share the sorted dictionary and steal prefix-expansion slots; compound-head recall was already 1.000 |
 | folded stream (inflectional endings) | recall identical on every group (inflected 1.000 both ways), +31 % size, one term query got *worse* | **off by default** — and structurally redundant: folding only removes suffixes, so the stem is always a prefix of the word, which right-extension already reaches |
-| BM25 `b` (length penalty) | citation 0.500 at b=0.75/0.45/0.20, **1.000 at b=0**; term 0.700→0.740, phrase 0.967→1.000 | **b = 0** — a document with no numbered sections is one long unit, and that unit is exactly what "lov nr. 1399" needs, so penalising length penalised the right answer |
+| BM25 `b` (length penalty) | re-measured on both unit shapes: on model units b=0.75 gives citation 0.633 / aa 0.600 against b=0's 0.800 / 0.700; on section units 0.676 / 0.750 against 0.933 / 0.850 | **b = 0** — a document with no numbered conditions is one long unit, and that unit is exactly what "lov nr. 1399" needs, so penalising length penalised the right answer. The decision survived the unit change; the number behind it is now measured under both shapes |
 | positions in postings | every phrase query's top-10 did contain the words adjacent (3/3) | **not stored** — the only measured need for them did not materialise |
 
 Danish-specific normalisation, all guarded: æ/ø/å are never folded into other letters
@@ -1337,15 +1380,16 @@ Measured in one run over the same 1,000 documents, both paths, same machine and 
 
 | query | by parse | by artifact |
 |---|---|---|
-| whole document, p50 | 471 µs | 69 µs (6.8x) |
-| whole document, mean | 2.016 ms | 188 µs (10.7x) |
-| one provision addressed, p50 | 626 µs | 69 µs (9.1x) |
-| one hit's unit text, p50 | 625 µs | 72 µs (8.7x) |
+| whole document, p50 | 468 µs | 75 µs (6.2x) |
+| whole document, mean | 2.001 ms | 202 µs (9.9x) |
+| one provision addressed, p50 | 443 µs | 52 µs (8.5x) |
+| one provision addressed, mean | 1.976 ms | 167 µs (11.8x) |
+| one hit's unit text, p50 | 442 µs | 32 µs cold (13.8x) |
 
-Speed is the argument, so it is measured; agreement is the requirement, so it is gated: of 1,369
-answers and 369 snippets served through both paths, none differed. The payload cache's own share
-of that is 0 µs at this resolution — for documents of a few kilobytes it saves the seek and one
-frame decompression out of ~178 µs, so the win is over the XML parse and not over the cache,
+Speed is the argument, so it is measured; agreement is the requirement, so it is gated: of 2,000
+answers and 1,000 snippets served through both paths, none differed. The payload cache's own share
+of that is −1 µs of the 105 µs an artifact read costs — for documents of a few kilobytes it saves
+the seek and one frame decompression, so the win is over the XML parse and not over the cache,
 which is worth saying out loud because the cache is the part that looks like the optimisation.
 
 ### Text provenance: which documents have real text, and where it came from
