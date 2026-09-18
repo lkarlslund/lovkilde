@@ -1254,12 +1254,12 @@ Measured against the unitisation this replaced, over the same 9,237-document sam
 
 | | section units | model units |
 |---|---|---|
-| of a document's served words, share the index can find | 45.6 % | **99.6 %** |
+| of a document's served words, share the index can find (sample; over the mirror 0.456 → 0.995) | 45.6 % | **99.6 %** |
 | indexed text against the text the server renders | 93.0 MB of 174.9 MB (53 %) | 173.1 MB of 174.9 MB (99 %) |
-| citations that open text containing the words quoted | 89.6 % | **97.0 %** |
+| citations whose opened text contains the words quoted | 89.6 % (10.4 % fail) | **95.8 %** (4.2 % fail) |
 | distinct places a reader can follow, over 1,597 documents | 9,739 | **8,296** — and every one of the 2,069 places the section list reaches that the model does not cite is classified: 1,177 item-level (the index stores no positions), 458 conditions the document prints no number for (cited as their section), 145 entry-into-force provisions (cited under the series' own locator), 289 cited but refused by the text check, which is M012T013 |
 | old answers still returned to the same query | — | 236 of 250; the 4 that are not are glued-run tokens (`fremsata199212k00198…`), not words |
-| answers only the new index can return | — | 165 of 250 top-10 hits |
+| answers only the new index can return | — | 164, counted per query group |
 | units, index size (sample) | 111,969, 18.0 MB | 151,502, 33.2 MB |
 
 Two query classes came out *worse* on the recall@10-against-grep metric — aa-spelling 0.85
@@ -1268,8 +1268,9 @@ tripled (10,777 to 31,513 and 4,357 to 12,869 matching units). That metric asks 
 of thousands of matches two correct orderings put first, so indexing half again as much of
 each document changes the argument by construction; the answer-parity row asks the two
 systems the reader's question instead, and moves the other way. Both numbers are in the
-reports, and neither is averaged into the other. The remaining 3 % of citations that do not
-open their own words are the glued run boundaries tracked as a separate milestone.
+reports, and neither is averaged into the other. The 4.2 % of citations that do not open their
+own words are the glued run boundaries tracked as a separate milestone, and the section index
+was worse on the same measurement at 10.4 %.
 
 Four decisions were made by measurement rather than by taste. The first two were taken
 against `index-measurement-20260917.txt`; the length penalty was re-measured after the unit

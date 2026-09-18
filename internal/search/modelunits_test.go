@@ -517,7 +517,13 @@ func TestModelUnitsOverMirrorResolve(t *testing.T) {
 	// here as room to tighten it, and a regression shows up as a failure.
 	if modelCited > 0 {
 		bad := 100 * float64(modelCited-modelOpen) / float64(modelCited)
-		t.Logf("cited units whose opened text does not contain their own words: %.1f%% (mostly the run-join difference M012T013 tracks)", bad)
+		secBad := 0.0
+		if sectionCited > 0 {
+			secBad = 100 * float64(sectionCited-sectionOpen) / float64(sectionCited)
+		}
+		// Both sides from the same run: the comparison is the point, and the section figure
+		// quoted in the README came from a diagnostic that no longer exists.
+		t.Logf("cited units whose opened text does not contain their own words: model %.1f%%, section units %.1f%% (mostly the run-join difference M012T013 tracks)", bad, secBad)
 		if bad > citationTextBound {
 			t.Errorf("%.1f%% of cited addresses do not open the words they quote, above the recorded bound of %.1f%%", bad, citationTextBound)
 		}
