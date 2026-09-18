@@ -372,6 +372,14 @@ func (c *Content) applyOne(e Edit, out *Consolidation) {
 				apply(t.String(), "removed the heading only; the provision itself is untouched")
 				continue
 			}
+			if t.Item != nil && t.Stykke != nil {
+				if t.Provision == nil || !t.Provision.DeleteItem(t.Stykke.Nr, t.Item.Nr) {
+					reject(fmt.Sprintf("could not remove %s", t))
+					return
+				}
+				apply(t.String(), "removed the condition only; the rest renumbered by position")
+				continue
+			}
 			if t.Stykke != nil {
 				if t.Provision == nil || !t.Provision.DeleteStykke(t.Stykke.Nr) {
 					reject(fmt.Sprintf("could not remove %s", t))

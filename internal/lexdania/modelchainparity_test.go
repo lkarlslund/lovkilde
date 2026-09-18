@@ -2,12 +2,9 @@ package lexdania
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // Consolidation on the model has to produce the same law as consolidation on the tree, on real
@@ -31,9 +28,8 @@ func TestModelConsolidationParityOnCorpus(t *testing.T) {
 	var outcomeDiffs int
 	// Examples are kept per kind of difference, so one noisy class cannot crowd the others out
 	// of the log.
-	var outcomeExamples, diffExamples []string
-	treeSideLoss := map[string]int{}
-	unexplained := 0
+	var outcomeExamples []string
+	debt := newDiffTally()
 
 	for _, e := range recentLawEntries(a.Entries(), budget) {
 		vs, err := a.Versions(e.Accession)
@@ -105,17 +101,17 @@ func TestModelConsolidationParityOnCorpus(t *testing.T) {
 		// calling a difference once it has been traced to a change: the words an amendment
 		// brought are known, so a provision that holds them in one engine and not the other is
 		// a reported-applied change that produced no text, not an argument about formatting.
-		brought := broughtWords(model.Consolidation)
 		_, treeTexts, _ := sectionKeys(tree.Sections())
 		_, modelTexts, _, _ := contentKeys(model.Content)
+		ctx := newDebtContext(model.Consolidation, treeTexts, modelTexts)
 		for k, tv := range treeTexts {
 			if !comparableText(k) {
 				continue
 			}
 			mv := modelTexts[k]
+			prov := provisionOf(k)
 			if len(tv) != len(mv) {
-				classifyDiff(treeSideLoss, &unexplained, &diffExamples, brought,
-					strings.Join(tv, "\n"), strings.Join(mv, "\n"),
+				ctx.classify(debt, prov, prov != k, strings.Join(tv, "\n"), strings.Join(mv, "\n"),
 					fmt.Sprintf("%s %s: %d units on the tree, %d on the model", e.Accession, k, len(tv), len(mv)))
 				continue
 			}
@@ -123,7 +119,7 @@ func TestModelConsolidationParityOnCorpus(t *testing.T) {
 				if tv[i] == mv[i] {
 					continue
 				}
-				classifyDiff(treeSideLoss, &unexplained, &diffExamples, brought, tv[i], mv[i],
+				ctx.classify(debt, prov, prov != k, tv[i], mv[i],
 					fmt.Sprintf("%s %s:\n  tree: %q\n model: %q", e.Accession, k, cut(tv[i], 140), cut(mv[i], 140)))
 			}
 		}
@@ -135,98 +131,72 @@ func TestModelConsolidationParityOnCorpus(t *testing.T) {
 	if checked < 5 {
 		t.Skipf("only %d chained documents with amendments in this archive slice", checked)
 	}
-	t.Logf("consolidation parity over %d documents with chains: tree applied %d / refused %d, model applied %d / refused %d; text debt: %d units the tree wrote none of, %d units unexplained",
-		checked, appliedTree, refusedTree, appliedModel, refusedModel, treeLossTotal(treeSideLoss), unexplained)
+	t.Logf("consolidation parity over %d documents with chains: tree applied %d / refused %d, model applied %d / refused %d; text debt: %d units the tree lacks, %d units an insertion put elsewhere, %d units the model lacks, %d units with words but no addressable unit, %d units filed under another number, %d units unexplained",
+		checked, appliedTree, refusedTree, appliedModel, refusedModel,
+		debt.total(debt.treeSideLoss), debt.total(debt.insertionPosition), debt.total(debt.modelSideLoss),
+		debt.total(debt.inlineUnit), debt.relocated, debt.unexplained)
+	for _, x := range debt.examples {
+		t.Log(x)
+	}
 	if outcomeDiffs > 0 {
 		for _, x := range outcomeExamples {
 			t.Log(x)
 		}
 		t.Errorf("%d changes were applied by one engine and refused by the other", outcomeDiffs)
 	}
-	// Text parity is not reached, and the two remaining classes are recorded here as measured
-	// debt with a bound that may only fall. Softening the comparison would hide the debt; a
-	// ratchet keeps it visible and stops it growing while it is worked off. Each class says who
-	// loses what:
+	// Text parity is not reached yet, and what remains is recorded as measured debt in classes
+	// that each say who loses what. Softening the comparison would hide the debt; a per-class
+	// bound keeps it visible and stops any class growing while it is worked off. A bound may only
+	// fall. Measuring the classes rather than one "unexplained" bucket is what found that the
+	// bucket held a deleted subsection, and that the class previously called tree-side loss was
+	// an artifact of comparing unit texts in isolation: measured against the whole provision, the
+	// tree's engine loses no law at all here.
 	//
-	//   - treeSideLossBound: units whose text is missing words an applied change brought, while
-	//     the tree reported that change applied. The model carries the words, so this is the
-	//     shipped engine losing law it claims to have written (multi-node donations and
-	//     positionally anchored insertions).
-	//   - unexplainedBound: units holding different words with no single change to account for
-	//     them. Sampling shows these are subsections filed under different numbers after
-	//     structural edits, which is the open question this task has not answered yet.
+	//   - treeSideLossBound: law the model holds that the tree's provision does not hold anywhere.
+	//   - insertionPositionBound: the same, where the words came from an applied insertion. The
+	//     model puts inserted text after the addressed provision and records that the position
+	//     inside a run of insertions is approximate; the tree splices at whatever position the
+	//     publisher's file has. This is the measured cost of that choice.
+	//   - modelSideLossBound: law the tree holds that the model's provision does not hold anywhere.
+	//     Sampling: a numbered condition brought by a multi-node donation.
+	//   - inlineUnitBound: the words are in the provision but no unit is addressed there - a
+	//     condition that became inline text and so cannot be cited, looked up or indexed. Feeds
+	//     the unit-recall measurement in the task that indexes units from the model.
+	//   - relocatedBound: both engines have a unit here and hold each other's words elsewhere in
+	//     the provision: the same law filed under another subsection or condition number.
+	//   - unexplainedBound: what none of those checks accounts for.
 	//
-	// Both bounds are the counts measured on 2026-09-18 over this corpus slice.
-	const treeSideLossBound, unexplainedBound = 9, 30
-
-	missed, open := treeLossTotal(treeSideLoss), unexplained
-	if missed > treeSideLossBound {
-		for _, x := range diffExamples {
-			t.Log(x)
-		}
-		t.Errorf("%d units are missing words an applied change brought, while the tree reported that change applied; the recorded debt was %d", missed, treeSideLossBound)
-	}
-	if open > unexplainedBound {
-		for _, x := range diffExamples {
-			t.Log(x)
-		}
-		t.Errorf("%d units hold different words with no change to account for them; the recorded debt was %d", open, unexplainedBound)
-	}
-	if missed < treeSideLossBound || open < unexplainedBound {
-		t.Logf("debt fell below its recorded bound (tree-side loss %d/%d, unexplained %d/%d): lower the bounds to lock the gain in",
-			missed, treeSideLossBound, open, unexplainedBound)
-	}
-}
-
-// broughtWords returns the text the applied changes brought, longest first: the words a provision
-// has to contain if the change that named them was carried out.
-func broughtWords(cons *lexdoc.Consolidation) []string {
-	var out []string
-	for _, ap := range cons.Applied {
-		if ap.Edit.New != "" {
-			out = append(out, QuoteStrip(ap.Edit.New))
-		}
-		for _, segs := range ap.Edit.NewStykker {
-			out = append(out, lexdoc.SegmentsText(segs))
-		}
-		for _, p := range ap.Edit.NewProvisions {
-			out = append(out, p.Text())
-		}
-		out = append(out, ap.Edit.NewProse...)
-	}
-	sort.Slice(out, func(i, j int) bool { return len(out[i]) > len(out[j]) })
-	return out
-}
-
-// classifyDiff decides whether a text difference is a change one engine reported and did not
-// carry out, or a disagreement no change explains. The second kind is the one that matters, so it
-// is counted separately and asserted separately.
-func classifyDiff(treeLoss map[string]int, unexplained *int, examples *[]string, brought []string, treeText, modelText, describe string) {
-	want := lexdoc.MatchText(treeText)
-	have := lexdoc.MatchText(modelText)
-	for _, f := range brought {
-		frag := lexdoc.MatchText(f)
-		if len(frag) < 24 {
-			continue
-		}
-		if strings.Contains(have, frag) && !strings.Contains(want, frag) {
-			treeLoss[describe]++
-			if len(*examples) < 6 {
-				*examples = append(*examples, "the tree wrote none of this change's words: "+describe)
+	// The bounds are the counts measured on 2026-09-18 over this corpus slice: 21 documents with
+	// amendment chains, 25 differing units, all six classes accounted for.
+	const (
+		treeSideLossBound      = 0
+		insertionPositionBound = 9
+		modelSideLossBound     = 2
+		inlineUnitBound        = 6
+		relocatedBound         = 6
+		unexplainedBound       = 2
+	)
+	for _, c := range []struct {
+		name  string
+		count int
+		bound int
+	}{
+		{"the tree's provision does not hold this law", debt.total(debt.treeSideLoss), treeSideLossBound},
+		{"an applied insertion landed where the tree has nothing", debt.total(debt.insertionPosition), insertionPositionBound},
+		{"the model's provision does not hold this law", debt.total(debt.modelSideLoss), modelSideLossBound},
+		{"the words are present but no unit is addressed there", debt.total(debt.inlineUnit), inlineUnitBound},
+		{"the same words are filed under another number", debt.relocated, relocatedBound},
+		{"no change accounts for the difference", debt.unexplained, unexplainedBound},
+	} {
+		switch {
+		case c.count > c.bound:
+			for _, x := range debt.examples {
+				t.Log(x)
 			}
-			return
+			t.Errorf("%d units differ: %s; the recorded debt was %d", c.count, c.name, c.bound)
+		case c.count < c.bound:
+			t.Logf("debt class %q measured %d against its recorded %d: lower the bound to lock the gain in",
+				c.name, c.count, c.bound)
 		}
 	}
-	*unexplained++
-	if len(*examples) < 6 {
-		*examples = append(*examples, "no change accounts for this: "+describe)
-	}
-}
-
-func treeLossTotal(m map[string]int) int {
-	total := 0
-	for _, n := range m {
-		total += n
-	}
-	return total
 }

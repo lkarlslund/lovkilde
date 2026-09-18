@@ -253,9 +253,15 @@ func (p *Provision) ReplaceSpanContent(s Span, segs []Segment) bool {
 			continue
 		}
 		shiftSpan(&st.Span, s.To, delta)
-		for j := range st.Items {
-			shiftSpan(&st.Items[j].Span, s.To, delta)
+		kept := st.Items[:0]
+		for _, it := range st.Items {
+			if it.Span.From >= s.From && it.Span.To <= s.To {
+				continue // the condition's words went with the text that was replaced
+			}
+			shiftSpan(&it.Span, s.To, delta)
+			kept = append(kept, it)
 		}
+		st.Items = kept
 	}
 	return true
 }
@@ -372,6 +378,67 @@ func (p *Provision) renumberStykker() {
 //
 // Removing the segments shifts every span after them, and the item spans live inside the removed
 // range, so both have to move in the same step.
+// DeleteItem removes one numbered condition and renumbers the rest by position, which is
+// what "nr. 5 ophæves. Nr. 6 og 7 bliver herefter nr. 5 og 6" asks for. Deleting the
+// containing subsection instead - which is what an address that resolves to an item used to
+// do, because the location also carries its subsection - took seven conditions and the
+// sentence introducing them with the one that was repealed: measured on Bekendtgørelse
+// 2026-0037929, where "§ 2, stk. 1, nr. 5, ophæves" emptied § 2's first subsection outright.
+func (p *Provision) DeleteItem(stykkeNr, itemNr int) bool {
+	at, itemAt := -1, -1
+	for i := range p.Stykker {
+		if p.Stykker[i].Nr != stykkeNr {
+			continue
+		}
+		at = i
+		for j := range p.Stykker[i].Items {
+			if p.Stykker[i].Items[j].Nr == itemNr {
+				itemAt = j
+			}
+		}
+	}
+	if at < 0 || itemAt < 0 {
+		return false
+	}
+	sp := p.Stykker[at].Items[itemAt].Span
+	if sp.From > len(p.Segments) || sp.To > len(p.Segments) || sp.From > sp.To {
+		return false
+	}
+	removed := sp.To - sp.From
+	p.Stykker[at].Items = append(p.Stykker[at].Items[:itemAt], p.Stykker[at].Items[itemAt+1:]...)
+	kept := make([]Segment, 0, len(p.Segments)-removed)
+	kept = append(kept, p.Segments[:sp.From]...)
+	kept = append(kept, p.Segments[sp.To:]...)
+	p.Segments = kept
+	for i := range p.Stykker {
+		st := &p.Stykker[i]
+		if st.Span.From >= sp.To {
+			st.Span.From -= removed
+		}
+		if st.Span.To >= sp.To {
+			st.Span.To -= removed
+		}
+		if st.Span.From > st.Span.To {
+			st.Span.From = st.Span.To
+		}
+		for j := range st.Items {
+			it := &st.Items[j]
+			if it.Span.From >= sp.To {
+				it.Span.From -= removed
+			}
+			if it.Span.To >= sp.To {
+				it.Span.To -= removed
+			}
+			if it.Span.From > it.Span.To {
+				it.Span.From = it.Span.To
+			}
+			// Printed markers stay as the publisher set them, so only the position counts.
+			it.Nr = j + 1
+		}
+	}
+	return true
+}
+
 func (p *Provision) DeleteStykke(nr int) bool {
 	at := -1
 	for i := range p.Stykker {

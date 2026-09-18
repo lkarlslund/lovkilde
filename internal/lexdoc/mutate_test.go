@@ -277,3 +277,42 @@ func TestHeadingOfAGroupIsChangeable(t *testing.T) {
 		t.Errorf("the provision itself changed: %+v", p)
 	}
 }
+
+// An address that resolves to a numbered condition must delete that condition and nothing
+// else: the location carries its subsection too, and the old code acted on the subsection.
+func TestDeleteItemKeepsTheSubsection(t *testing.T) {
+	c := sampleLaw()
+	p := mustFindProvision(t, c, "§ 2")
+	st := p.Stykke(1)
+	if len(st.Items) != 2 {
+		t.Fatalf("fixture items = %d, want 2", len(st.Items))
+	}
+	before := p.SpanText(st.Span)
+	if !p.DeleteItem(1, 1) {
+		t.Fatal("deleting nr. 1 refused")
+	}
+	st = p.Stykke(1)
+	if len(st.Items) != 1 {
+		t.Fatalf("items after delete = %d, want 1", len(st.Items))
+	}
+	if st.Items[0].Nr != 1 {
+		t.Errorf("surviving condition numbered %d, want position 1", st.Items[0].Nr)
+	}
+	got := p.SpanText(st.Span)
+	if !strings.Contains(got, "Nr to.") {
+		t.Errorf("surviving condition lost its words: %q", got)
+	}
+	if strings.Contains(got, "Nr een.") {
+		t.Errorf("repealed condition still present: %q", got)
+	}
+	if len(before) <= len(got) {
+		t.Errorf("text did not shrink: %q -> %q", before, got)
+	}
+	// Other subsections keep their own words and positions.
+	if p.SpanText(p.Stykke(2).Span) != "Andet stykke." {
+		t.Errorf("stk. 2 after the item delete = %q", p.SpanText(p.Stykke(2).Span))
+	}
+	if p.DeleteItem(1, 9) {
+		t.Error("deleting a condition that does not exist was accepted")
+	}
+}
