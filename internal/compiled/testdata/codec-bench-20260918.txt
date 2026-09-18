@@ -1,0 +1,23 @@
+# compiled-document codec bench
+# generated: 2026-09-18 12:49:07
+# reproduce: RETSIN_CODEC_BENCH=1 RETSIN_CODEC_DOCS=1000 go test ./internal/compiled -run TestCodecBench -v
+# sample: 1000 documents, 59.9 MB of publisher XML, from ../../data
+
+## the parse this would replace
+  lexdania.Parse:  725.848ms total, 726µs per document
+  Sections():      286.263ms total, 286µs per document
+  extrapolated to 191393 documents: parse 2m18.922226264s
+
+## baseline: store the XML itself
+  raw     59.9 MB   zstd      5.7 MB  (9.5% of raw)
+
+## the compiled form (exported fields, indices not pointers)
+  74.9 MB of Go strings and slices in memory, before any encoding.
+  nodes 714434, sections 22923, warnings 1 across 1000 documents
+
+## encoders
+codec                     per-doc     stream      +zstd     encode     decode    faith
+gob stream                  81.0 MB      79.5 MB       9.5 MB     185ms      204ms    false
+encoding/json              124.1 MB     124.1 MB      10.1 MB     382ms      710ms     true
+go-json-experiment         123.0 MB     123.0 MB      10.3 MB     330ms      596ms    false
+cbor                       101.5 MB     101.5 MB      10.0 MB     215ms      450ms     true
