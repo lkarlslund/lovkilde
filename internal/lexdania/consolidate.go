@@ -531,7 +531,7 @@ func (s *Section) spliceAll(old, new string) int {
 	runes := make([][]rune, len(s.Runs))
 	start := make([]int, len(s.Runs))
 	for i, r := range s.Runs {
-		runes[i] = []rune(r.node.Runs[r.idx])
+		runes[i] = []rune(r.Node.Runs[r.Idx])
 		start[i] = len(text)
 		text = append(text, runes[i]...)
 	}
@@ -597,7 +597,7 @@ func (s *Section) spliceAll(old, new string) int {
 		}
 	}
 	for i, r := range s.Runs {
-		r.node.Runs[r.idx] = string(runes[i])
+		r.Node.Runs[r.Idx] = string(runes[i])
 	}
 	return len(positions)
 }
@@ -719,7 +719,7 @@ func (s *Section) splice(old, new string) bool {
 	runes := make([][]rune, len(s.Runs))
 	start := make([]int, len(s.Runs))
 	for i, r := range s.Runs {
-		runes[i] = []rune(r.node.Runs[r.idx])
+		runes[i] = []rune(r.Node.Runs[r.Idx])
 		start[i] = len(text)
 		text = append(text, runes[i]...)
 		for range runes[i] {
@@ -756,7 +756,7 @@ func (s *Section) splice(old, new string) bool {
 		runes[i] = out
 	}
 	for i, r := range s.Runs {
-		r.node.Runs[r.idx] = string(runes[i])
+		r.Node.Runs[r.Idx] = string(runes[i])
 	}
 	return true
 }
@@ -770,7 +770,7 @@ func (s *Section) appendText(text string) bool {
 	}
 	if len(s.Runs) > 0 {
 		last := s.Runs[len(s.Runs)-1]
-		last.node.Runs[last.idx] = strings.TrimRight(last.node.Runs[last.idx], " ") + " " + text
+		last.Node.Runs[last.Idx] = strings.TrimRight(last.Node.Runs[last.Idx], " ") + " " + text
 		return true
 	}
 	s.Node.Runs = append(s.Node.Runs, " "+text)

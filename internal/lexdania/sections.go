@@ -58,12 +58,17 @@ type Section struct {
 
 	// Runs lists every text run inside this section, in order, so a located match
 	// can be spliced back into the tree instead of being rewritten wholesale.
-	Runs []textRun
+	Runs []TextRun
 }
 
-type textRun struct {
-	node *Node
-	idx  int
+// TextRun locates one text run inside the tree: run Idx of Node. It is exported because
+// the compiled dataset has to store it. Unexported fields are invisible to gob and to
+// every JSON encoder, so a compiled document built straight off the parse struct would
+// lose the exact positions that amendments are spliced back into, and nothing would
+// report the loss.
+type TextRun struct {
+	Node *Node
+	Idx  int
 }
 
 func (s *Section) Display() string { return DisplayText(s.Node) }
@@ -314,10 +319,10 @@ func itemMarker(s string) (num int, litra string) {
 }
 
 // collectRuns records every text run in document order.
-func collectRuns(n *Node, out *[]textRun) {
+func collectRuns(n *Node, out *[]TextRun) {
 	for i := range n.Runs {
 		if n.Runs[i] != "" {
-			*out = append(*out, textRun{node: n, idx: i})
+			*out = append(*out, TextRun{Node: n, Idx: i})
 		}
 	}
 	for _, c := range n.Elems {
