@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2008/11/13/LOVH.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>LOV H#LOKDOK01</DocumentType>
+    <Rank>A</Rank>
+    <AccessionNumber>A19420054230</AccessionNumber>
+    <DocumentId>BL000183</DocumentId>
+    <UniqueDocumentId>124993</UniqueDocumentId>
+    <DocumentTitle>Lov om Forlægning af Hillerød-Frederiksværk Jernbane paa Strækningen mellem Hillerød og Skævinge</DocumentTitle>
+    <Year>1942</Year>
+    <DiesSigni>1942-07-16</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2009-07-09</StartDate>
+    <EndDate REFid="submit_1">2026-06-23</EndDate>
+    <Status>Valid</Status>
+    <Number>542</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2009-07-09</DiesEdicti>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Christian R.\n(L.S.)</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Gunnar Larsen</Signature>
+    <PlaceOfSignature>Givet på Amalienborg</PlaceOfSignature>
+    <JournalNumber>Journalnummer, Ingen</JournalNumber>
+    <Ministry>By-, Land- og Transportministeriet</Ministry>
+    <AdministrativeAuthority>Ministeriet for offentlige arbejder (Transportministeriet)</AdministrativeAuthority>
+  </Meta>
+  <TitelGruppe>
+    <Titel>
+      <Linea>
+        <Char>Lov om Forlægning af Hillerød-Frederiksværk Jernbane paa Strækningen mellem Hillerød og Skævinge</Char>
+      </Linea>
+      <Nota id="Not1">
+        <Explicatus>1)</Explicatus>
+        <Exitus>
+          <Linea>
+            <Char>Udfærdiget gennem Ministeriet for offentlige Arbejder.</Char>
+          </Linea>
+          <Linea>
+            <Char>Se Rigsdagstidenden for 1941-42:</Char>
+          </Linea>
+          <Linea>
+            <Char>Folket.</Char>
+          </Linea>
+          <Linea>
+            <Char>Tid.</Char>
+          </Linea>
+          <Linea>
+            <Char>Sp. 2018, 2030, 2039, 2052; Landst.</Char>
+          </Linea>
+          <Linea>
+            <Char>Tid.</Char>
+          </Linea>
+          <Linea>
+            <Char>Sp. 954, 1015, 1051; Till.</Char>
+          </Linea>
+          <Linea>
+            <Char>A.</Char>
+          </Linea>
+          <Linea>
+            <Char>Sp. 5419; Till.</Char>
+          </Linea>
+          <Linea>
+            <Char>C. Sp. 1357, 2141.</Char>
+          </Linea>
+        </Exitus>
+      </Nota>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold>
+    <Hymne>
+      <Exitus>
+        <Linea>
+          <Char>Vi Christian den Tiende, af Guds Naade Konge til Danmark og Island, de Venders og Goters, Hertug til Slesvig, Holsten, Stormarn, Ditmarsken, Lauenborg og Oldenborg, </Char>
+          <Char formaChar="Italic">Gøre vitterligt</Char>
+          <Char>:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char>Rigsdagen har vedtaget og Vi ved Vort Samtykke stadfæstet følgende Lov:</Char>
+        </Linea>
+      </Exitus>
+    </Hymne>
+    <Bog id="Bog0">
+      <Afsnit id="Afs0">
+        <Kapitel id="Kap0">
+          <ParagrafGruppe id="Kap0_X1">
+            <Paragraf id="Par1" localId="1">
+              <Explicatus>§ 1.</Explicatus>
+              <Stk id="Par1_Stk1">
+                <Exitus>
+                  <Linea>
+                    <Char>Ministeren for offentlige Arbejder bemyndiges til vederlagsfrit </Char>
+                    <Char formaChar="Italic">at</Char>
+                    <Char> stille til Raadighed for Hillerød-Frederiksværk Jernbaneselskab til Anvendelse ved en Forlægning på Strækningen fra Hillerød til Skævinge af Jernbanen fra Hillerød til Frederiksværk de til Anlægget af den i Lov Nr. 156 af 27.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Maj 1908 § 1 t ommeldte Statsbane fra Næstved til Hillerød erhvervede Arealer med den derpaa anlagte Baneunderbygning m.v., for saa vidt angaar Strækningen fra Hillerød Statsbanestation til og med den i Nørre Herlev beliggende Viadukt for Landevejen Hillerød-Lynge-Farum, samt </Char>
+                    <Char formaChar="Italic">at</Char>
+                    <Char> meddele nævnte Selskab Tilladelse til om fornødent ved Ekspropriation efter Reglerne i Forordning af 5.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Marts 1845, jfr.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Lov Nr. 6 af 10.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Januar 1928, at erhverve de Arealer m.v., der ud over de ovennævnte udkræves i Anledning af den i nærværende Paragraf omhandlede Jernbaneforlægning.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </Paragraf>
+            <Paragraf id="Par2" localId="2">
+              <Explicatus>§ 2.</Explicatus>
+              <Stk id="Par2_Stk1">
+                <Exitus>
+                  <Linea>
+                    <Char>Saa længe de i Henhold til denne Lov for Hillerød-Frederiksværk Jernbane erhvervede eller af Ministeren for offentlige Arbejder til Raadighed stillede Grunde anvendes til Baneanlægget eller forbeholdes en senere Udvidelse deraf, fritages de for alle Skatter og Afgifter.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>De paa Grundene til Anlæggets Brug opførte Bygninger saavel i Købstad som paa Landet fritages indtil videre for alle Skatter og Afgifter til Staten.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par2_Stk2">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>De i Anledning af eller Forbindelse med ovennævnte Baneforlægning udfærdigede Dokumenter, Udskrifter, Attester m.v. fritages for Stempel- og Tinglysningsafgifter samt alle andre Afgifter til det offentlige.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+              <Stk id="Par2_Stk3">
+                <Explicatus>Stk. 3.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Hvorefter alle vedkommende sig have at rette.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </Paragraf>
+          </ParagrafGruppe>
+        </Kapitel>
+      </Afsnit>
+    </Bog>
+  </DokumentIndhold>
+  <UnderskriftGruppe>
+    <UnderskriftStedDato />
+    <Segl>
+      <Linea>
+        <Char>Under Vor Kongelige Hånd og Segl</Char>
+      </Linea>
+    </Segl>
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

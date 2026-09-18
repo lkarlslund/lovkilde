@@ -1,9 +1,13 @@
 // Package compiled is where the mirror's compiled dataset lives: the artifacts the
 // serving path reads instead of parsing the publisher's XML at query time.
 //
-// Nothing here is wired into serving yet. The first pass is measurement: what a
-// compiled document costs in each candidate encoding, and whether the numbers justify
-// replacing the parse-on-read path at all. See codec_bench_test.go and the reports it
-// writes to testdata, which is where the decisions in this package should be argued
-// from rather than asserted.
+// The writer and reader of the artifact exist, and `retsin artifact build` makes the
+// file. What is not here yet is serving: lookup and snippets still parse XML, and they
+// will not be pointed at the artifact until the parity gate over all seven media says
+// the artifact answers exactly what the parse answers, and a latency measurement says
+// what the change is worth.
+//
+// Decisions in this package are argued from the reports in testdata — codec-bench for
+// the encoding and container, artifact-<date> for the measured cost of the container
+// that was chosen — not from preference.
 package compiled

@@ -1,0 +1,21 @@
+# compiled artifact measurement
+# generated: 2026-09-18 16:57:14
+# reproduce: RETSIN_ARTIFACT_BENCH=1 RETSIN_ARTIFACT_DOCS=1000 go test ./internal/compiled -run TestArtifactOnCorpus -v
+# sample: 1000 documents, 59.9 MB of publisher XML, from ../../data
+
+## build
+  parse+model+size check: 878ms (878µs per document)
+  container write:        237ms (237µs per document)
+  json in the clear: 28.5 MB; artifact on disk: 5.6 MB (19.6% of the JSON, 9.3% of the XML)
+  extrapolated to 191393 documents: 1068 MB
+
+## the baseline it must justify itself against
+  publisher xml: 59.9 MB raw, 5.7 MB zstd (9.5% of raw)
+
+## lookup
+  artifact read+decode: 117ms total, 117µs per document
+  xml parse today:      677ms total, 677µs per document
+  ratio: 5.8x faster per lookup
+
+## container
+  1002 content frames decode as one plain zstd stream to 28613654 bytes, matching the frames exactly

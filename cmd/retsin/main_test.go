@@ -180,7 +180,7 @@ func TestRealCommandTree(t *testing.T) {
 	for _, c := range root.Commands() {
 		have[c.Name()] = true
 	}
-	for _, name := range []string{"inventory", "harvest", "fetch", "update", "status", "rebuild"} {
+	for _, name := range []string{"inventory", "harvest", "fetch", "update", "status", "rebuild", "index", "artifact"} {
 		if !have[name] {
 			t.Errorf("command %q missing from the tree", name)
 		}

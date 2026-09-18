@@ -1228,6 +1228,51 @@ Guards: 34 mutations of the reader, encoder, ranking, filters and answer renderi
 caught with 0 holes (each by the test that names it), plus `internal/lexdania/scanroot_test.go`
 for the empty-mirror case that produced the first confusing "0 documents" measurement.
 
+### Compiled serving: `retsin artifact build`
+
+```bash
+retsin artifact build                   # whole mirror → data/artifact.bin
+```
+
+The artifact is the mirror's own document model (`internal/lexdoc`) as JSON, one
+independently decodable zstd frame per document, in the
+[Zstandard Seekable Format](https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md)
+so the result is still a plain zstd stream that ordinary tools read. It exists because
+`lookup` re-parsed the publisher's XML on every request and `search` re-parsed it again for
+snippets.
+
+The frames are the layout, which took a measurement to get right: `Flush()` on a zstd
+encoder ends a *block* and leaves the frame open, so a "frame per document" written with
+Flush is one frame with n blocks — not seekable, not independently decodable. `EncodeAll`
+writes a complete frame per call. What the writer stores is the model, so no publisher
+element name or attribute map is in the file: the refusal reasons an answer gives come from
+the model's vocabulary, and the artifact cannot leak the schema by accident.
+
+Three properties are enforced by the reader rather than by discipline. An artifact from a
+different build is **refused**, with the version numbers and the remedy in the message. The
+document table and the frame table are **cross-checked against each other** on open, so a
+build that wrote one without the other fails instead of serving half a mirror. A document
+the artifact does not hold is an **error**, not an empty answer, because coverage is the one
+claim a reader of an answer cannot check for themselves.
+
+Measured over the same 1,000 documents as the codec bench
+(`internal/compiled/testdata/artifact-20260918.txt`):
+
+| | publisher XML | artifact |
+|---|---|---|
+| raw | 59.9 MB | 28.5 MB of model JSON |
+| on disk (zstd 3) | 5.7 MB | 5.6 MB |
+| per lookup | 691 µs (parse) | 122 µs (read + decode) |
+| whole mirror projected | — | ~1.07 GB |
+
+The codec bench's earlier note that a compiled form would be *bigger* than the XML was a
+property of the struct it measured: `cDoc` copied a section's run text out per section, while
+the model keeps one segment slice per provision and its subsections and conditions are spans
+over it. The artifact is argued for on lookup speed, but it does not cost size either — and
+the difference between those two claims is a measurement rather than a hope. Serving does not
+read it yet; that is the next task, and it will not claim a latency improvement without a
+before-and-after number.
+
 ### Text provenance: which documents have real text, and where it came from
 
 `Archive.Open` and `LoadWithBody` attach the text recovered from a `.json` sidecar to a
