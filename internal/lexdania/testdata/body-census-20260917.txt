@@ -1,0 +1,24 @@
+# Body census over every stored documentHtml payload, measured 2026-09-17.
+# Reproduce:  RETSIN_BODIES_CENSUS=1 go test -timeout 4h -run TestBodyCensus ./internal/lexdania/ -v
+# Corpus: data/xml (101,727 .json sidecars, 3.2 GiB), which is not in git, so this
+# report is the evidence and the instrument is TestBodyCensus.
+# Reader revision: commit 6f3394e plus the mappings this census asked for (h1-h6 -> Rubrica,
+# thead/tbody/tfoot -> container, ins/del/s/mark -> Char) and the rule that an unmapped tag
+# becomes a container instead of a nameless element. Re-measured after that change.
+censusing 101727 payloads on 32 workers
+payloads=101727 bytes=3.2 GiB empty=0 undecodable=0 parse_fail=0 sgml_generation=26917
+documents with no prose at all=0; no sections built=20870 (20.5%)
+sections: 1291836 total, 288323 of them empty; nesting pass absorbed 1031964 elements into 0 paragraphs
+orphan stykker (no paragraph parent)=255828
+elements with no name at all=0
+footnotes relocated=0 unanchored=0; implicit closes=1403443 stray ends=661531; invariant failures=0
+prose per document: 1-10k=54085 10-100k=30306 <1k=13917 >100k=3419
+payload classes outside the table: p.MsoNormal=419011 p.Paragraftekst=243663 p.NormalInd9=161829 p.TekstV=131858 p.Litra=58520 p.Kapitelnummer=41014 p.Tekst9=40867 p.Pind=40570 p.Kapiteloverskrift=35904 p.MsoPlainText=30376 table.MsoNormalTable=30318 p.Nummer9=30187 p.TekstoverskriftVB=29558 p.Tekst0=25404 p.TabelHoved=21252 p.TekstoverskriftVenstre=19205 p.TekstoverskriftBm=17016 p.Konc-rkke=16329 p.TekstoverskriftB=15093 p.Tekst1Sp=14076 p.BilagsOverskrift=13961 p.Slutnotetekst=13487 p.Bilagstitel=13256 p.TekstoverskriftVK9=12989 p.Resume=12826 p.MsoBodyText=12394 p.Index-nr=12031 p.TekstoverskriftVenstreN=10914 p.TekstoverskriftVenstreBm=10179 p.BemTilV9=9119 p.TabelFod=8989 p.TekstoverskriftVK=8927 p.Afsnitsoverskrift=8538 p.TabelHoved9=7397 p.TITEL-KOMMENTAR=7007 p.TabelTekstTegn=6446 p.PreTitel1=5886 p.PreTitel0=5797 p.Brduden=5385 p.Undertitel=5184
+payload tags with no entry at all: st1:place.=355 st1:personname.=340 st1:metricconverter.=319 st1:state.=254 a<.=151 sp.=107 st1:country-region.=95 st1:city.=23 sp.SpellE=19 a<a.=5 meta.=5 st1:date.=5 st1:placename.=4 st1:placetype.=4 st2:sn.=4 su.=4 a<i.=1 a<span.msoDel=1 a<span.msoIns=1 body.TRYKFF=1 head.=1 html.=1 link.=1 sp.MsoFootnoteReference=1 st.=1
+deliberate class drops: site banner, not document text=191766 converter artefact with no content of its own=21067 script, not document text=1
+sections by kind: stk=564745 paragraf=512674 titel=75620 kapitel=73519 indledning=32032 bilag=19166 nr=7886 afsnit=6194
+elements produced: Exitus=10661618 Char=5594442 Td=3579103 Tr=1019829 Stk=846130 Indentatio=596215 Paragraf=586752 Explicatus=442804 Rubrica=150793 Table=117081 DokumentIndhold=101727 UnderskriftStedDato=94264 Titel=75796 BilagIndhold=73816 Kapitel=73532 Underskriver=61908 Indledning=32378 UnderskriverTekst=20342 Bilag=19183 Afsnit=6194 UnderTitel=5729 UnderskriftGruppe=3515 Segl=2024 AendringsNummer=1
+documents by kind: retsinfo=41495 lta=29899 ft=19347 mt=5838 ltc=4294 fob=810 ltb=44
+no-section documents by kind: ft=12654 retsinfo=5569 lta=1732 mt=574 ltc=253 fob=44 ltb=44
+documents by decade: 1990s=38028 2000s=30705 1980s=24247 1970s=5137 1960s=1596 1950s=748 1930s=389 1940s=312 1920s=207 1910s=92 1890s=51 1900s=47 1870s=28 2010s=21 1880s=20 2020s=14 1860s=13 1820s=10 1850s=10 1840s=9 1790s=7 1830s=5 1740s=4 1770s=4 1670s=3 1760s=3 1780s=3 1660s=2 1680s=2 1730s=2
+example no sections (check these into testdata before fixing): ../../data/xml/fob/1989/152.json ../../data/xml/fob/1992/264.json ../../data/xml/fob/1994/124.json ../../data/xml/fob/1997/118.json ../../data/xml/fob/1999/323.json ../../data/xml/fob/2001/457.json ../../data/xml/fob/2005/165.json ../../data/xml/fob/2005/141.json

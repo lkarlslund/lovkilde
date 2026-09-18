@@ -9,8 +9,12 @@
 //   - Site document JSON (POST {site}/api/document/eli/{path}, body {}): the
 //     representation the website itself uses. It carries the rendered documentHtml
 //     plus rich structured metadata (title, ministry, classification, PDF
-//     availability, editorial notes, references). It is fetched only when the XML
-//     content actually changed, which keeps request volume low.
+//     availability, editorial notes, references). It is fetched per document, not
+//     per change: the body backfill (internal/crawl/bodies.go) requests it only for
+//     documents whose canonical XML has no <DokumentIndhold>, and records the outcome
+//     in Badger, so the volume is bounded by the corpus rather than by the update
+//     rate. It is the site's own endpoint, not the third-party API, and does not
+//     draw on that request budget.
 package docapi
 
 import (
@@ -19,8 +23,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	stdhtml "html"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/limiter"
@@ -88,6 +94,41 @@ type Document struct {
 	PDFLink struct {
 		IsPDFAvailable bool `json:"isPdfAvailable"`
 	} `json:"pdfLink"`
+}
+
+// TextLen reports how much visible text a documentHtml payload carries, counting
+// runes after tags are removed, entities decoded and whitespace collapsed.
+//
+// It exists to classify a payload without parsing it: the body backfill needs to
+// know whether a document came back with prose or with nothing but a heading and a
+// table shell, and it needs to record that number once per document so the census
+// ("how many of the 29k body-less laws actually have text?") is a store scan rather
+// than a re-read of gigabytes of payloads.
+//
+// Tags are stripped before entities are decoded, so a document that quotes markup
+// as escaped text is counted as text rather than stripped again.
+func TextLen(markup string) int {
+	var b strings.Builder
+	depth := 0
+	for _, r := range markup {
+		switch {
+		case r == '<':
+			depth++
+		case depth > 0 && r == '>':
+			depth--
+			b.WriteRune(' ')
+		case depth == 0:
+			b.WriteRune(r)
+		}
+	}
+	text := stdhtml.UnescapeString(b.String())
+	// Zero-width and soft-hyphen marks are invisible, so they are not text. They
+	// occur in this corpus (see internal/lexdania's matchRunes), and a count that
+	// called them characters would over-report an empty document as having one.
+	text = strings.NewReplacer("\u00ad", "", "\u200b", "", "\u200c", "", "\u200d", "", "\ufeff", "").Replace(text)
+	// Runes, not bytes: Danish text is mostly multi-byte, and a count used to
+	// classify documents has to mean the same thing in every language.
+	return utf8.RuneCountInString(strings.Join(strings.Fields(text), " "))
 }
 
 // ParseJSON decodes the site document payload, which is a one-element array.

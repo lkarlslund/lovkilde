@@ -1,0 +1,55 @@
+# Paired ground truth: canonical <DokumentIndhold> against its own documentHtml, 2026-09-17.
+# Reproduce:  RETSIN_PAIRED_TRUTH=../../data/paired-truth go test -timeout 2h -run TestPairedTruthParity ./internal/lexdania/ -v
+# Sample: 2,105 documents planned from the 89,667 documents that have both, seed 20260917
+# (data/paired-truth/manifest.tsv, not in git). Reference is the publisher's own XML,
+# never a third-party API.
+# Measured again the same day after an instrument was added that compares each stykke's printed
+# "Stk. N" marker with its position: the register itself disagrees in 233 cases, so numbering
+# stykker by position is right 99.4% of the time and wrong in a way that changes a citation.
+
+2108 payloads, 2108 documents compared
+
+addresses_matched=95909
+canonical_sections=110374
+canonical_without_provisions=17
+documents=2108
+documents_with_identical_address_order=555
+extra_in_tree=22764
+matched_with_different_text=2249
+matched_with_equal_text=93660
+missing_from_tree=14465
+tree_sections=118673
+missing by kind: afsnit=970 bilag=1392 indledning=14 kapitel=2643 nr=802 paragraf=3799 stk=4822 titel=23
+stykke marker against position, canonical XML: matches_position=35758 no_marker=21524 disagrees=233
+stykke marker against position, HTML tree:      matches_position=32531 no_marker=21122 disagrees=1923
+example document with a disagreeing marker: retsinfo/2026/9898.json
+addresses resolved identically with identical text: 93660 of 110374 canonical (84.9%)
+== unaddressed rate by stratum ==
+aendring   documents=250  canonical=2129   matched=988    equal_text=893    missing=1141  rate=53.6%
+centreret  documents=250  canonical=10160  matched=8118   equal_text=7926   missing=2042  rate=20.1%
+nota       documents=250  canonical=15931  matched=13301  equal_text=13005  missing=2630  rate=16.5%
+gammel     documents=8    canonical=61     matched=51     equal_text=49     missing=10    rate=16.4%
+random     documents=400  canonical=6949   matched=5846   equal_text=5663   missing=1103  rate=15.9%
+stor       documents=150  canonical=12332  matched=10415  equal_text=10147  missing=1917  rate=15.5%
+tabel      documents=200  canonical=7726   matched=6659   equal_text=6444   missing=1067  rate=13.8%
+liste      documents=250  canonical=10760  matched=9427   equal_text=9266   missing=1333  rate=12.4%
+bilag      documents=150  canonical=6245   matched=5569   equal_text=5412   missing=676   rate=10.8%
+kapitel    documents=250  canonical=25430  matched=23452  equal_text=22844  missing=1978  rate=7.8%
+afsnit     documents=150  canonical=18153  matched=16851  equal_text=16513  missing=1302  rate=7.2%
+mellem     documents=61   canonical=240    matched=223    equal_text=212    missing=17    rate=7.1%
+== unaddressed rate by decade ==
+1840s    documents=1    canonical=4      matched=2      equal_text=1      missing=2     rate=50.0%
+1930s    documents=3    canonical=7      matched=5      equal_text=5      missing=2     rate=28.6%
+1940s    documents=3    canonical=12     matched=10     equal_text=9      missing=2     rate=16.7%
+2020s    documents=581  canonical=31096  matched=26364  equal_text=26103  missing=4732  rate=15.2%
+1920s    documents=2    canonical=14     matched=12     equal_text=12     missing=2     rate=14.3%
+2010s    documents=1039 canonical=61541  matched=53581  equal_text=52191  missing=7960  rate=12.9%
+2000s    documents=385  canonical=17201  matched=15458  equal_text=14875  missing=1743  rate=10.1%
+1960s    documents=8    canonical=71     matched=64     equal_text=63     missing=7     rate=9.9%
+1900s    documents=1    canonical=27     matched=25     equal_text=24     missing=2     rate=7.4%
+1970s    documents=49   canonical=155    matched=145    equal_text=145    missing=10    rate=6.5%
+1990s    documents=6    canonical=206    matched=203    equal_text=202    missing=3     rate=1.5%
+1950s    documents=2    canonical=11     matched=11     equal_text=2      missing=0     rate=0.0%
+1980s    documents=28   canonical=29     matched=29     equal_text=28     missing=0     rate=0.0%
+== payload classes outside the mapping table (106 distinct) ==
+p.DokumentHoved=516 p.TitelPrefiks1=511 p.TitelPrefiks2=476 span.Underline=288 div.Resume=271 p.Bemaerkninger=244 p.Fremsaetter=123 p.Overskriftsnummer1=87 p.TekstV=87 p.TekstoverskriftVenstre=83 div.ParallelTekst=78 p.BetaenkningsTekst1=75 p.BetaenkningsTekst2=75 caption.FolketingetsSammensaetning=74 p.IkkeMedlemmer2=74 p.UdvalgsSammensaetning=74 span.MedlemsTitel=74 td.PartiMandater=74 td.PartiNavn=74 div.ParallelTekstHeader=65 p.AendringsBeskrivelse=63 p.Stiller=63 p.Afsnitsoverskrift=58 p.Kapiteloverskrift=57 p.Paragraftekst=55 div.Paragraftekst=54 p.BetaenkningTilAendringsNummer=54 p.BetaenkningsBemaerkninger=53 p.TekstoverskriftFOB=52 p.TekstoverskriftVenstreN=51 p.TekstoverskriftBm=42 p.TekstoverskriftVenstreBm=41 p.ForslagsNummer=38 p.ForslagsTitel=38 p.Tekst9=35 div.TabelHoved=32 p.BemTilV=32 td.PartiNote=29 p.AendringsForslagIndhold=28 div.title-section=25 header.=25 div.Standard=22 p.Kapitelnummer=22 p.OverskriftSp=22 p.SkriftligFremsaettelse=21 p.ParagrafOverskrift=20 p.Standard=18 span.BoldUnderline=18 p.KapitelOverskrift=17 p.TekstoverskriftB=16 p.AendringNyTekst=13 p.Titel2Aendring=13 span.ItalicUnderline=13 div.TekstoverskriftVenstre=10 div.Pind=9 p.BemaerkningTekst=9 p.BemaerkningerTilAendringsNummer=9 p.Tekst1Sp=9 div.Overskriftsnummer1=8 div.TekstV=8 p.BemaerkningerTilForslagetsEnkelteBestemmelser=8 p.BemaerkningerTilParagraf=8 div.Afsnitsoverskrift=7 div.Kapitelnummer=7 p.AlmindeligeBemaerkninger=7 p.TilParagrafGruppeOverskrift=7 div.FolSam=6 p.TilParagrafGruppe=6 div.Kapiteloverskrift=5 div.Litra=5 div.TabelFod=5 p.NormalInd9=5 p.Subtitle=5 div.IkraftCentreretParagrafNummer=4 div.Tekst9=4 p.AendringUdenNummer=4 p.TabelFod=4 div.TekstoverskriftVenstreBm=3 p.Afsnitsnummer=3 p.BeretningsUnderskriverPUV=3 p.BeretningsUnderskriverTekst=3 p.TabelTekstHøjre=3 span.NotItalic=3 div.Afsnitsnummer=2 div.Tekst1Sp=2 p.BemTil=2 p.ParaOverskrift=2 p.ParaOverskriftBm=2 p.Titel2_B3=2 p.TitelPrefiks1_B3=2 p.TitelPrefiks2_B3=2 span.BoldItalicUnderline=2 span.font-style:italic=2 div.IndholdHdr=1 div.TekstoverskriftB=1 div.TekstoverskriftBm=1 div.TekstoverskriftVenstreN=1 p.BemaerkningerTilKapitel=1 p.BemaerkningerTilStk=1 p.IkraftCentreretParagrafNummer=1 p.PreTitel1=1 span.SubscriptBoldItalic=1 span.SuperscriptBold=1 span.font-weight:bold=1 span.font-weight:bold;font-style:italic=1 span.text-decoration:underline=1

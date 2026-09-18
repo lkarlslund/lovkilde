@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"unicode/utf8"
 )
 
 // Fixtures are genuine responses captured from three different LexDania schemas
@@ -132,5 +133,31 @@ func TestParseXMLMetaDetectsHTMLPayload(t *testing.T) {
 	}
 	if IsHTMLPayload([]byte("<?xml version=\"1.0\"?>\n<Dokument><Meta><AccessionNumber>A1</AccessionNumber></Meta></Dokument>")) {
 		t.Error("XML declaration misclassified as HTML")
+	}
+}
+
+// TextLen decides whether a payload carries a document or just a wrapper, so the
+// classification of 29k body-less laws rests on it.
+func TestTextLenCountsVisibleText(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want int
+	}{
+		{"heading", `<div class="bjelke">Den fulde tekst</div>`, utf8.RuneCountInString("Den fulde tekst")},
+		{"two paragraphs", `<p>§ 1.</p><p>tekst</p>`, utf8.RuneCountInString("§ 1. tekst")},
+		{"inline span keeps its text", `<span class="ParagrafNr">§ 1.</span> Det er formålet`, utf8.RuneCountInString("§ 1. Det er formålet")},
+		{"comment is not text", "<p>a<!-- k -->b</p>", utf8.RuneCountInString("a b")},
+		{"entities decoded", "An &aelig;ble", utf8.RuneCountInString("An æble")},
+		{"nbsp is a space", "a&nbsp;b", utf8.RuneCountInString("a b")},
+		{"escaped markup is text", "&lt;p&gt;", 3},
+		{"whitespace collapses", "a   \n\t  b", 3},
+		{"no text at all", `<div class="bjelke"></div><p>  </p>`, 0},
+		{"invisible marks are not text", "\u200b\u200c\u200d\ufeff\u00ad", 0},
+	}
+	for _, tc := range cases {
+		if got := TextLen(tc.in); got != tc.want {
+			t.Errorf("%s: TextLen(%q) = %d, want %d", tc.name, tc.in, got, tc.want)
+		}
 	}
 }

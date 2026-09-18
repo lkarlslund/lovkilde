@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -143,5 +144,128 @@ func TestSizeHint(t *testing.T) {
 		if got := SizeHint(c.in); got != c.want {
 			t.Errorf("SizeHint(%d) = %s, want %s", c.in, got, c.want)
 		}
+	}
+}
+
+// The sidecar rule that matters most: the backfill writes .json next to the
+// canonical mirror, and must never be able to reach the mirror itself. A
+// representation-aware write that could overwrite canonical bytes would corrupt
+// the archive with the site's non-canonical rendering, silently, for 29k files.
+func TestPutExtCannotTouchCanonicalXML(t *testing.T) {
+	a, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "https://www.retsinformation.dk/eli/lta/1995/498"
+	canonical := []byte("<Dokument><DokumentIndhold/></Dokument>")
+	if _, _, _, err := a.Put(url, canonical); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, ext := range []string{XMLExt, ".XML", "xml", ""} {
+		if _, _, _, err := a.PutExt(url, ext, []byte(`[{"documentHtml":"<p>nope</p>"}]`)); !errors.Is(err, ErrCanonicalExt) {
+			t.Errorf("PutExt with ext %q: err = %v, want ErrCanonicalExt", ext, err)
+		}
+	}
+	got, err := a.Get(url)
+	if err != nil || string(got) != string(canonical) {
+		t.Errorf("canonical xml altered by a refused write: %q, err %v", got, err)
+	}
+}
+
+// One document, one directory: the representation is the extension, not a second
+// tree that has to be kept in sync with the first.
+func TestSidecarSharesItsXMLsDirectory(t *testing.T) {
+	a, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "https://www.retsinformation.dk/eli/lta/1995/498"
+	xmlPath := a.Path(url)
+	jsonPath := a.PathExt(url, ".json")
+	if filepath.Dir(jsonPath) != filepath.Dir(xmlPath) {
+		t.Errorf("sidecar dir %s, want %s", filepath.Dir(jsonPath), filepath.Dir(xmlPath))
+	}
+	if strings.TrimSuffix(xmlPath, ".xml") != strings.TrimSuffix(jsonPath, ".json") {
+		t.Errorf("sidecar %s is not the xml %s with another extension", jsonPath, xmlPath)
+	}
+
+	if _, _, _, err := a.PutExt(url, ".json", []byte(`[{"documentHtml":"x"}]`)); err != nil {
+		t.Fatal(err)
+	}
+	if a.Has(url) {
+		t.Error("a sidecar must not make the canonical representation look held")
+	}
+	if !a.HasExt(url, ".json") {
+		t.Error("HasExt should see the sidecar")
+	}
+	if a.HasExt(url, ".JSON") {
+		t.Error("ext normalisation made a second representation appear")
+	}
+}
+
+// An extension arrives from a constant today, but the path it produces is
+// filesystem-visible: a caller (or a future flag) that passes something hostile
+// must not be able to write outside the archive.
+func TestPathExtCannotEscapeArchive(t *testing.T) {
+	dir := t.TempDir()
+	a, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "https://www.retsinformation.dk/eli/lta/1995/498"
+	for _, ext := range []string{"../../evil", ".json/../../x", ".js\u0000on", "."} {
+		p := a.PathExt(url, ext)
+		if rel, err := filepath.Rel(dir, p); err != nil || strings.HasPrefix(rel, "..") {
+			t.Errorf("PathExt(%q) = %s, escapes the archive rooted at %s", ext, p, dir)
+		}
+		if filepath.Ext(p) == "" || filepath.Ext(p) == "." {
+			t.Errorf("PathExt(%q) = %s, want a usable extension", ext, p)
+		}
+	}
+}
+
+// Status reports "canonical xml" and "body payloads" separately; once both exist
+// in one tree, a count that lumps them together reports 29k phantom documents.
+func TestCountExtSplitsRepresentations(t *testing.T) {
+	a, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, url := range []string{
+		"https://www.retsinformation.dk/eli/lta/1995/498",
+		"https://www.retsinformation.dk/eli/lta/1963/7",
+	} {
+		if _, _, _, err := a.Put(url, []byte("<Dokument/>")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, _, err := a.PutExt("https://www.retsinformation.dk/eli/lta/1995/498", ".json", []byte(`[{"documentHtml":"x"}]`)); err != nil {
+		t.Fatal(err)
+	}
+
+	xmlFiles, xmlBytes, err := a.CountExt(XMLExt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if xmlFiles != 2 {
+		t.Errorf("CountExt(.xml) = %d files, want 2", xmlFiles)
+	}
+	if xmlBytes == 0 {
+		t.Error("CountExt(.xml) reported no bytes")
+	}
+	jsonFiles, _, err := a.CountExt(".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jsonFiles != 1 {
+		t.Errorf("CountExt(.json) = %d files, want 1", jsonFiles)
+	}
+	allFiles, _, err := a.Count()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allFiles != 3 {
+		t.Errorf("Count() = %d files, want 3 across both representations", allFiles)
 	}
 }

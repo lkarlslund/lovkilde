@@ -1,0 +1,8 @@
+absent_from_payload=2
+documents=51
+heading_spanning_probe=0
+lost_by_builder=0
+provisions_compared=13283
+table_bearing_document=0
+verbatim=13281
+whitespace_or_entity_only=0

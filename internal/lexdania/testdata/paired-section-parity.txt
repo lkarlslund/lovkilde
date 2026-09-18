@@ -1,0 +1,10 @@
+addresses_matched=15269
+canonical_sections=17797
+canonical_without_provisions=25
+documents=51
+documents_with_identical_address_order=4
+extra_in_tree=1131
+matched_with_different_text=187
+matched_with_equal_text=15082
+missing_from_tree=2528
+tree_sections=16400
