@@ -390,8 +390,8 @@ func updateCmd(open openFunc) *cobra.Command {
 		Use:   "update",
 		Short: "Harvest and fetch what changed since the last completed pass (the daily cron entry point)",
 		Long: `Daily refill: consume the official change feed, download whatever is new or moved,
-including the JSON body payloads, and record the sweep timestamp only if nothing
-is left outstanding. Unchanged documents are never re-requested.
+including the JSON body payloads, and record when it pulled along with what it could
+not get. Unchanged documents are never re-requested.
 
 The feed answers for a rolling 10 days, so a mirror whose last completed pass is
 older than that cannot be refilled honestly: the changes in the gap are no longer
@@ -647,17 +647,24 @@ func status(ctx context.Context, a *app, lim *limiter.Limiter) error {
 	// The timestamp that decides whether the next daily refill can be trusted.
 	// Reported as an age and a verdict rather than a bare date, because the date
 	// means nothing without the 10-day feed window next to it.
-	if ts, found, err := a.crawl.LastSweep(ctx); err != nil {
+	if rec, found, err := a.crawl.LastSweepRecord(ctx); err != nil {
 		return err
 	} else if found {
-		age := time.Since(ts)
+		age := time.Since(rec.PulledAt)
 		verdict := "incremental refill OK"
 		if age > crawl.MaxSweepAge {
 			verdict = fmt.Sprintf("STALE: beyond the %d-day feed window, run update --full", int(crawl.MaxSweepAge/(24*time.Hour)))
 		}
-		fmt.Printf("last completed sweep:    %s (%.1f h ago): %s\n", ts.Format(time.RFC3339), age.Hours(), verdict)
+		fmt.Printf("last update pull:        %s (%.1f h ago): %s\n", rec.PulledAt.Format(time.RFC3339), age.Hours(), verdict)
+		// What the pull could not get travels with the pull, so the answer to "is the
+		// mirror current" is a date plus a count rather than a claim.
+		if rec.IssuesKnown {
+			fmt.Printf("unresolved after pull:   %s\n", rec.Issues.String())
+		} else {
+			fmt.Printf("unresolved after pull:   not recorded by that pass\n")
+		}
 	} else {
-		fmt.Printf("last completed sweep:    (never): incremental refill will fail until update --full finishes once\n")
+		fmt.Printf("last update pull:        (never): incremental refill will fail until update --full finishes once\n")
 	}
 
 	fmt.Printf("pacing now:  ")

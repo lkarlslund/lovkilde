@@ -49,10 +49,13 @@ func TestSearchResultCarriesTheFreshnessCaveat(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(res.Warnings, " ")
-	// The mirror is only as current as its last crawl, and the feed harvest has never
-	// run here, so every search answer has to say what the index does not cover.
-	if !strings.Contains(joined, "1 documents") || !strings.Contains(joined, "does not include anything published since") {
-		t.Errorf("warnings do not bound the claim: %q", joined)
+	// Every search answer has to say which dates it speaks for and what the index
+	// covers, so that a partial result cannot be read as a complete one.
+	if !strings.Contains(joined, "covering 1 documents") || !strings.Contains(joined, "1 of the mirror's 3 documents") {
+		t.Errorf("warnings do not state coverage: %q", joined)
+	}
+	if !strings.Contains(joined, "a hit here proves presence") {
+		t.Errorf("warnings do not state what the counts mean: %q", joined)
 	}
 	if !strings.Contains(res.String(), "**Note:**") {
 		t.Errorf("rendered result drops the caveat:\n%s", res.String())
@@ -64,6 +67,9 @@ func TestSearchResultCarriesTheFreshnessCaveat(t *testing.T) {
 	}
 	if len(empty.Hits) != 0 {
 		t.Fatal("a term not in the index returned hits")
+	}
+	if !strings.Contains(empty.String(), "no provision in the indexed corpus matches") {
+		t.Errorf("empty result does not say what it searched:\n%s", empty.String())
 	}
 	if !strings.Contains(empty.String(), "No matches") {
 		t.Errorf("empty result does not say so:\n%s", empty.String())

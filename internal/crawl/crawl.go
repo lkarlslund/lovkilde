@@ -609,37 +609,46 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 		return fmt.Errorf("fetch bodies: %w", err)
 	}
 
-	xmlOwed, xmlStalled, err := c.store.InventoryPendingSplit(ctx, defaultMaxAttempts)
-	if err != nil {
-		return err
-	}
-	bodyOwed, bodyStalled, err := c.store.BodyPendingSplit(ctx, defaultMaxAttempts)
-	if err != nil {
-		return err
-	}
-	if xmlOwed > 0 || bodyOwed > 0 {
-		// Owed includes documents this pass tried and failed to download, which is
-		// the useful case: a run that came home empty-handed is not a completed
-		// collection, and must not leave the mirror looking collected. The row gets
-		// the retry ceiling's worth of runs to arrive before it goes stalled and
-		// stops holding the timestamp up.
-		slog.Warn("collection pass incomplete; sweep timestamp not advanced",
-			"xml_owed", xmlOwed, "body_owed", bodyOwed)
-		return nil
-	}
-	if stalled := xmlStalled + bodyStalled; stalled > 0 {
-		// Reported, not fatal: these need a deliberate pass, and the feed window
-		// is not what they are waiting on.
-		slog.Warn("documents past the automatic retry ceiling are not collected",
-			"count", stalled, "remedy", "retsin fetch --state pending (and --bodies --state pending)")
-	}
-
+	// Whatever the pass managed, it records the attempt: when it pulled, and a
+	// fingerprint of what it could not get. A mirror can only hold what the site serves,
+	// so a run that came home with holes is still the record of a run, and the holes are
+	// data rather than a reason to hide the timestamp. "pulled 3 hours ago, 14
+	// unresolved" is a usable fact; silence because one document answers HTTP 500 is not.
 	now := time.Now().UTC()
-	if err := c.store.SetMeta(ctx, metaLastSweep, now.Format(time.RFC3339)); err != nil {
+	issues, err := c.Issues(ctx)
+	if err != nil {
 		return err
 	}
-	slog.Info("collection sweep complete", "at", now.Format(time.RFC3339))
+	rec := SweepRecord{PulledAt: now, Issues: issues, IssuesKnown: true}
+	if err := c.store.SetMeta(ctx, metaLastSweep, rec.String()); err != nil {
+		return err
+	}
+	if err := PublishSweepRecord(c.cfg.SweepStampPath(), rec); err != nil {
+		slog.Warn("could not publish the sweep record", "path", c.cfg.SweepStampPath(), "err", err)
+	}
+	if issues.Total() > 0 {
+		slog.Warn("collection pass recorded with unresolved work",
+			"at", now.Format(time.RFC3339),
+			"owed", issues.Owed, "stalled", issues.Stalled, "issues", issues.Digest,
+			"remedy", "retsin fetch --state pending (and --bodies --state pending)")
+	} else {
+		slog.Info("collection pass recorded", "at", now.Format(time.RFC3339))
+	}
 	return nil
+}
+
+// Issues counts what both queues still intend to fetch: documents the site has not
+// served yet, and documents past the automatic retry ceiling.
+func (c *Crawler) Issues(ctx context.Context) (store.Issues, error) {
+	xml, err := c.store.InventoryIssues(ctx, defaultMaxAttempts)
+	if err != nil {
+		return store.Issues{}, err
+	}
+	body, err := c.store.BodyIssues(ctx, defaultMaxAttempts)
+	if err != nil {
+		return store.Issues{}, err
+	}
+	return xml.Merge(body), nil
 }
 
 // defaultMaxAttempts is the retry ceiling Fetch applies when the caller does not
@@ -647,19 +656,30 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 // sweep about what still counts as work.
 const defaultMaxAttempts = 5
 
-// LastSweep reports when a collection pass last drained every queue.
+// LastSweep reports when a collection pass last recorded itself. It is a convenience
+// over LastSweepRecord for the callers that only need the date.
 func (c *Crawler) LastSweep(ctx context.Context) (time.Time, bool, error) {
-	v, found, err := c.store.GetMeta(ctx, metaLastSweep)
+	rec, found, err := c.LastSweepRecord(ctx)
 	if err != nil || !found {
 		return time.Time{}, found, err
 	}
-	ts, err := time.Parse(time.RFC3339, v)
-	if err != nil {
-		// A corrupt timestamp must not be read as "recently swept", which is what
-		// parsing to the zero time would mean in the age comparison. Fail loudly.
-		return time.Time{}, false, fmt.Errorf("parsing %s: %w", metaLastSweep, err)
+	return rec.PulledAt, true, nil
+}
+
+// LastSweepRecord reports the account the last collection pass left behind: when it
+// pulled, and a fingerprint of what it could not get.
+func (c *Crawler) LastSweepRecord(ctx context.Context) (SweepRecord, bool, error) {
+	v, found, err := c.store.GetMeta(ctx, metaLastSweep)
+	if err != nil || !found {
+		return SweepRecord{}, found, err
 	}
-	return ts, true, nil
+	rec, err := ParseSweepRecord(v)
+	if err != nil {
+		// A corrupt record must not be read as "recently pulled", which is what parsing
+		// to the zero time would mean in the age comparison. Fail loudly.
+		return SweepRecord{}, false, fmt.Errorf("reading %s: %w", metaLastSweep, err)
+	}
+	return rec, true, nil
 }
 
 func (c *Crawler) Rebuild(ctx context.Context) error {

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 )
@@ -57,12 +58,17 @@ type LookupResult struct {
 	Provenance     string
 	ProvenanceNote string
 
-	// Mirror identifies the archive this came from and when it was indexed, which is
-	// as close to "how current is this" as a mirror can honestly claim.
+	// Mirror is the dataset line: the date asked, the mirror's collection horizon and
+	// the index build. It is what "current" means in this answer, stated as dates
+	// rather than as a claim.
 	Mirror        string
 	AsOf          string
 	AppliedEdits  int
 	ChainComplete bool
+
+	// Amendments names the later documents this one's metadata points at: the
+	// register's own statement, not the mirror's guess.
+	Amendments string
 
 	Text      string
 	Truncated bool
@@ -76,7 +82,7 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 		return nil, err
 	}
 	res := &LookupResult{
-		Mirror:    s.Status(),
+		Mirror:    s.horizon().Line(),
 		Citation:  citation(entry),
 		ELIURL:    s.siteBase + "/" + entry.ELIPath(),
 		Accession: entry.Accession,
@@ -97,6 +103,7 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 	}
 	res.Path = path
 	res.provenance(doc, s.archive.Root)
+	res.noteAmendments(doc, s.horizon().Now)
 
 	secs := doc.Sections()
 	if req.Address != "" {
@@ -110,7 +117,7 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 	} else {
 		res.Text = documentText(doc)
 	}
-	res.Warnings = doc.Warnings()
+	res.Warnings = append(res.Warnings, doc.Warnings()...)
 	res.truncate(req.MaxChars)
 	return res, nil
 }
@@ -142,7 +149,7 @@ func (s *Server) lookupAsOf(req LookupRequest, entry lexdania.Entry, res *Lookup
 	}
 	if !res.ChainComplete {
 		res.Warnings = append(res.Warnings,
-			"the amendment chain is incomplete: some amending documents are not in the mirror, so this text may not be the law as it stood on the requested date")
+			"the amendment chain is incomplete: at least one amending document named by the chain is not in the mirror, so this text does not include its edits. The chain, including what is missing, is listed in the consolidation report")
 	}
 	if len(view.Unresolved) > 0 {
 		res.Warnings = append(res.Warnings, fmt.Sprintf(
@@ -151,6 +158,63 @@ func (s *Server) lookupAsOf(req LookupRequest, entry lexdania.Entry, res *Lookup
 	res.truncate(req.MaxChars)
 	return res, nil
 }
+
+// noteAmendments records what this document's own metadata says about later
+// documents, which is how a mirror answers "is this the text in force?" without
+// guessing at anything. The Change anchors are data in the register's payload: they
+// name the accessions that amend this document and the date each takes effect, so
+// the answer carries dates the mirror holds rather than a forecast of what may or
+// may not have happened since the mirror was crawled.
+func (r *LookupResult) noteAmendments(doc *lexdania.Document, now time.Time) {
+	type later struct {
+		accn, eff string
+	}
+	var past, future []later
+	for _, ref := range doc.Meta.References {
+		if ref.Kind != "Change" || ref.Accn == "" {
+			continue
+		}
+		item := later{accn: ref.Accn, eff: ref.Effective}
+		// An amendment whose payload carries no date cannot be placed on a timeline,
+		// so it is treated as applicable: the register says something changed and the
+		// mirror cannot say when, which is the client's problem to know about.
+		if eff, ok := lexdania.ParseDate(ref.Effective); !ok || !eff.After(now) {
+			past = append(past, item)
+		} else {
+			future = append(future, item)
+		}
+	}
+	if len(past) > 0 {
+		parts := make([]string, 0, len(past)+1)
+		for i, l := range past {
+			if i == maxNamedAmendments {
+				parts = append(parts, fmt.Sprintf("and %d more", len(past)-i))
+				break
+			}
+			field := l.accn
+			if l.eff != "" {
+				field += " eff. " + l.eff
+			}
+			parts = append(parts, field)
+		}
+		r.Amendments = strings.Join(parts, ", ")
+		if r.AsOf == "" {
+			r.Warnings = append(r.Warnings, fmt.Sprintf(
+				"%d document(s) named in this document's own metadata amend it on or before %s. The text above is this accession as published; ask again with as_of=%s for the text as amended on that date.",
+				len(past), now.Format("2006-01-02"), now.Format("2006-01-02")))
+		}
+	}
+	if len(future) > 0 {
+		if len(past) == 0 {
+			r.Amendments = fmt.Sprintf("%d, all effective after %s (earliest %s) -- as of %s this accession is the operative text in this dataset",
+				len(future), now.Format("2006-01-02"), future[0].eff, now.Format("2006-01-02"))
+		}
+	}
+}
+
+// maxNamedAmendments bounds how many accessions an answer names before summarising;
+// a bill with a hundred sittings should not be served as a hundred words.
+const maxNamedAmendments = 6
 
 // provenance records which text this is, in the words a client will read.
 func (r *LookupResult) provenance(doc *lexdania.Document, mirrorRoot string) {
@@ -219,7 +283,10 @@ func (r *LookupResult) String() string {
 		fmt.Fprintf(&b, "- **As of %s:** %d amending documents applied, chain %s\n", r.AsOf, r.AppliedEdits, chain)
 	}
 	fmt.Fprintf(&b, "- **Text source:** `%s` — %s\n", r.Provenance, r.ProvenanceNote)
-	fmt.Fprintf(&b, "- **Mirror:** %s\n", r.Mirror)
+	fmt.Fprintf(&b, "- **Dataset:** %s\n", r.Mirror)
+	if r.Amendments != "" {
+		fmt.Fprintf(&b, "- **Later documents naming this one (per its own metadata):** %s\n", r.Amendments)
+	}
 	for _, w := range r.Warnings {
 		fmt.Fprintf(&b, "> **Warning:** %s\n", w)
 	}

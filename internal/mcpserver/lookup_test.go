@@ -280,7 +280,7 @@ func TestLookupResultRendersAnIdentifyingHeader(t *testing.T) {
 		"## ",                    // a heading, not a bare line: the consumer renders markdown
 		"Text source:",           // label and value are checked apart so a renderer that
 		"html",                   // drops either half cannot pass while still looking complete
-		"Mirror:",                //
+		"Dataset:",               // the answer states which dates it speaks for
 		"3 documents",            //
 		"### Text",               //
 		"```",                    // statute text is fenced so it cannot be re-read as markup
@@ -295,14 +295,27 @@ func TestLookupResultRendersAnIdentifyingHeader(t *testing.T) {
 	}
 }
 
-// The server's own status is the freshness claim every answer leans on.
+// The server's own status is a coverage claim, so the only time it may quote is the
+// index file's build stamp. The first version of this test asked for the current
+// year and passed because the server printed its own start time under the label
+// "index built": a freshly started process looked like a freshly built index, which
+// is the exact way a stale index claims to be current.
 func TestServerStatus(t *testing.T) {
 	s := newTestServer(t)
+	i := mustIndex(t)
+	i.Built = time.Date(2020, 3, 4, 5, 6, 7, 0, time.UTC).Unix()
+	s.UseIndex(i)
 	st := s.Status()
 	if !strings.Contains(st, "3 documents") || !strings.Contains(st, "lta=3") {
 		t.Errorf("Status = %q, want counts and media", st)
 	}
-	if !strings.Contains(st, time.Now().Format("2006")) {
-		t.Errorf("Status = %q, want the index time", st)
+	if !strings.Contains(st, "index built 2020-03-04") {
+		t.Errorf("Status = %q, want the index file's own build stamp", st)
+	}
+	if strings.Contains(st, time.Now().Format("2006-01-02")) {
+		t.Errorf("Status = %q quotes today, which is how a process start passes for an index time", st)
+	}
+	if got := newTestServer(t).Status(); !strings.Contains(got, "index built undated") {
+		t.Errorf("a server with no index claims an index time: %q", got)
 	}
 }

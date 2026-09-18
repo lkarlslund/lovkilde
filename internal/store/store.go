@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strconv"
 	"strings"
@@ -927,59 +928,102 @@ func (s *Store) PutChanges(ctx context.Context, changes []Change) error {
 	return b.Flush()
 }
 
-// InventoryPendingSplit counts inventory rows the automatic sweep still intends
-// to fetch, as either owed or stalled:
+// Issues is the work a collection pass could not finish, and a fingerprint of which
+// work that was.
 //
 //	owed     pending, or failed while still under the retry ceiling
 //	stalled  either of those, but past the ceiling, so only a deliberate pass
 //	         with --state pending revisits them
 //
-// A failed row counts as owed rather than as a conclusion, which is what makes
-// the check say something: a pass that could not download a document does not
-// get to record itself as complete, and has a few runs to get it before the row
-// goes stalled and stops holding the mirror hostage. Rows in gone, skipped or
-// fetched states are conclusions and are ignored.
+// A failed row counts as owed rather than as a conclusion, because the site may serve
+// it tomorrow. Rows in gone, skipped, fetched or empty states are conclusions and are
+// ignored. Stalled rows are counted apart because they are not retryable: they are
+// reported so a reader knows the mirror has holes, not so a run can refuse to run.
 //
-// Treating stalled rows as outstanding instead would mean one pathological
-// document stops the daily refill forever and, once the feed window passes, fails
-// it outright: the mirror would be refused for a document no automatic retry can
-// ever fetch.
-func (s *Store) InventoryPendingSplit(ctx context.Context, maxAttempts int) (owed, stalled int64, err error) {
-	return pendingSplit(s, ctx, prefixInventory, maxAttempts, decodeInventory)
+// Digest fingerprints the identities of the outstanding rows, which the counts cannot.
+// The same digest on consecutive runs means the same handful of documents the site will
+// not serve; a moving digest means something new broke.
+type Issues struct {
+	Owed    int64
+	Stalled int64
+
+	// Digest is 8 hex digits over the outstanding rows, empty when nothing is
+	// outstanding. A fingerprint for comparing runs, not an integrity check.
+	Digest string
 }
 
-// BodyPendingSplit is InventoryPendingSplit for the body sidecar queue, where
-// empty is also a conclusion: the payload genuinely had no text.
-func (s *Store) BodyPendingSplit(ctx context.Context, maxAttempts int) (owed, stalled int64, err error) {
-	return pendingSplit(s, ctx, prefixBody, maxAttempts, decodeBody)
+// Total is everything outstanding, retryable or not.
+func (i Issues) Total() int64 { return i.Owed + i.Stalled }
+
+// Merge folds another queue's issues into these. The digests are combined rather than
+// concatenated so the whole record stays one short field.
+func (i Issues) Merge(j Issues) Issues {
+	out := Issues{Owed: i.Owed + j.Owed, Stalled: i.Stalled + j.Stalled}
+	if i.Digest != "" || j.Digest != "" {
+		h := fnv.New64a()
+		_, _ = h.Write([]byte(i.Digest))
+		_, _ = h.Write([]byte(j.Digest))
+		out.Digest = fmt.Sprintf("%08x", h.Sum64()>>32)
+	}
+	return out
 }
 
-// pendingSplit is the shared scan: one walk per queue.
-func pendingSplit[T row](s *Store, ctx context.Context, prefix string, maxAttempts int, decode func(key, value string) (T, error)) (int64, int64, error) {
-	var owed, stalled int64
+// String is the form both the state store and the published file carry.
+func (i Issues) String() string {
+	if i.Total() == 0 {
+		return "clean"
+	}
+	if i.Digest == "" {
+		return fmt.Sprintf("owed=%d stalled=%d", i.Owed, i.Stalled)
+	}
+	return fmt.Sprintf("owed=%d stalled=%d issues=%s", i.Owed, i.Stalled, i.Digest)
+}
+
+// InventoryIssues walks the sitemap queue once and reports what it still intends to
+// fetch.
+func (s *Store) InventoryIssues(ctx context.Context, maxAttempts int) (Issues, error) {
+	return pendingIssues(s, ctx, prefixInventory, maxAttempts, decodeInventory)
+}
+
+// BodyIssues is InventoryIssues for the body sidecar queue, where empty is also a
+// conclusion: the payload genuinely had no text.
+func (s *Store) BodyIssues(ctx context.Context, maxAttempts int) (Issues, error) {
+	return pendingIssues(s, ctx, prefixBody, maxAttempts, decodeBody)
+}
+
+// pendingIssues is the shared scan: one walk per queue. Rows come back in key order,
+// so the fingerprint is reproducible without collecting anything.
+func pendingIssues[T row](s *Store, ctx context.Context, prefix string, maxAttempts int, decode func(key, value string) (T, error)) (Issues, error) {
+	var out Issues
+	h := fnv.New64a()
 	err := s.scanAll(ctx, prefix, func(key, value string) (bool, error) {
 		r, err := decode(key, value)
 		if err != nil {
 			return false, err
 		}
-		h := r.head()
+		hh := r.head()
 		// An empty state is a pre-state-column record, which means pending.
-		switch h.state {
+		switch hh.state {
 		case "", string(StatePending), string(StateFailed), string(StateStale):
 		default:
 			return false, nil
 		}
-		if h.attempts < maxAttempts {
-			owed++
+		if hh.attempts < maxAttempts {
+			out.Owed++
 		} else {
-			stalled++
+			out.Stalled++
 		}
+		_, _ = h.Write([]byte(prefix))
+		_, _ = h.Write([]byte(key))
 		return false, nil
 	})
 	if err != nil {
-		return 0, 0, err
+		return Issues{}, err
 	}
-	return owed, stalled, nil
+	if out.Total() > 0 {
+		out.Digest = fmt.Sprintf("%08x", h.Sum64()>>32)
+	}
+	return out, nil
 }
 
 // HeldSince lists rows the mirror holds whose sitemap lastmod is at or after a

@@ -801,8 +801,8 @@ go build -o retsin ./cmd/retsin
 Flags go before or after the subcommand, either form works.
 
 `update` is the daily refill: harvest, then download what is new, changed, or
-missing — including the JSON body payloads — and record a sweep timestamp if
-nothing is left outstanding. `--full` adds the sitemap pass, which is the only
+missing — including the JSON body payloads — and record when it pulled and what it
+could not get. `--full` adds the sitemap pass, which is the only
 pass with full scope; see [the collection contract](#keeping-it-current-the-collection-contract).
 
 **Measured bootstrap:** the learner reaches the 200 ms floor within ~1,000 documents and
@@ -831,10 +831,10 @@ three stamps, and each authorises something different.
 |---|---|---|
 | `H\|<date>` | each harvested feed day | the change feed for that day was read to the end |
 | `last_sitemap_inventory` | `inventory` | the catalogue was re-read; every row knows its current `lastmod` |
-| `last_full_sweep` | `update`, only when nothing is owed | the mirror was brought fully up to date at this moment |
+| `last_full_sweep` | every `update` | when it pulled, how much it still owes, and a fingerprint of which documents those were |
 
 **The 10-day rule.** The harvesting service answers for a rolling ten days
-(`harvest.MaxWindowDays`), so a mirror whose last completed sweep is older than that
+(`harvest.MaxWindowDays`), so a mirror whose last recorded pull is older than that
 cannot be refilled honestly: the changes in between are listed nowhere any more.
 `retsin update` therefore **fails** rather than collecting a partial set and leaving
 the mirror looking current — it fails *before the first request*, and says to run
@@ -844,11 +844,24 @@ past; the gate is a flag, not a warning an operator learns to scroll past. A `--
 run also tolerates a feed gap, since the sitemap pass on that same run covers the
 days the feed has forgotten.
 
-**The timestamp means drained, not attempted.** A pass that could not download a
-document does not get to stamp the mirror collected: `owed` counts rows still pending
-*or* failed while under the retry ceiling. Past the ceiling they are `stalled`, which
-is reported and does not block — otherwise one pathological document would refuse the
-daily refill forever, and once the window passed, refuse it outright.
+**The pull record is an account, not a certificate.** Every pass writes one, complete
+or not: the moment it pulled, how many documents it still owes, how many are past the
+retry ceiling, and an eight-digit fingerprint of *which* they were. The alternative —
+recording nothing until a pass finishes with both queues drained — discards the true
+statement "we pulled today, and these fourteen documents would not come", which is the
+statement an operator and a reader actually need. A mirror can only hold what the site
+agrees to serve, so completeness is not a fact available here and withholding a
+timestamp cannot invent it.
+
+The fingerprint does what the counts cannot. `owed=0 stalled=14` on two consecutive
+nights says nothing about whether anything changed; the same digest says it is the same
+fourteen documents the site refuses, and a moving digest says something new broke. The
+counts and digest travel in the state store row, in `data/sweep.stamp` for readers that
+cannot open Badger, in `retsin status`, and in the dataset line of every MCP answer.
+
+`owed` counts rows still pending *or* failed while under the retry ceiling; past the
+ceiling they are `stalled` and are reported apart, since no automatic pass will ever
+fetch them and `retsin fetch --state pending` is the remedy.
 
 **An inventory pass merges; it does not overwrite.** The sitemap reports every
 resource it has ever advertised, and the rows it hands over carry only URL, `lastmod`,
@@ -885,7 +898,7 @@ Measured on the live mirror, 2026-09-18 (yesterday's full crawl, today's first r
 | feed changes naming a document this mirror has never seen | 0 |
 | rows the first inventory pass queued, out of 201,616 | 1,438 |
 | documents the refill collected | ~1,300 rows worked, **35 genuinely new** files |
-| rows left owing after the refill | 1 (a `retsinfo` path the site answers **HTTP 500**), which refused the sweep stamp until it hit the retry ceiling |
+| rows left owing after the refill | 1 (a `retsinfo` path the site answers **HTTP 500**), carried in the pull record and fingerprinted; it later joined the 14 rows past the retry ceiling |
 | permanently failing rows, reported and not blocking | 14 |
 | request rate | 47–52 documents/min, dropping to 400 ms pacing when the site errors |
 | `held rows with a September lastmod that were stored before their own lastmod` | **0 of 308** |
@@ -1357,6 +1370,16 @@ did exactly that, which is how a case-sensitive matcher and a duplicated fallbac
 found (below).
 
 ### Bugs the tests caught
+
+- **The answers could not see their own horizon, twice over.** Giving every answer a
+  dataset line (date asked, when the mirror last pulled, when the index was built)
+  produced two defects that only tests written against the new contract could see.
+  `horizon()` returned early when no full-text index was attached, before reading the
+  collection record — so a lookup-only server, which is the ordinary configuration, said
+  "never pulled" for a mirror crawled an hour ago; and the lookup path assigned
+  `res.Warnings = doc.Warnings()` instead of appending, silently dropping the note about
+  amendments the register's own metadata names. The first hides unless a test attaches no
+  index; the second unless a test asserts a warning that is not the document's own.
 
 - **A nightly inventory pass erased the whole catalogue's state, and an amended law
   could never be re-downloaded.** Two separate defects in the same path, both found by

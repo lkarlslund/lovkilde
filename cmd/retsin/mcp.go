@@ -68,6 +68,10 @@ Stdout is reserved for the protocol; logs go to stderr either way.`,
 				slog.Warn("archive scan skipped unreadable files", "skipped", a.Skipped)
 			}
 			srv := mcpserver.New(a, cfg.SiteBase, version)
+			// The horizon comes from the file the collection pass publishes, not from
+			// this process's start time or the archive's mtimes: the server must state
+			// how current the data is, not how long it has been running.
+			srv.SweepStampPath = cfg.SweepStampPath()
 			if maxChars > 0 {
 				srv.MaxChars = maxChars
 			}

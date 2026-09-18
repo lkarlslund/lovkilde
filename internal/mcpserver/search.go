@@ -8,7 +8,6 @@ package mcpserver
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/search"
@@ -100,34 +99,27 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 			Snippet:    snippet,
 		})
 	}
+	h := s.horizon()
+	res.Mirror = h.Line()
 	if len(res.Hits) == 0 {
-		// An empty result has to say what it did not search rather than looking like a
+		// An empty result has to say what it searched rather than looking like a
 		// statute that does not mention the words.
-		res.Warnings = append(res.Warnings,
-			"no provision in the indexed mirror matches; the index covers the documents present when it was built")
+		res.Warnings = append(res.Warnings, fmt.Sprintf(
+			"no provision in the indexed corpus matches this query: the index covers %d documents built %s, and the mirror holds %d",
+			h.IndexDocs, h.indexStamp(), h.MirrorDocs))
 	}
-	// The freshness caveat belongs on the result, not only on the server instructions:
-	// the mirror is only as current as its last crawl, and the feed harvest has never
-	// run on this installation, so "current law" is a claim this cannot make.
-	// Both numbers are the index's own, not the server's: what it covers, and when it
-	// was built. Reporting the archive count or the process start would let a stale
-	// index claim it was current.
-	res.Warnings = append(res.Warnings,
-		fmt.Sprintf("the index covers %d documents and was built %s; it does not include anything published since",
-			len(s.index.Docs), time.Unix(s.index.Built, 0).Format("2006-01-02 15:04")))
-	// Any disagreement between the two counts is worth saying out loud, in both
-	// directions: the index may be behind the mirror, or it may have been built over a
-	// different directory altogether.
-	if gap := s.archive.Len() - len(s.index.Docs); gap != 0 {
-		if gap > 0 {
-			res.Warnings = append(res.Warnings,
-				fmt.Sprintf("the mirror now holds %d documents, %d more than this index: rebuild with `retsin index build` before treating completeness as established",
-					s.archive.Len(), gap))
-		} else {
-			res.Warnings = append(res.Warnings,
-				fmt.Sprintf("this index covers %d documents but the served mirror holds %d: the index was built over a different directory, so its hits may name documents that are not here",
-					len(s.index.Docs), s.archive.Len()))
-		}
+	// The dataset line belongs on every answer, so a reader can see which date this
+	// result speaks for. "Current" is not a property of the corpus, it is a date, and
+	// without it a partial result is indistinguishable from a complete one.
+	res.Warnings = append(res.Warnings, h.Line())
+	if h.IndexDocs != h.MirrorDocs {
+		// The two counts differ routinely -- documents arrive between index builds --
+		// so both are reported and nothing is inferred about why. What follows from the
+		// pair is a rule, not a guess: a hit here proves the document is in the mirror,
+		// and a miss proves only that it is not in the index.
+		res.Warnings = append(res.Warnings, fmt.Sprintf(
+			"the index covers %d of the mirror's %d documents: a hit here proves presence, a miss does not prove absence from the mirror (`retsin index build` closes the gap)",
+			h.IndexDocs, h.MirrorDocs))
 	}
 	return res, nil
 }
@@ -137,8 +129,11 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 func (r *SearchResult) String() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Search: %q\n\n", r.Query)
+	if r.Mirror != "" {
+		fmt.Fprintf(&b, "- **Dataset:** %s\n\n", r.Mirror)
+	}
 	if len(r.Hits) == 0 {
-		b.WriteString("No matches in the indexed mirror.\n")
+		b.WriteString("No matches in the indexed corpus.\n")
 	}
 	for i, h := range r.Hits {
 		fmt.Fprintf(&b, "### %d. %s", i+1, h.Citation)

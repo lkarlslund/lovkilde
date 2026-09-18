@@ -141,7 +141,7 @@ func TestUpdateRefusesSweepOlderThanFeedWindow(t *testing.T) {
 
 // The timestamp means "nothing is left to collect", so a pass that collected
 // everything must record it, and one that could not must not.
-func TestUpdateRecordsSweepOnlyAfterDraining(t *testing.T) {
+func TestUpdateRecordsEveryPassAndItsProblems(t *testing.T) {
 	f := newUpdateFixture(t)
 	ctx := context.Background()
 
@@ -163,10 +163,17 @@ func TestUpdateRecordsSweepOnlyAfterDraining(t *testing.T) {
 	}
 	ts, found, err := f.c.LastSweep(ctx)
 	if err != nil || !found {
-		t.Fatalf("no sweep timestamp after a drained pass: found=%v err=%v", found, err)
+		t.Fatalf("no pull record after a drained pass: found=%v err=%v", found, err)
 	}
 	if time.Since(ts) > time.Minute {
-		t.Errorf("sweep timestamp is %.1f h old, expected this run's", time.Since(ts).Hours())
+		t.Errorf("pull record is %.1f h old, expected this run's", time.Since(ts).Hours())
+	}
+	rec, _, err := f.c.LastSweepRecord(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rec.IssuesKnown || rec.Total() != 0 {
+		t.Errorf("a pass that drained both queues recorded %q, want clean", rec.Issues)
 	}
 	row, found, err := f.st.GetInventory(ctx, pending)
 	if err != nil || !found || row.State != store.StateFetched {
@@ -193,10 +200,19 @@ func TestUpdateRecordsSweepOnlyAfterDraining(t *testing.T) {
 	}
 	ts2, found, err := f.c.LastSweep(ctx)
 	if err != nil || !found {
-		t.Fatalf("stalled row blocked the timestamp: found=%v err=%v", found, err)
+		t.Fatalf("stalled row blocked the record: found=%v err=%v", found, err)
 	}
 	if !ts2.After(ts) {
-		t.Errorf("stalled row left the timestamp where it was: %s then %s", ts.Format(time.RFC3339), ts2.Format(time.RFC3339))
+		t.Errorf("stalled row left the record where it was: %s then %s", ts.Format(time.RFC3339), ts2.Format(time.RFC3339))
+	}
+	// The stalled document is reported rather than held against the mirror: the counts
+	// and fingerprint are how a reader learns the mirror has a hole in it.
+	rec2, _, err := f.c.LastSweepRecord(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec2.Stalled != 1 || rec2.Digest == "" {
+		t.Errorf("stalled work not carried in the record: %q", rec2)
 	}
 }
 
@@ -218,7 +234,7 @@ func TestLastSweepRejectsCorruptTimestamp(t *testing.T) {
 // stays owed -- failed but still under the retry ceiling -- and the mirror must
 // not be stamped as collected, because that stamp is what authorises every
 // subsequent incremental refill.
-func TestUpdateWithholdsTimestampWhenFetchFails(t *testing.T) {
+func TestFailingPassRecordsThePullAndTheProblem(t *testing.T) {
 	f := newUpdateFixture(t)
 	ctx := context.Background()
 
@@ -233,10 +249,21 @@ func TestUpdateWithholdsTimestampWhenFetchFails(t *testing.T) {
 	if err := f.c.Update(ctx, UpdateOptions{Force: true}); err != nil {
 		t.Fatalf("Update with a failing document: %v", err)
 	}
-	if _, found, err := f.c.LastSweep(ctx); err != nil {
+	rec, found, err := f.c.LastSweepRecord(ctx)
+	if err != nil {
 		t.Fatal(err)
-	} else if found {
-		t.Error("a pass that failed to download a document recorded a completed sweep")
+	}
+	// The pass records that it pulled and what it could not get. Hiding the record
+	// until everything worked would discard the true statement "we tried today and this
+	// one would not come", which is the statement an operator needs.
+	if !found {
+		t.Fatal("a pass that pulled recorded nothing")
+	}
+	if !rec.IssuesKnown || rec.Owed != 1 {
+		t.Errorf("the document the site refused is not in the record: %q", rec)
+	}
+	if rec.Digest == "" {
+		t.Error("unresolved work recorded without a fingerprint, so the next run cannot tell it is the same work")
 	}
 	row, found, err := f.st.GetInventory(ctx, doc)
 	if err != nil || !found {
@@ -252,7 +279,98 @@ func TestUpdateWithholdsTimestampWhenFetchFails(t *testing.T) {
 	if err := f.c.Update(ctx, UpdateOptions{Force: true}); err != nil {
 		t.Fatalf("Update after the document became available: %v", err)
 	}
-	if _, found, err := f.c.LastSweep(ctx); err != nil || !found {
-		t.Errorf("sweep not recorded once the document arrived: found=%v err=%v", found, err)
+	rec2, found, err := f.c.LastSweepRecord(ctx)
+	if err != nil || !found {
+		t.Fatalf("nothing recorded once the document arrived: found=%v err=%v", found, err)
+	}
+	if rec2.IssuesKnown && rec2.Total() != 0 {
+		t.Errorf("the document arrived but the record still reports %q", rec2.Issues)
+	}
+	if rec2.Digest != "" {
+		t.Errorf("a clean pass kept the previous run's fingerprint: %q", rec2)
+	}
+}
+
+// The store row is the authority on when a collection pass pulled, but it sits behind
+// Badger's exclusive per-process lock, so the same fact has to reach readers that
+// cannot open the store: the MCP server answers "how current is this?" from the
+// published file. The two must not be allowed to drift apart.
+func TestUpdatePublishesTheRecord(t *testing.T) {
+	f := newUpdateFixture(t)
+	ctx := context.Background()
+	recent := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	if err := f.st.SetMeta(ctx, metaLastSweep, recent); err != nil {
+		t.Fatal(err)
+	}
+	pending := "https://www.retsinformation.dk/eli/lta/2026/1234"
+	if err := f.st.PutInventory(ctx, store.Inventory{ELIURL: pending, LastMod: "2026-09-18", Kind: "lta", State: store.StatePending}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.c.Update(ctx, UpdateOptions{}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	row, found, err := f.c.LastSweepRecord(ctx)
+	if err != nil || !found {
+		t.Fatalf("no pull record: found=%v err=%v", found, err)
+	}
+	file, fileFound, err := ReadSweepRecord(f.c.cfg.SweepStampPath())
+	if err != nil {
+		t.Fatalf("reading the published record: %v", err)
+	}
+	if !fileFound {
+		t.Fatalf("nothing published at %s: a reader that cannot open the store has no horizon", f.c.cfg.SweepStampPath())
+	}
+	if !file.PulledAt.Equal(row.PulledAt) || file.Digest != row.Digest || file.Owed != row.Owed || file.Stalled != row.Stalled {
+		t.Errorf("published %q disagrees with the store row %q", file, row)
+	}
+}
+
+func TestSweepRecordRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "sweep.stamp")
+	want := SweepRecord{
+		PulledAt:    time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC),
+		Issues:      store.Issues{Owed: 2, Stalled: 14, Digest: "6f2c1a9d"},
+		IssuesKnown: true,
+	}
+	if err := PublishSweepRecord(path, want); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := ReadSweepRecord(path)
+	if err != nil || !found {
+		t.Fatalf("round trip: found=%v err=%v", found, err)
+	}
+	if !got.PulledAt.Equal(want.PulledAt) || got.Issues != want.Issues {
+		t.Errorf("round trip returned %q, want %q", got, want)
+	}
+
+	// A record written before the problems were counted must not read as "clean": the
+	// honest rendering is that nobody knows what was outstanding.
+	legacy, err := ParseSweepRecord("2026-09-18T09:16:52Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.IssuesKnown || legacy.PulledAt.IsZero() {
+		t.Errorf("a bare timestamp was read as %q, which claims more than it says", legacy)
+	}
+	if legacy.String() != "2026-09-18T09:16:52Z" {
+		t.Errorf("legacy record re-serialised as %q: an unknown problem count must not gain a verdict", legacy.String())
+	}
+
+	_, found, err = ReadSweepRecord(filepath.Join(t.TempDir(), "sweep.stamp"))
+	if found || err != nil {
+		t.Errorf("absent record read as found=%v err=%v", found, err)
+	}
+
+	// A record that will not parse must fail loudly rather than read as the zero time,
+	// which every age comparison would then place somewhere it never was.
+	bad := filepath.Join(t.TempDir(), "sweep.stamp")
+	if err := os.WriteFile(bad, []byte("last tuesday\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, found, err := ReadSweepRecord(bad); found || err == nil || !got.PulledAt.IsZero() {
+		t.Errorf("unparsable record: got=%v found=%v err=%v", got, found, err)
+	}
+	if _, err := ParseSweepRecord("2026-09-18T09:16:52Z owed=notanumber"); err == nil {
+		t.Error("a malformed count parsed silently")
 	}
 }

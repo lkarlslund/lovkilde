@@ -31,6 +31,11 @@ type Server struct {
 	// MaxChars caps every answer when the request does not ask for a different cap.
 	// Zero keeps the package default.
 	MaxChars int
+
+	// SweepStampPath is the file the collection pass publishes its horizon to. Empty
+	// means the server says its horizon is unknown rather than inventing one from
+	// file mtimes, which a bulk crawl makes meaningless.
+	SweepStampPath string
 }
 
 // New indexes the archive for serving. Scanning 191,393 documents takes about a second
@@ -80,8 +85,12 @@ func (s *Server) ambiguous(eli string) []lexdania.Entry {
 // Status is what the server knows about the mirror it is serving, for the initialize
 // instructions and for the lookup header.
 func (s *Server) Status() string {
+	built := "undated"
+	if s.index != nil && s.index.Built > 0 {
+		built = time.Unix(s.index.Built, 0).Format(time.RFC3339)
+	}
 	return fmt.Sprintf("%d documents in %s (media: %s), index built %s",
-		s.archive.Len(), s.archive.Root, s.kinds, s.started.Format(time.RFC3339))
+		s.archive.Len(), s.archive.Root, s.kinds, built)
 }
 
 // lookupInput is the tool's argument object. The jsonschema tags are what a client
@@ -105,8 +114,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			"Every answer names where its text came from: 'xml' is the register's own " +
 			"structured body, 'html' is text our reader recovered from the site's HTML " +
 			"payload, and 'none' means the mirror has metadata but no text. Say which one " +
-			"a quotation came from. The mirror is only as current as its last crawl, which " +
-			"is in the answer header.",
+			"a quotation came from. " + s.horizon().Policy(),
 	})
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "lookup",

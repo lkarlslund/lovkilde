@@ -97,6 +97,17 @@ func (c Config) XMLDir() string { return c.DataDir + "/xml" }
 // StoreDir returns the directory holding the Badger state store.
 func (c Config) StoreDir() string { return c.DataDir + "/meta/kv" }
 
+// SweepStampPath returns the file holding the timestamp of the last collection
+// sweep that left nothing owed.
+//
+// The authority is a row in the state store. This file exists because the store is
+// Badger, which takes an exclusive per-process lock: a long-lived reader such as
+// the MCP server cannot open it without locking out the nightly crawl, so the
+// collection pass mirrors the one fact readers need into a plain file. Same value,
+// readable by anything -- and nothing else should be derived from it. If it ever
+// disagrees with the store, the store is right.
+func (c Config) SweepStampPath() string { return c.DataDir + "/sweep.stamp" }
+
 // Validate refuses configurations that cannot mean anything. It deliberately does
 // not police the document floor: how fast to ask for uncached documents is the
 // operator's call, and the service itself answers 429 if the answer was wrong.

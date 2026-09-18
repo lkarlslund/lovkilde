@@ -882,11 +882,11 @@ func TestChangesRange(t *testing.T) {
 	}
 }
 
-// TestPendingSplitCountsStale pins what the completed-sweep check counts once a
-// publisher has moved on from a document we hold. An unattempted stale row is work
-// the sweep owes; past the retry ceiling it is stalled, and must not hold the
-// mirror's timestamp hostage forever.
-func TestPendingSplitCountsStale(t *testing.T) {
+// TestIssuesCountsStale pins what the collection record counts once a publisher has
+// moved on from a document we hold. An unattempted stale row is work the sweep owes;
+// past the retry ceiling it is stalled, which is reported rather than held against the
+// mirror forever.
+func TestIssuesCountsStale(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
@@ -898,12 +898,49 @@ func TestPendingSplitCountsStale(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	owed, stalled, err := s.InventoryPendingSplit(ctx, 5)
+	issues, err := s.InventoryIssues(ctx, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if owed != 1 || stalled != 1 {
-		t.Errorf("owed %d stalled %d, want 1 and 1: the fresh stale row is owed work and the exhausted one is stalled, and the fetched row is neither", owed, stalled)
+	if issues.Owed != 1 || issues.Stalled != 1 {
+		t.Errorf("issues %s, want owed 1 and stalled 1: the fresh stale row is owed work and the exhausted one is stalled, and the fetched row is neither", issues)
+	}
+	// The fingerprint is what tells two runs apart when the counts are the same, so it
+	// has to depend on which rows are outstanding, not merely how many.
+	if issues.Digest == "" {
+		t.Fatal("outstanding rows produced no fingerprint")
+	}
+	before := issues.Digest
+	if again, err := s.InventoryIssues(ctx, 5); err != nil || again.Digest != before {
+		t.Errorf("the same outstanding set fingerprinted differently: %q then %q", before, again.Digest)
+	}
+	if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/lta/4", LastMod: "2026-09-18", Kind: "lta", State: StatePending, SHA256: "h4"}); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := s.InventoryIssues(ctx, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.Digest == before {
+		t.Errorf("a different outstanding set produced the same fingerprint %q", moved.Digest)
+	}
+
+	// Nothing outstanding is reported as clean, with no fingerprint to compare.
+	// Draining the queue goes through the single-row write the fetch path uses. The
+	// batch path is an inventory pass, and an inventory pass reporting a later date is
+	// the publisher saying the text changed -- which re-queues the row rather than
+	// settling it -- so it cannot be used to record a completed download here.
+	for _, u := range []string{"1", "2", "3", "4"} {
+		if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/lta/" + u, LastMod: "2026-09-18", Kind: "lta", State: StateFetched, SHA256: "h" + u}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clean, err := s.InventoryIssues(ctx, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clean.Total() != 0 || clean.Digest != "" || clean.String() != "clean" {
+		t.Errorf("a drained queue reads as %q", clean)
 	}
 }
 
