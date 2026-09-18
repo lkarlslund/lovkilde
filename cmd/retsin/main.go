@@ -78,12 +78,29 @@ func newRootCmd() *cobra.Command {
 		return a, lim, nil
 	})
 
+	// resolve validates the flags and sets up logging without opening any storage.
+	// The read-only commands (mcp, index, search) take this instead of the runtime:
+	// opening the store would take Badger's exclusive lock, and a serving or indexing
+	// process that held it would keep the nightly crawl out.
+	resolve := func() (config.Config, error) {
+		if err := cfg.Validate(); err != nil {
+			return cfg, err
+		}
+		setLogger(logLevel)
+		return cfg, nil
+	}
+
 	root.AddCommand(
 		inventoryCmd(open),
 		harvestCmd(open),
 		fetchCmd(open),
+		sampleCmd(open),
+		mcpCmd(resolve),
+		indexCmd(resolve),
+		searchCmd(resolve),
 		updateCmd(open),
 		statusCmd(open),
+		changesCmd(open),
 		rebuildCmd(open),
 	)
 	return root
@@ -102,7 +119,9 @@ Phases (each independent, resumable and idempotent):
   inventory  walk the ELI sitemap: ~22 requests discover all ~203k resources
   harvest    consume the official change feed, which covers a rolling 10 days
   fetch      download canonical XML for every resource not already on disk
-  update     all three in order, suitable for a daily cron
+  update     harvest + fetch since the last completed pass; --full adds the sitemap
+             pass, which is the only one that can repair an outage over 10 days
+  changes    read the change feed back and reconcile it against the archive
 
 Pacing:
   The harvesting service is limited by its own documentation to one call per 10

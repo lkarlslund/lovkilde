@@ -1,0 +1,15 @@
+# stale content census
+# reproduce: RETSIN_STALE_CENSUS=1 RETSIN_STALE_SAMPLE=30 RETSIN_STALE_SINCE=2026-09-01 go test ./internal/crawl/ -run TestStaleContentCensus -count=1 -v
+# ran 2026-09-18T09:17:11Z, elapsed 0s
+
+NOTHING BEHIND: no held row was stored before its own lastmod since 2026-09-01
+(checked 308 rows; 0 had no fetch stamp, 0 had no file)
+
+held rows with lastmod at or after 2026-09-01: 308
+  whose stored file predates that lastmod (the trap set): 0
+  with no file on disk at all:                            0
+  sampled with a request (strided across the trap set):   0
+  bytes identical to what we hold:   0
+  bytes DIFFERENT from what we hold: 0  (held 0.0 MiB, current 0.0 MiB)
+  request failed:                    0
+

@@ -97,6 +97,12 @@ func (c *Crawler) Inventory(ctx context.Context) error {
 // as far as it has not already recorded, because the service answers for a
 // rolling 10-day window: entries older than that expire, so an outage longer
 // than 10 days can only be repaired via the sitemap.
+//
+// When the gap is longer than the window it still collects what remains
+// available -- throwing away recoverable changes would be silly -- and then
+// returns ErrFeedGap, because the run is a partial refill and only the caller
+// knows whether a sitemap pass is on this same run to cover the rest. A daily
+// cron that ignores this error is reporting success while silently missing days.
 func (c *Crawler) Harvest(ctx context.Context) error {
 	last, found, err := c.store.LastHarvestedDay(ctx)
 	if err != nil {
@@ -104,6 +110,7 @@ func (c *Crawler) Harvest(ctx context.Context) error {
 	}
 	today := time.Now().UTC()
 	limit := harvest.MaxWindowDays
+	var gapDays int
 	if found {
 		// Resume the day after the last completed one, capped at the window.
 		span := int(today.UTC().Truncate(24*time.Hour).Sub(last.Truncate(24*time.Hour)).Hours()/24) + 1
@@ -112,6 +119,7 @@ func (c *Crawler) Harvest(ctx context.Context) error {
 			return nil
 		}
 		if span > limit {
+			gapDays = span
 			slog.Warn("harvest gap exceeds the service window; older changes are no longer available and need a sitemap inventory pass",
 				"last_day", last.Format(time.DateOnly), "gap_days", span, "window_days", limit)
 			span = limit
@@ -158,6 +166,10 @@ func (c *Crawler) Harvest(ctx context.Context) error {
 		slog.Info("harvested day", "day", day.Format(time.DateOnly), "changes", len(docs))
 	}
 	slog.Info("harvest complete", "days", stored, "changes_seen", seen)
+	if gapDays > 0 {
+		return fmt.Errorf("%w: last harvested %s, %d days ago; only the newest %d days were collected, and the remaining %d are gone from the service. Run a sitemap inventory pass (retsin inventory) to find the changes by lastmod",
+			ErrFeedGap, last.Format(time.DateOnly), gapDays, stored, gapDays-stored)
+	}
 	return nil
 }
 
@@ -230,6 +242,36 @@ func (c *Crawler) PendingCount(ctx context.Context, limit int, f store.Filter) (
 	return total, nil
 }
 
+// queue is one of the store's work queues specialised for the fetch loops: the
+// XML inventory and the body sidecar queue differ in record type and in which
+// store methods they call, not in how a batch is handed out.
+type queue[T any] struct {
+	pending func(context.Context, int, store.Filter) ([]T, error)
+	keys    func(context.Context, store.Filter) ([]string, error)
+	byKeys  func(context.Context, []string) ([]T, error)
+	key     func(T) string
+}
+
+// inventoryQueue is the queue the XML fetch loop drains.
+func (c *Crawler) inventoryQueue() queue[store.Inventory] {
+	return queue[store.Inventory]{
+		pending: c.store.PendingInventory,
+		keys:    c.store.PendingKeys,
+		byKeys:  c.store.Inventories,
+		key:     func(in store.Inventory) string { return in.ELIURL },
+	}
+}
+
+// bodyQueue is the queue the sidecar fetch loop drains.
+func (c *Crawler) bodyQueue() queue[store.Body] {
+	return queue[store.Body]{
+		pending: c.store.PendingBodies,
+		keys:    c.store.PendingBodyKeys,
+		byKeys:  c.store.Bodies,
+		key:     func(b store.Body) string { return b.ELIURL },
+	}
+}
+
 // batchSource returns the function the fetch loop pulls its next batch from, so the
 // per-row work below stays shared whatever order was asked for.
 //
@@ -245,20 +287,26 @@ func (c *Crawler) PendingCount(ctx context.Context, limit int, f store.Filter) (
 // costs a few tens of megabytes of URLs on a run that asked for it, which beats
 // re-scanning the whole catalogue per batch to re-derive the same shuffle.
 func (c *Crawler) batchSource(ctx context.Context, filter store.Filter, opt FetchOptions) (func(context.Context, int) ([]store.Inventory, error), error) {
+	return batchSourceT(c, ctx, filter, opt, c.inventoryQueue())
+}
+
+// batchSourceT is batchSource for any queue, so the cursor and shuffle handling
+// above is written once rather than once per representation.
+func batchSourceT[T any](c *Crawler, ctx context.Context, filter store.Filter, opt FetchOptions, q queue[T]) (func(context.Context, int) ([]T, error), error) {
 	if filter.Order != store.OrderRandom {
-		return func(ctx context.Context, want int) ([]store.Inventory, error) {
-			rows, err := c.store.PendingInventory(ctx, want, filter)
+		return func(ctx context.Context, want int) ([]T, error) {
+			rows, err := q.pending(ctx, want, filter)
 			if err != nil {
 				return nil, err
 			}
 			if len(rows) > 0 {
-				filter.Cursor = rows[len(rows)-1].ELIURL
+				filter.Cursor = q.key(rows[len(rows)-1])
 			}
 			return rows, nil
 		}, nil
 	}
 
-	keys, err := c.store.PendingKeys(ctx, filter)
+	keys, err := q.keys(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +321,7 @@ func (c *Crawler) batchSource(ctx context.Context, filter store.Filter, opt Fetc
 	rnd.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
 
 	pos := 0
-	return func(ctx context.Context, want int) ([]store.Inventory, error) {
+	return func(ctx context.Context, want int) ([]T, error) {
 		if pos >= len(keys) || want <= 0 {
 			return nil, nil
 		}
@@ -283,7 +331,7 @@ func (c *Crawler) batchSource(ctx context.Context, filter store.Filter, opt Fetc
 		}
 		page := keys[pos:end]
 		pos = end
-		return c.store.Inventories(ctx, page)
+		return q.byKeys(ctx, page)
 	}, nil
 }
 
@@ -298,7 +346,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 		opt.Batch = 200
 	}
 	if opt.MaxAttempts <= 0 {
-		opt.MaxAttempts = 5
+		opt.MaxAttempts = defaultMaxAttempts
 	}
 	var attempted, stored, skippedDup, failed, bytes int64
 	start := time.Now()
@@ -357,8 +405,11 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 			}
 			attempted++
 
-			// Already on disk from a previous run? Close it without a request.
-			if c.archive.Has(row.ELIURL) {
+			// Already on disk from a previous run? Close it without a request --
+			// unless the publisher says that copy is out of date, which is the one
+			// case where the file on disk is the reason to ask again rather than the
+			// reason not to.
+			if c.archive.Has(row.ELIURL) && row.State != store.StateStale {
 				if err := c.closeWithoutFetch(ctx, row); err != nil {
 					return err
 				}
@@ -482,33 +533,135 @@ func (c *Crawler) closeWithoutFetch(ctx context.Context, row store.Inventory) er
 	}
 	return c.store.PutInventory(ctx, store.Inventory{
 		ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind,
-		State: store.StateFetched, Attempts: row.Attempts,
+		State: store.StateFetched, Attempts: row.Attempts + 1,
 		Accession: acc, SHA256: hash, Bytes: n,
 	})
 }
 
-// Update is the intended recurring entry point: refresh the catalogue, consume
-// the official change feed, then download whatever is new or changed.
-func (c *Crawler) Update(ctx context.Context) error {
-	if err := c.Inventory(ctx); err != nil {
-		return fmt.Errorf("inventory: %w", err)
+// metaLastSweep records the moment a collection pass finished with *nothing left
+// to collect*. A timestamp set when the inventory merely completed would be a
+// lie after a run that died with 40,000 documents pending: the next day's refill
+// would look current while the mirror was days behind.
+const metaLastSweep = "last_full_sweep"
+
+// MaxSweepAge is how long a completed sweep keeps an incremental refill honest.
+// It is the change feed's own window, not a taste: past it, the days in between
+// are no longer retrievable at all, so continuing to "refill" would produce a
+// mirror that looks up to date and silently omits every change in the gap.
+const MaxSweepAge = harvest.MaxWindowDays * 24 * time.Hour
+
+// ErrFeedGap means the change feed could not cover the time since the last
+// harvested day: some changed documents are no longer listed by the service and
+// must be found by a sitemap inventory pass instead.
+var ErrFeedGap = errors.New("change feed gap")
+
+// ErrStaleSweep means the mirror has not completed a collection pass recently
+// enough for an incremental refill to be trustworthy, so the caller must run a
+// full pass rather than accept a partial picture.
+var ErrStaleSweep = errors.New("stale collection sweep")
+
+// UpdateOptions tunes the daily entry point.
+type UpdateOptions struct {
+	// Full runs the sitemap inventory first, which is the only pass with full
+	// scope. Incremental refills skip it because the feed plus the stored
+	// lastmod values cover a day's change, and a cold mirror needs it once.
+	Full bool
+	// Force runs the incremental refill regardless of the staleness gate. It
+	// exists for repairing a mirror deliberately, not for cron.
+	Force bool
+}
+
+func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
+	last, found, err := c.LastSweep(ctx)
+	if err != nil {
+		return err
 	}
+	if !opt.Full && !opt.Force {
+		if !found {
+			return fmt.Errorf("%w: this mirror has never completed a collection pass, so there is nothing to refill incrementally. Run the full pass once: retsin update --full", ErrStaleSweep)
+		}
+		if age := time.Since(last); age > MaxSweepAge {
+			return fmt.Errorf("%w: the last completed pass was %s (%.1f days ago), older than the %d-day change feed. The changes in between are no longer listed by the service, so a refill would only collect part of them and leave the mirror looking current. Run retsin update --full, which finds every change by sitemap lastmod",
+				ErrStaleSweep, last.Format(time.RFC3339), age.Hours()/24, harvest.MaxWindowDays)
+		}
+	}
+
+	if opt.Full {
+		if err := c.Inventory(ctx); err != nil {
+			return fmt.Errorf("inventory: %w", err)
+		}
+	}
+
 	if err := c.Harvest(ctx); err != nil {
-		return fmt.Errorf("harvest: %w", err)
+		// A full pass already detected changes by lastmod, so a feed gap there
+		// costs metadata detail but not documents. An incremental refill has no
+		// such fallback, so the gap is fatal there.
+		if !errors.Is(err, ErrFeedGap) || !opt.Full {
+			return fmt.Errorf("harvest: %w", err)
+		}
+		slog.Warn("continuing past the feed gap: this run re-inventoried the sitemap, which covers the missing days")
 	}
+
 	if err := c.Fetch(ctx, FetchOptions{}); err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
+	if err := c.FetchBodies(ctx, FetchOptions{}); err != nil {
+		return fmt.Errorf("fetch bodies: %w", err)
+	}
+
+	xmlOwed, xmlStalled, err := c.store.InventoryPendingSplit(ctx, defaultMaxAttempts)
+	if err != nil {
+		return err
+	}
+	bodyOwed, bodyStalled, err := c.store.BodyPendingSplit(ctx, defaultMaxAttempts)
+	if err != nil {
+		return err
+	}
+	if xmlOwed > 0 || bodyOwed > 0 {
+		// Owed includes documents this pass tried and failed to download, which is
+		// the useful case: a run that came home empty-handed is not a completed
+		// collection, and must not leave the mirror looking collected. The row gets
+		// the retry ceiling's worth of runs to arrive before it goes stalled and
+		// stops holding the timestamp up.
+		slog.Warn("collection pass incomplete; sweep timestamp not advanced",
+			"xml_owed", xmlOwed, "body_owed", bodyOwed)
+		return nil
+	}
+	if stalled := xmlStalled + bodyStalled; stalled > 0 {
+		// Reported, not fatal: these need a deliberate pass, and the feed window
+		// is not what they are waiting on.
+		slog.Warn("documents past the automatic retry ceiling are not collected",
+			"count", stalled, "remedy", "retsin fetch --state pending (and --bodies --state pending)")
+	}
+
+	now := time.Now().UTC()
+	if err := c.store.SetMeta(ctx, metaLastSweep, now.Format(time.RFC3339)); err != nil {
+		return err
+	}
+	slog.Info("collection sweep complete", "at", now.Format(time.RFC3339))
 	return nil
 }
 
-// Rebuild re-derives manifest state from the XML already on disk. Needed only
-// after state loss or suspicion: it makes zero HTTP requests, which is the whole
-// payoff of keeping the archive outside the database.
-//
-// It walks every stored document, re-extracts its accession and hash, and marks
-// the corresponding inventory row fetched. Rows with no file on disk are left
-// pending, so a rebuild followed by fetch is always safe.
+// defaultMaxAttempts is the retry ceiling Fetch applies when the caller does not
+// name one; the drain check has to use the same number, or it disagrees with the
+// sweep about what still counts as work.
+const defaultMaxAttempts = 5
+
+// LastSweep reports when a collection pass last drained every queue.
+func (c *Crawler) LastSweep(ctx context.Context) (time.Time, bool, error) {
+	v, found, err := c.store.GetMeta(ctx, metaLastSweep)
+	if err != nil || !found {
+		return time.Time{}, found, err
+	}
+	ts, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		// A corrupt timestamp must not be read as "recently swept", which is what
+		// parsing to the zero time would mean in the age comparison. Fail loudly.
+		return time.Time{}, false, fmt.Errorf("parsing %s: %w", metaLastSweep, err)
+	}
+	return ts, true, nil
+}
+
 func (c *Crawler) Rebuild(ctx context.Context) error {
 	var seen, matched, orphans int64
 	start := time.Now()
@@ -551,7 +704,12 @@ func (c *Crawler) Rebuild(ctx context.Context) error {
 		if err == nil {
 			acc = meta.Accession
 		}
-		in.State = store.StateFetched
+		// A row the publisher has moved on from stays stale: a rebuild re-derives
+		// what is on disk, and what is on disk is exactly the older version.
+		// Downgrading it here would erase the one signal that the copy is behind.
+		if in.State != store.StateStale {
+			in.State = store.StateFetched
+		}
 		in.Accession = acc
 		in.SHA256 = store.Sha256Hex(raw)
 		in.Bytes = int64(len(raw))

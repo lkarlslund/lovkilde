@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -41,6 +42,22 @@ const (
 	StateFailed  State = "failed"
 	StateSkipped State = "skipped" // duplicate body already stored under another URL
 	StateGone    State = "gone"    // no representation available: 404, or HTML served where XML was expected
+	// StateStale means the mirror holds bytes for a resource the publisher has
+	// since republished: the sitemap's lastmod moved, so what is on disk is a
+	// version the world has moved past. It is deliberately not "pending", because
+	// the fetch loop closes any pending row whose file is already on disk without
+	// asking the site -- the thing that makes a re-pended catalogue cheap -- and a
+	// row that merely wants re-verification has to survive that shortcut. Without
+	// a state of its own, an amended law is unreachable forever after its first
+	// download.
+	StateStale State = "stale"
+	// StateEmpty is a body-queue state: the payload arrived and is stored, but
+	// carries no document text at all. Published-as-tables documents (Finanslove
+	// and their tillægsbevillinger) are the common case. It is terminal and
+	// distinct from gone: here the answer came back, there was nothing in it, and
+	// re-requesting it on every future pass would spend the request budget to
+	// re-learn that.
+	StateEmpty State = "empty"
 )
 
 // Key prefixes. Single-character prefixes keep the keyspace small and make
@@ -51,6 +68,15 @@ const (
 	prefixChange    = "h|"
 	prefixDay       = "H|"
 	prefixMeta      = "m|"
+	// prefixBody keys the second-representation queue: one row per document whose
+	// canonical XML has no body, tracking the site JSON payload that does. It is a
+	// separate keyspace rather than another State on the inventory row because the
+	// two questions are independent -- an inventory row says "we hold the canonical
+	// XML" (StateFetched) and that must stay true while the same document is still
+	// pending a body. Overloading one State field would make PendingInventory
+	// offer already-archived XML again, which is the one thing the fetch loop's
+	// idempotency depends on.
+	prefixBody = "b|"
 )
 
 // Store is the Badger-backed manifest.
@@ -128,6 +154,12 @@ func decodeInventory(eliURL, v string) (Inventory, error) {
 	}, nil
 }
 
+// head reports the fields a scan selects on, so the shared scan code can serve
+// the inventory and body queues without knowing which record it is holding.
+func (in Inventory) head() rowHead {
+	return rowHead{kind: in.Kind, state: string(in.State), attempts: in.Attempts}
+}
+
 // PutInventory upserts one inventory record.
 func (s *Store) PutInventory(ctx context.Context, in Inventory) error {
 	return s.db.Update(func(tx *badger.Txn) error {
@@ -137,14 +169,52 @@ func (s *Store) PutInventory(ctx context.Context, in Inventory) error {
 
 // PutInventoryBatch upserts many records in one Badger batch, which is the
 // efficient path for the ~200k-row sitemap import.
+//
+// Known rows are merged, not replaced. The sitemap reports every resource it has
+// ever advertised on every pass, so a blind write would re-pend the whole
+// catalogue each night: the fetch loop would then close 200k files locally and
+// re-request the ~10k resources recorded as gone, and every attempt counter and
+// stored hash would be thrown away until re-derived. The only change signal the
+// sitemap carries is lastmod, so that is what re-pends a row.
 func (s *Store) PutInventoryBatch(ctx context.Context, rows []Inventory) error {
 	if len(rows) == 0 {
 		return nil
 	}
+
+	// One read snapshot for the page rather than a transaction per row: the
+	// sitemap arrives in pages of thousands, and each row needs its current
+	// state to be merged.
+	known := make(map[string]Inventory, len(rows))
+	err := s.db.View(func(tx *badger.Txn) error {
+		for _, in := range rows {
+			item, err := tx.Get([]byte(prefixInventory + in.ELIURL))
+			if errors.Is(err, badger.ErrKeyNotFound) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			cur, err := decodeInventory(in.ELIURL, string(v))
+			if err != nil {
+				return fmt.Errorf("inventory %s: %w", in.ELIURL, err)
+			}
+			known[in.ELIURL] = cur
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
 	b := s.db.NewWriteBatch()
 	defer b.Cancel()
 	for _, in := range rows {
-		if err := b.Set([]byte(prefixInventory+in.ELIURL), []byte(in.encode())); err != nil {
+		merged := mergeInventory(known[in.ELIURL], in)
+		if err := b.Set([]byte(prefixInventory+merged.ELIURL), []byte(merged.encode())); err != nil {
 			return err
 		}
 		if err := ctx.Err(); err != nil {
@@ -152,6 +222,44 @@ func (s *Store) PutInventoryBatch(ctx context.Context, rows []Inventory) error {
 		}
 	}
 	return b.Flush()
+}
+
+// mergeInventory decides what a sitemap observation means for a row already in
+// the store. cur.ELIURL is empty when the resource is new, and then the
+// observation is the whole record.
+//
+// An unchanged lastmod means nothing happened, so the row is left exactly as it
+// is -- including a pending state and its attempt counter, which is what keeps a
+// half-finished crawl resumable and a permanently dead resource from being
+// retried forever.
+//
+// Only a *later* lastmod counts as a change. The sitemap advertises the same
+// resource more than once per pass -- 203,188 entries for 201,616 resources --
+// and the duplicates do not always agree on the date, so treating any difference
+// as a change marked 872 rows stale on a pass that followed another one half an
+// hour earlier, and would spend hundreds of requests per day re-fetching
+// documents nobody amended. A date moving backwards is not the publisher saying
+// this changed.
+func mergeInventory(cur, observed Inventory) Inventory {
+	if cur.ELIURL == "" {
+		return observed
+	}
+	if observed.LastMod <= cur.LastMod {
+		return cur
+	}
+	next := cur
+	next.LastMod = observed.LastMod
+	next.Kind = observed.Kind
+	next.Error = ""
+	// Holding bytes and having them declared out of date is not the same problem as
+	// never having them: the fetch loop must ask the site this time, and it only
+	// does that for a row it cannot satisfy from disk.
+	if cur.SHA256 != "" {
+		next.State = StateStale
+	} else {
+		next.State = StatePending
+	}
+	return next
 }
 
 // GetInventory reads one record.
@@ -177,6 +285,66 @@ func (s *Store) GetInventory(ctx context.Context, eliURL string) (Inventory, boo
 	return out, found, err
 }
 
+// rowHead is the part of a stored record a selection decision is made from. Both
+// record types in the store (inventory rows and body rows) produce one, which is
+// what lets one scan implementation serve both queues.
+type rowHead struct {
+	kind     string
+	state    string
+	attempts int
+}
+
+// row is a stored record that can report what a scan needs to decide on it
+// without the caller knowing which record type it is holding.
+type row interface{ head() rowHead }
+
+func pendingByKind[T row](s *Store, ctx context.Context, prefix string, sel selector, decode func(key, value string) (T, error)) (map[string]int64, error) {
+	counts := map[string]int64{}
+	err := s.scanAll(ctx, prefix, func(key, value string) (bool, error) {
+		r, err := decode(key, value)
+		if err != nil {
+			return false, err
+		}
+		h := r.head()
+		if !sel.wantState(h.state) || !sel.wantKind(h.kind) {
+			return false, nil
+		}
+		counts[h.kind]++
+		return false, nil
+	})
+	return counts, err
+}
+
+// scanAll is a forward key-and-value walk over one prefix, for the counting and
+// selection paths that do not need direction or a cursor.
+func (s *Store) scanAll(ctx context.Context, prefix string, fn func(key, value string) (stop bool, err error)) error {
+	return s.db.View(func(tx *badger.Txn) error {
+		ops := badger.DefaultIteratorOptions
+		ops.PrefetchValues = false
+		ops.Prefix = []byte(prefix)
+		it := tx.NewIterator(ops)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			key := string(it.Item().Key())
+			v, err := it.Item().ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			stop, err := fn(strings.TrimPrefix(key, prefix), string(v))
+			if err != nil {
+				return err
+			}
+			if stop {
+				return nil
+			}
+		}
+		return nil
+	})
+}
+
 // PendingByKind counts resources still needing a fetch, grouped by ELI kind. It
 // exists because --kind filtering changes the denominator a progress bar needs
 // before the run starts, and the state totals cannot answer "how many of these
@@ -187,33 +355,7 @@ func (s *Store) PendingByKind(ctx context.Context, f Filter) (map[string]int64, 
 	if err != nil {
 		return nil, err
 	}
-	counts := map[string]int64{}
-	err = s.db.View(func(tx *badger.Txn) error {
-		ops := badger.DefaultIteratorOptions
-		ops.PrefetchValues = false
-		ops.Prefix = []byte(prefixInventory)
-		it := tx.NewIterator(ops)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			v, err := it.Item().ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			f := strings.Split(string(v), "\t")
-			if len(f) < 3 {
-				continue
-			}
-			if !sel.wantState(f[2]) || !sel.wantKind(f[1]) {
-				continue
-			}
-			counts[f[1]]++
-		}
-		return nil
-	})
-	return counts, err
+	return pendingByKind(s, ctx, prefixInventory, sel, decodeInventory)
 }
 
 // Order in which a scan hands out rows. --order exposes all three because they
@@ -301,10 +443,11 @@ func (f Filter) selector() (selector, error) {
 	for _, st := range f.States {
 		st = strings.ToLower(strings.TrimSpace(st))
 		switch State(st) {
-		case StatePending, StateFetched, StateFailed, StateSkipped, StateGone:
+		case StatePending, StateFetched, StateFailed, StateSkipped, StateGone, StateEmpty:
 		default:
-			return selector{}, fmt.Errorf("unknown state %q (valid: pending, fetched, failed, skipped, gone)", st)
+			return selector{}, fmt.Errorf("unknown state %q (valid: pending, fetched, failed, skipped, gone, empty)", st)
 		}
+
 		if sel.states == nil {
 			sel.states = map[string]bool{}
 		}
@@ -326,7 +469,10 @@ func (sel selector) wantState(state string) bool {
 		state = string(StatePending)
 	}
 	if sel.states == nil {
-		return state == string(StatePending) || state == string(StateFailed)
+		// Stale belongs in the default sweep: the row is work the automatic crawl
+		// owes, and excluding it would leave amended documents sitting there for a
+		// pass nobody runs.
+		return state == string(StatePending) || state == string(StateFailed) || state == string(StateStale)
 	}
 	return sel.states[state]
 }
@@ -353,6 +499,16 @@ func (sel selector) pastCursor(eliURL string) bool {
 // matching row to fn, stopping when fn says it has had enough. PendingInventory and
 // PendingKeys are thin wrappers so the direction and cursor handling exists once.
 func (s *Store) scanInventory(ctx context.Context, sel selector, fn func(eliURL, value string) (stop bool, err error)) error {
+	return s.scanRows(ctx, prefixInventory, sel, fn)
+}
+
+// scanRows is scanInventory for any key prefix. The body queue (prefixBody)
+// needs the same cursor paging, the same reverse-walk bound and the same
+// attempt/state narrowing as the XML inventory, and the subtleties in here --
+// the hand-rolled reverse bound, Seek landing on the cursor, the 0xff start
+// sentinel -- are exactly the parts that must not be reimplemented and got subtly
+// wrong a second time.
+func (s *Store) scanRows(ctx context.Context, prefix string, sel selector, fn func(eliURL, value string) (stop bool, err error)) error {
 	return s.db.View(func(tx *badger.Txn) error {
 		// Bigger value threshold keeps small records inline in the LSM, making
 		// this scan read only the LSM rather than the value log.
@@ -366,21 +522,21 @@ func (s *Store) scanInventory(ctx context.Context, sel selector, fn func(eliURL,
 			// as soon as a key falls out of it.
 			ops.Reverse = true
 		} else {
-			ops.Prefix = []byte(prefixInventory)
+			ops.Prefix = []byte(prefix)
 		}
 		it := tx.NewIterator(ops)
 		defer it.Close()
 
-		for it.Seek(sel.scanStart()); it.Valid(); it.Next() {
+		for it.Seek(sel.scanStartAt(prefix)); it.Valid(); it.Next() {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 			item := it.Item()
 			key := string(item.Key())
-			if sel.reverse && !strings.HasPrefix(key, prefixInventory) {
+			if sel.reverse && !strings.HasPrefix(key, prefix) {
 				return nil // walked out of the bottom of the range
 			}
-			eliURL := strings.TrimPrefix(key, prefixInventory)
+			eliURL := strings.TrimPrefix(key, prefix)
 			// Seek lands *on* the target, so the cursor row itself needs dropping
 			// in both directions.
 			if sel.pastCursor(eliURL) {
@@ -408,22 +564,52 @@ func (s *Store) scanInventory(ctx context.Context, sel selector, fn func(eliURL,
 // everything above -- but re-walks every row above the cursor once per batch, which
 // over a 200k catalogue is the quadratic scan that already bit the ascending path
 // once. Cost like that is invisible to result assertions.
-func (sel selector) scanStart() []byte {
+func (sel selector) scanStart() []byte { return sel.scanStartAt(prefixInventory) }
+
+// scanStartAt is scanStart for a given prefix.
+func (sel selector) scanStartAt(prefix string) []byte {
 	switch {
 	case sel.reverse && sel.cursor != "":
 		// Badger's reverse Seek lands at or below the target, so aiming at the
 		// cursor itself starts the walk on its near side; pastCursor drops the row
 		// the cursor names.
-		return []byte(prefixInventory + sel.cursor)
+		return []byte(prefix + sel.cursor)
 	case sel.reverse:
 		// 0xff cannot appear in an ELI URL, so this sits above every key with this
 		// prefix and below the next one (the keyspace uses single-letter prefixes),
 		// which is where a backwards walk with nothing covered yet should begin.
-		return append([]byte(prefixInventory), 0xff, 0xff, 0xff, 0xff)
+		return append([]byte(prefix), 0xff, 0xff, 0xff, 0xff)
 	case sel.cursor != "":
-		return []byte(prefixInventory + sel.cursor)
+		return []byte(prefix + sel.cursor)
 	}
-	return []byte(prefixInventory)
+	return []byte(prefix)
+}
+
+// pendingRows is the shared selection loop behind PendingInventory and
+// PendingBodies: same filter, same cursor paging, same attempt ceiling, one
+// decode function each. Two independent copies of this loop is where a queue
+// would drift out of agreement with the other.
+func pendingRows[T row](s *Store, ctx context.Context, prefix string, limit int, f Filter, decode func(key, value string) (T, error)) ([]T, error) {
+	sel, err := f.selector()
+	if err != nil {
+		return nil, err
+	}
+	var out []T
+	err = s.scanRows(ctx, prefix, sel, func(key, value string) (bool, error) {
+		r, err := decode(key, value)
+		if err != nil {
+			return false, err
+		}
+		h := r.head()
+		if !sel.wantState(h.state) || !sel.wantAttempts(h.attempts) || !sel.wantKind(h.kind) {
+			return false, nil
+		}
+		out = append(out, r)
+		// Zero means unlimited here, as it does for --limit; comparing directly
+		// would stop after the first row.
+		return limit > 0 && len(out) >= limit, nil
+	})
+	return out, err
 }
 
 // PendingInventory returns up to limit resources the filter selects, in the order
@@ -431,25 +617,7 @@ func (sel selector) scanStart() []byte {
 // a few tens of milliseconds over the whole catalogue, which is noise next to the
 // paced requests it feeds.
 func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]Inventory, error) {
-	sel, err := f.selector()
-	if err != nil {
-		return nil, err
-	}
-	var out []Inventory
-	err = s.scanInventory(ctx, sel, func(eliURL, value string) (bool, error) {
-		in, err := decodeInventory(eliURL, value)
-		if err != nil {
-			return false, err
-		}
-		if !sel.wantState(string(in.State)) || !sel.wantAttempts(in.Attempts) || !sel.wantKind(in.Kind) {
-			return false, nil
-		}
-		out = append(out, in)
-		// Zero means unlimited here, as it does for --limit; comparing directly
-		// would stop after the first row.
-		return limit > 0 && len(out) >= limit, nil
-	})
-	return out, err
+	return pendingRows(s, ctx, prefixInventory, limit, f, decodeInventory)
 }
 
 // PendingKeys returns the ELI URLs the filter selects, without decoding the rows.
@@ -459,39 +627,51 @@ func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]In
 // roughly 60 bytes per URL, the full catalogue costs a few tens of megabytes --
 // paid once, on a run that asked for it.
 func (s *Store) PendingKeys(ctx context.Context, f Filter) ([]string, error) {
-	sel, err := f.selector()
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	err = s.scanInventory(ctx, sel, func(eliURL, value string) (bool, error) {
-		// Decoding the row costs nothing extra -- the value has to be read to apply
-		// the filter either way -- and going through decodeInventory keeps this
-		// selection identical to PendingInventory's rather than a second parse.
-		in, err := decodeInventory(eliURL, value)
-		if err != nil {
-			return false, err
-		}
-		if !sel.wantState(string(in.State)) || !sel.wantAttempts(in.Attempts) || !sel.wantKind(in.Kind) {
-			return false, nil
-		}
-		out = append(out, eliURL)
-		return false, nil
-	})
-	return out, err
+	return pendingKeys(s, ctx, prefixInventory, f, decodeInventory)
 }
 
 // Inventories returns the rows for specific ELI URLs, in the order given, skipping
 // any that have disappeared. It is the point-lookup path Order=random uses after
 // shuffling, instead of re-scanning the keyspace per batch.
 func (s *Store) Inventories(ctx context.Context, eliURLs []string) ([]Inventory, error) {
-	var out []Inventory
+	return rowsByKeys(s, ctx, prefixInventory, eliURLs, decodeInventory)
+}
+
+func pendingKeys[T row](s *Store, ctx context.Context, prefix string, f Filter, decode func(key, value string) (T, error)) ([]string, error) {
+	sel, err := f.selector()
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	err = s.scanRows(ctx, prefix, sel, func(key, value string) (bool, error) {
+		r, err := decode(key, value)
+		if err != nil {
+			return false, err
+		}
+		// Decoding the row costs nothing extra -- the value has to be read to apply
+		// the filter either way -- and going through the same decoder PendingRows
+		// uses keeps this selection identical to its rather than a second parse.
+		h := r.head()
+		if !sel.wantState(h.state) || !sel.wantAttempts(h.attempts) || !sel.wantKind(h.kind) {
+			return false, nil
+		}
+		out = append(out, key)
+		return false, nil
+	})
+	return out, err
+}
+
+// rowsByKeys returns the decoded rows for specific keys, in the order given,
+// skipping any that have disappeared. It is the point-lookup path Order=random
+// uses after shuffling, instead of re-scanning the keyspace per batch.
+func rowsByKeys[T any](s *Store, ctx context.Context, prefix string, keys []string, decode func(key, value string) (T, error)) ([]T, error) {
+	var out []T
 	err := s.db.View(func(tx *badger.Txn) error {
-		for _, u := range eliURLs {
+		for _, u := range keys {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			item, err := tx.Get([]byte(prefixInventory + u))
+			item, err := tx.Get([]byte(prefix + u))
 			if errors.Is(err, badger.ErrKeyNotFound) {
 				continue
 			}
@@ -502,46 +682,174 @@ func (s *Store) Inventories(ctx context.Context, eliURLs []string) ([]Inventory,
 			if err != nil {
 				return err
 			}
-			in, err := decodeInventory(u, string(v))
+			r, err := decode(u, string(v))
 			if err != nil {
 				return err
 			}
-			out = append(out, in)
+			out = append(out, r)
 		}
 		return nil
 	})
 	return out, err
 }
 
-// CountByState tallies inventory records per state using a key-only scan.
-func (s *Store) CountByState(ctx context.Context) (map[State]int64, int64, error) {
+// countByState tallies records per state using a key-and-value scan over one prefix.
+func countByState[T row](s *Store, ctx context.Context, prefix string, decode func(key, value string) (T, error)) (map[State]int64, int64, error) {
 	counts := map[State]int64{}
 	var total int64
-	err := s.db.View(func(tx *badger.Txn) error {
-		ops := badger.DefaultIteratorOptions
-		ops.PrefetchValues = false
-		ops.Prefix = []byte(prefixInventory)
-		it := tx.NewIterator(ops)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			v, err := it.Item().ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			f := strings.Split(string(v), "\t")
-			st := State("pending")
-			if len(f) > 2 && f[2] != "" {
-				st = State(f[2])
-			}
-			counts[st]++
-			total++
+	err := s.scanAll(ctx, prefix, func(key, value string) (bool, error) {
+		r, err := decode(key, value)
+		if err != nil {
+			return false, err
 		}
-		return nil
+		counts[State(r.head().state)]++
+		total++
+		return false, nil
 	})
 	return counts, total, err
+}
+
+// CountByState tallies inventory records per state using a key-only scan.
+func (s *Store) CountByState(ctx context.Context) (map[State]int64, int64, error) {
+	return countByState(s, ctx, prefixInventory, decodeInventory)
+}
+
+// Body is one document's second-representation record: the site JSON payload that
+// carries documentHtml for documents whose canonical ELI XML is metadata only.
+//
+// The row exists so a backfill run does not repeat itself. Half the law corpus has
+// no XML body, so "does the sidecar file exist" is not enough to decide what to
+// request: a document that 404s, or whose payload turns out to hold no text at all
+// (Finanslove are published as tables), would otherwise be requested again on every
+// future pass. That is the same mistake the XML path guards against by recording a
+// dead representation as gone rather than failed.
+type Body struct {
+	ELIURL    string
+	Kind      string
+	State     State
+	Attempts  int
+	SHA256    string
+	Bytes     int64
+	TextChars int64
+	Error     string
+}
+
+// head reports the selection fields, which is what lets Body share the inventory
+// queue's scan, cursor paging, ordering and attempt ceiling.
+func (b Body) head() rowHead {
+	return rowHead{kind: b.Kind, state: string(b.State), attempts: b.Attempts}
+}
+
+func (b Body) encode() string {
+	return strings.Join([]string{
+		b.Kind, string(b.State), strconv.Itoa(b.Attempts),
+		b.SHA256, strconv.FormatInt(b.Bytes, 10),
+		strconv.FormatInt(b.TextChars, 10), b.Error,
+	}, "\t")
+}
+
+func decodeBody(eliURL, v string) (Body, error) {
+	f := strings.Split(v, "\t")
+	// Tolerate short records so a future field addition does not break reads,
+	// exactly as decodeInventory does.
+	if len(f) < 7 {
+		g := make([]string, 7)
+		copy(g, f)
+		f = g
+	}
+	attempts, _ := strconv.Atoi(f[2])
+	bytes, _ := strconv.ParseInt(f[4], 10, 64)
+	chars, _ := strconv.ParseInt(f[5], 10, 64)
+	state := State(f[1])
+	if state == "" {
+		state = StatePending
+	}
+	return Body{
+		ELIURL: eliURL, Kind: f[0], State: state, Attempts: attempts,
+		SHA256: f[3], Bytes: bytes, TextChars: chars, Error: f[6],
+	}, nil
+}
+
+// PutBody upserts one body-queue record.
+func (s *Store) PutBody(ctx context.Context, b Body) error {
+	return s.db.Update(func(tx *badger.Txn) error {
+		return tx.Set([]byte(prefixBody+b.ELIURL), []byte(b.encode()))
+	})
+}
+
+// PutBodyBatch upserts many body rows in one Badger batch, which is the path the
+// detection scan uses: it queues tens of thousands of documents in one pass.
+func (s *Store) PutBodyBatch(ctx context.Context, rows []Body) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	b := s.db.NewWriteBatch()
+	defer b.Cancel()
+	for _, row := range rows {
+		if err := b.Set([]byte(prefixBody+row.ELIURL), []byte(row.encode())); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	return b.Flush()
+}
+
+// GetBody reads one body-queue record.
+func (s *Store) GetBody(ctx context.Context, eliURL string) (Body, bool, error) {
+	var out Body
+	var found bool
+	err := s.db.View(func(tx *badger.Txn) error {
+		item, err := tx.Get([]byte(prefixBody + eliURL))
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		v, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		out, err = decodeBody(eliURL, string(v))
+		found = true
+		return err
+	})
+	return out, found, err
+}
+
+// PendingBodies returns up to limit documents the filter selects from the body
+// queue, in the order the filter asks for. Selection semantics are the inventory
+// queue's by construction: both go through pendingRows.
+func (s *Store) PendingBodies(ctx context.Context, limit int, f Filter) ([]Body, error) {
+	return pendingRows(s, ctx, prefixBody, limit, f, decodeBody)
+}
+
+// PendingBodyKeys is PendingKeys for the body queue, for --order random sampling.
+func (s *Store) PendingBodyKeys(ctx context.Context, f Filter) ([]string, error) {
+	return pendingKeys(s, ctx, prefixBody, f, decodeBody)
+}
+
+// Bodies reads specific body rows by ELI URL.
+func (s *Store) Bodies(ctx context.Context, eliURLs []string) ([]Body, error) {
+	return rowsByKeys(s, ctx, prefixBody, eliURLs, decodeBody)
+}
+
+// PendingBodiesByKind is the body queue's denominator for the progress bar.
+func (s *Store) PendingBodiesByKind(ctx context.Context, f Filter) (map[string]int64, error) {
+	sel, err := f.selector()
+	if err != nil {
+		return nil, err
+	}
+	return pendingByKind(s, ctx, prefixBody, sel, decodeBody)
+}
+
+// CountBodiesByState reports the queue's state totals, which after a run is also
+// the census: fetched rows have text, empty rows are the documents the site has no
+// text for either.
+func (s *Store) CountBodiesByState(ctx context.Context) (map[State]int64, int64, error) {
+	return countByState(s, ctx, prefixBody, decodeBody)
 }
 
 // Accession is a stored document body keyed by accession number, which is the
@@ -617,6 +925,133 @@ func (s *Store) PutChanges(ctx context.Context, changes []Change) error {
 		}
 	}
 	return b.Flush()
+}
+
+// InventoryPendingSplit counts inventory rows the automatic sweep still intends
+// to fetch, as either owed or stalled:
+//
+//	owed     pending, or failed while still under the retry ceiling
+//	stalled  either of those, but past the ceiling, so only a deliberate pass
+//	         with --state pending revisits them
+//
+// A failed row counts as owed rather than as a conclusion, which is what makes
+// the check say something: a pass that could not download a document does not
+// get to record itself as complete, and has a few runs to get it before the row
+// goes stalled and stops holding the mirror hostage. Rows in gone, skipped or
+// fetched states are conclusions and are ignored.
+//
+// Treating stalled rows as outstanding instead would mean one pathological
+// document stops the daily refill forever and, once the feed window passes, fails
+// it outright: the mirror would be refused for a document no automatic retry can
+// ever fetch.
+func (s *Store) InventoryPendingSplit(ctx context.Context, maxAttempts int) (owed, stalled int64, err error) {
+	return pendingSplit(s, ctx, prefixInventory, maxAttempts, decodeInventory)
+}
+
+// BodyPendingSplit is InventoryPendingSplit for the body sidecar queue, where
+// empty is also a conclusion: the payload genuinely had no text.
+func (s *Store) BodyPendingSplit(ctx context.Context, maxAttempts int) (owed, stalled int64, err error) {
+	return pendingSplit(s, ctx, prefixBody, maxAttempts, decodeBody)
+}
+
+// pendingSplit is the shared scan: one walk per queue.
+func pendingSplit[T row](s *Store, ctx context.Context, prefix string, maxAttempts int, decode func(key, value string) (T, error)) (int64, int64, error) {
+	var owed, stalled int64
+	err := s.scanAll(ctx, prefix, func(key, value string) (bool, error) {
+		r, err := decode(key, value)
+		if err != nil {
+			return false, err
+		}
+		h := r.head()
+		// An empty state is a pre-state-column record, which means pending.
+		switch h.state {
+		case "", string(StatePending), string(StateFailed), string(StateStale):
+		default:
+			return false, nil
+		}
+		if h.attempts < maxAttempts {
+			owed++
+		} else {
+			stalled++
+		}
+		return false, nil
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	return owed, stalled, nil
+}
+
+// HeldSince lists rows the mirror holds whose sitemap lastmod is at or after a
+// date, newest first, capped at limit (0 for no cap).
+//
+// It answers a health question nothing else can: the sitemap says these resources
+// were republished by the publisher, so anything still held from before that date
+// is a version the rest of the world has moved past. Counting them is the only
+// way to know whether the mirror is a current law library or a snapshot that
+// quietly stopped being one.
+func (s *Store) HeldSince(ctx context.Context, since string, limit int) ([]Inventory, error) {
+	var out []Inventory
+	err := s.scanAll(ctx, prefixInventory, func(key, value string) (bool, error) {
+		in, err := decodeInventory(key, value)
+		if err != nil {
+			return false, err
+		}
+		// Stale rows belong here: they are exactly the ones the publisher says were
+		// republished while we hold an older version.
+		if (in.State != StateFetched && in.State != StateStale) || in.LastMod < since {
+			return false, nil
+		}
+		out = append(out, in)
+		return limit > 0 && len(out) >= limit*4, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	// The scan stops after a handful of times the limit rather than walking all
+	// 200k rows, so it then needs the newest ones: sorting what it collected and
+	// keeping the top limit. Collecting more than limit keeps that truncation
+	// honest even when the early keyspace is dominated by one medium.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].LastMod != out[j].LastMod {
+			return out[i].LastMod > out[j].LastMod
+		}
+		return out[i].ELIURL < out[j].ELIURL
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// Changes lists recorded feed changes from a date (YYYY-MM-DD, inclusive) onward,
+// oldest first. Keys start with the date, so the range is a prefix scan rather
+// than a filter over every change the feed has ever reported.
+//
+// It exists because a change row is otherwise write-only data: the feed's value
+// is knowing *which* documents moved, and that is only useful if it can be read
+// back next to what the mirror actually did about them.
+func (s *Store) Changes(ctx context.Context, since string, limit int) ([]Change, error) {
+	var out []Change
+	err := s.scanAll(ctx, prefixChange, func(key, value string) (bool, error) {
+		f := strings.SplitN(key, "|", 3)
+		if len(f) < 3 {
+			return false, nil
+		}
+		c := Change{Date: f[0], Accession: f[1], Reason: f[2]}
+		if since != "" && c.Date < since {
+			return false, nil
+		}
+		if vf := strings.Split(value, "\t"); len(vf) >= 4 {
+			c.DocumentID, c.DocType, c.Href, c.SeenAt = vf[0], vf[1], vf[2], vf[3]
+		}
+		out = append(out, c)
+		return limit > 0 && len(out) >= limit, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // UnresolvedAccessions lists change entries whose accession is not stored yet.

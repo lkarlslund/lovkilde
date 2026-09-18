@@ -531,3 +531,424 @@ func TestSha256Hex(t *testing.T) {
 		t.Errorf("Sha256Hex(abc) = %s", got)
 	}
 }
+
+func TestBodyRoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	in := Body{
+		ELIURL: "https://www.retsinformation.dk/eli/lta/1995/498", Kind: "lta",
+		State: StateEmpty, Attempts: 1, SHA256: "deadbeef", Bytes: 12611,
+		TextChars: 12, Error: "payload has no text",
+	}
+	if err := s.PutBody(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := s.GetBody(ctx, in.ELIURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("body record not found after write")
+	}
+	if got != in {
+		t.Errorf("round trip mismatch:\n got %+v\nwant %+v", got, in)
+	}
+}
+
+// The body queue shares the store with the live mirror and keys rows by the same
+// ELI URL. If the two keyspaces ever leak into each other, the XML crawler starts
+// re-requesting 29k documents it already holds -- or the backfill starts refetching
+// canonical XML as if it were a body -- and neither shows up as an error, just as a
+// crawl that never converges. So the same URL is used on both sides here.
+func TestBodyRowsDoNotMixWithInventory(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	url := "https://www.retsinformation.dk/eli/lta/1995/498"
+	if err := s.PutInventory(ctx, Inventory{ELIURL: url, Kind: "lta", State: StatePending, SHA256: "xmlhash", Bytes: 700}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutBody(ctx, Body{ELIURL: url, Kind: "lta", State: StatePending, SHA256: "jsonhash", Bytes: 12611}); err != nil {
+		t.Fatal(err)
+	}
+
+	inv, err := s.PendingInventory(ctx, 10, Filter{MaxAttempts: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inv) != 1 || inv[0].SHA256 != "xmlhash" {
+		t.Fatalf("inventory queue = %+v, want only the XML row", inv)
+	}
+	bodies, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bodies) != 1 || bodies[0].SHA256 != "jsonhash" {
+		t.Fatalf("body queue = %+v, want only the body row", bodies)
+	}
+
+	invCount, invTotal, err := s.CountByState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invTotal != 1 || invCount[StatePending] != 1 {
+		t.Errorf("inventory census = %v total %d, want one pending row only", invCount, invTotal)
+	}
+	bodyCount, bodyTotal, err := s.CountBodiesByState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bodyTotal != 1 || bodyCount[StatePending] != 1 {
+		t.Errorf("body census = %v total %d, want one pending row only", bodyCount, bodyTotal)
+	}
+
+	// The accession index is a third keyspace; seeding it proves the body prefix
+	// does not sweep up anything that merely starts with a similar byte.
+	if err := s.PutAccession(ctx, Accession{Accession: "A19950049829", ELIURL: url, SHA256: "xmlhash", Bytes: 700, ChangedAt: "2026-09-17"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5}); err != nil || len(got) != 1 {
+		t.Errorf("body queue after accession seed = %+v (err %v), want still one row", got, err)
+	}
+}
+
+// The automatic sweep must only offer rows that are genuinely still work. empty and
+// gone are conclusions about the corpus -- Finanslove have no prose to fetch -- so a
+// sweep that handed them back would re-request ~10k documents on every pass and
+// never converge. Only an explicit --state selection may retry them.
+func TestPendingBodiesSweepsOnlyRetryableStates(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	seed := []Body{
+		{ELIURL: "https://x/eli/lta/1", Kind: "lta", State: StatePending},
+		{ELIURL: "https://x/eli/lta/2", Kind: "lta", State: StateFetched, Attempts: 1},
+		{ELIURL: "https://x/eli/lta/3", Kind: "lta", State: StateFailed, Attempts: 1},
+		{ELIURL: "https://x/eli/lta/4", Kind: "lta", State: StateGone, Attempts: 1},
+		{ELIURL: "https://x/eli/lta/5", Kind: "lta", State: StateEmpty, Attempts: 1},
+		{ELIURL: "https://x/eli/lta/6", Kind: "lta", State: StateSkipped, Attempts: 1},
+	}
+	if err := s.PutBodyBatch(ctx, seed); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Errorf("default sweep offered %d rows (%v), want pending and failed only", len(got), got)
+	}
+	if err := s.PutBody(ctx, Body{ELIURL: "https://x/eli/lta/7", Kind: "lta", State: StatePending, Attempts: 9}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5}); err != nil || len(got) != 2 {
+		t.Errorf("default sweep with an exhausted row = %+v (err %v), want the retry ceiling honoured", got, err)
+	}
+
+	for _, st := range []State{StateGone, StateEmpty, StateFetched, StateSkipped} {
+		got, err := s.PendingBodies(ctx, 10, Filter{States: []string{string(st)}})
+		if err != nil {
+			t.Fatalf("state %s: %v", st, err)
+		}
+		if len(got) != 1 {
+			t.Errorf("explicit --state %s offered %d rows, want 1", st, len(got))
+		}
+	}
+	if _, err := s.PendingBodies(ctx, 10, Filter{States: []string{"bogus"}}); err == nil {
+		t.Error("an unknown state was accepted, so a typo in --state silently fetches nothing")
+	}
+}
+
+// Body rows page the same way inventory rows do, and the shared scan is only proven
+// prefix-generic if it also works for the body keyspace: a cursor that escaped the
+// prefix would either re-offer rows or walk into the inventory keys.
+func TestPendingBodiesPagesAfterCursor(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	var rows []Body
+	for _, id := range []string{"a/1", "a/2", "a/3", "a/4", "a/5"} {
+		rows = append(rows, Body{ELIURL: "https://x/eli/" + id, Kind: "a", State: StatePending})
+	}
+	// An inventory row sorts after every body key, so the walk has to stop at the
+	// top of the body prefix instead of spilling into it.
+	if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/z/9", Kind: "z", State: StatePending}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutBodyBatch(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+
+	seen := map[string]bool{}
+	var after string
+	for page := 0; page < 10; page++ {
+		got, err := s.PendingBodies(ctx, 2, Filter{MaxAttempts: 5, Cursor: after})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) == 0 {
+			break
+		}
+		for _, b := range got {
+			if seen[b.ELIURL] {
+				t.Fatalf("cursor paging offered %s twice", b.ELIURL)
+			}
+			seen[b.ELIURL] = true
+		}
+		after = got[len(got)-1].ELIURL
+	}
+	if len(seen) != 5 {
+		t.Errorf("paged %d distinct body rows, want 5", len(seen))
+	}
+	if got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5, Cursor: "zzz-beyond-the-end"}); err != nil || len(got) != 0 {
+		t.Errorf("cursor past the prefix returned %+v (err %v), want nothing", got, err)
+	}
+
+	// Descending is what the live backfill wants once it starts from the newest law.
+	got, err := s.PendingBodies(ctx, 2, Filter{MaxAttempts: 5, Order: "desc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ELIURL != "https://x/eli/a/5" {
+		t.Errorf("descending first page = %+v, want the newest body rows", got)
+	}
+}
+
+// A short record has to decode, not error: the queue is written by a future version
+// of this program with more fields, and a decode failure mid-scan aborts the run
+// with nothing fetched.
+func TestDecodeBodyToleratesShortRecord(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	if err := s.db.Update(func(tx *badger.Txn) error {
+		return tx.Set([]byte(prefixBody+"https://x/eli/lta/1"), []byte("lta"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := s.GetBody(ctx, "https://x/eli/lta/1")
+	if err != nil {
+		t.Fatalf("short record errored: %v", err)
+	}
+	if !found || got.Kind != "lta" || got.State != StatePending {
+		t.Errorf("short record decoded to %+v found=%v, want kind lta and pending", got, found)
+	}
+}
+
+// The census is also the deliverable: "how many laws have no text anywhere" is a
+// question about the corpus, and empty must not be folded into failed.
+func TestCountBodiesByStateSeparatesEmpty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	if err := s.PutBodyBatch(ctx, []Body{
+		{ELIURL: "https://x/eli/lta/1", Kind: "lta", State: StateFetched, TextChars: 5000},
+		{ELIURL: "https://x/eli/lta/2", Kind: "lta", State: StateEmpty, TextChars: 12},
+		{ELIURL: "https://x/eli/lta/3", Kind: "lta", State: StateFailed, Error: "timeout"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	counts, total, err := s.CountBodiesByState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 {
+		t.Errorf("total %d, want 3", total)
+	}
+	if counts[StateFetched] != 1 || counts[StateEmpty] != 1 || counts[StateFailed] != 1 {
+		t.Errorf("counts %v, want one each of fetched, empty, failed", counts)
+	}
+}
+
+// TestPutInventoryBatchPreservesState is the guard for the nightly refill.
+//
+// A sitemap pass reports every resource it has ever advertised, so the rows it
+// hands over carry only what the sitemap knows: URL, lastmod, kind, and pending.
+// Overwriting on upsert throws away the hash, the accession, the attempt counter,
+// and the fact that a resource was already fetched -- turning a daily run into a
+// full re-crawl, including re-requests for resources long since recorded as gone.
+// Only a moved lastmod may re-pend a row.
+func TestPutInventoryBatchPreservesState(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	have := []Inventory{
+		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-01-01", Kind: "lta", State: StateFetched,
+			Attempts: 1, Accession: "B20260000105", SHA256: "hash1", Bytes: 5000},
+		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-01-02", Kind: "lta", State: StateGone,
+			Attempts: 4, Error: "404 Not Found"},
+		// A document we hold, so a moved lastmod has to re-pend it while keeping the
+		// hash: that pairing is what lets the next fetch tell an amended text from a
+		// republication of the same one.
+		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-01-03", Kind: "lta", State: StateFetched,
+			Attempts: 2, Accession: "B20260000305", SHA256: "hash3", Bytes: 1200},
+	}
+	if err := s.PutInventoryBatch(ctx, have); err != nil {
+		t.Fatal(err)
+	}
+
+	// The next sitemap pass: same lastmod for rows 1 and 2, a newer one for row 1's
+	// neighbour below, and one resource the store has never seen.
+	observed := []Inventory{
+		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-01-01", Kind: "lta", State: StatePending},
+		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-01-02", Kind: "lta", State: StatePending},
+		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-09-18", Kind: "lta", State: StatePending},
+		{ELIURL: "https://x/eli/lta/4", LastMod: "2026-09-18", Kind: "lta", State: StatePending},
+	}
+	if err := s.PutInventoryBatch(ctx, observed); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unchanged lastmod: the conclusion survives untouched, attempts included, so
+	// a dead resource is not retried forever and a fetched one is not re-fetched.
+	for _, want := range []Inventory{
+		{ELIURL: "https://x/eli/lta/1", State: StateFetched, Attempts: 1, Accession: "B20260000105", SHA256: "hash1", Bytes: 5000},
+		{ELIURL: "https://x/eli/lta/2", State: StateGone, Attempts: 4, Error: "404 Not Found"},
+	} {
+		got, found, err := s.GetInventory(ctx, want.ELIURL)
+		if err != nil || !found {
+			t.Fatalf("GetInventory(%s): found=%v err=%v", want.ELIURL, found, err)
+		}
+		if got.State != want.State || got.Attempts != want.Attempts || got.SHA256 != want.SHA256 ||
+			got.Accession != want.Accession || got.Bytes != want.Bytes || got.Error != want.Error {
+			t.Errorf("%s unchanged lastmod rewrote the row: got %+v, want state %s attempts %d accession %s hash %s bytes %d error %q",
+				want.ELIURL, got, want.State, want.Attempts, want.Accession, want.SHA256, want.Bytes, want.Error)
+		}
+	}
+
+	// Moved lastmod: stale, not pending -- pending is the state the fetch loop
+	// answers from disk, which would discard the change signal. The identity fields
+	// must survive so the fetch can tell an amended text from a republication.
+	got3, found, err := s.GetInventory(ctx, "https://x/eli/lta/3")
+	if err != nil || !found {
+		t.Fatalf("GetInventory row 3: found=%v err=%v", found, err)
+	}
+	if got3.State != StateStale || got3.LastMod != "2026-09-18" {
+		t.Errorf("moved lastmod did not mark the held row stale: %+v", got3)
+	}
+	if got3.SHA256 != "hash3" || got3.Accession != "B20260000305" || got3.Bytes != 1200 || got3.Attempts != 2 {
+		t.Errorf("re-pending threw away the identity of a held document: %+v", got3)
+	}
+
+	// A resource the sitemap newly advertises is written as observed.
+	got4, found, err := s.GetInventory(ctx, "https://x/eli/lta/4")
+	if err != nil || !found {
+		t.Fatalf("new resource missing after batch: found=%v err=%v", found, err)
+	}
+	if got4.State != StatePending || got4.LastMod != "2026-09-18" {
+		t.Errorf("new resource stored as %+v", got4)
+	}
+}
+
+// TestChangesRange pins the read-back path for the change feed: a date filter
+// that silently drops the boundary day, or a limit that stops early, both make
+// "we harvested N changes and collected them" unverifiable.
+func TestChangesRange(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	if err := s.PutChanges(ctx, []Change{
+		{Date: "2026-09-16", Accession: "B20260000001", Reason: "BEKGJOR", DocumentID: "1", DocType: "LBK H", Href: "/a", SeenAt: "t"},
+		{Date: "2026-09-17", Accession: "B20260000002", Reason: "AENDRING", DocumentID: "2", DocType: "LBK H", Href: "/b", SeenAt: "t"},
+		{Date: "2026-09-18", Accession: "B20260000002", Reason: "AENDRING", DocumentID: "2", DocType: "LBK H", Href: "/b", SeenAt: "t"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.Changes(ctx, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("unfiltered changes returned %d, want 3: %+v", len(all), all)
+	}
+	if all[0].Date != "2026-09-16" || all[2].Date != "2026-09-18" {
+		t.Errorf("changes are not oldest-first: %s .. %s", all[0].Date, all[2].Date)
+	}
+	if all[1].Accession != "B20260000002" || all[1].Reason != "AENDRING" || all[1].DocType != "LBK H" || all[1].Href != "/b" {
+		t.Errorf("key or value fields lost in the round trip: %+v", all[1])
+	}
+
+	fromDay, err := s.Changes(ctx, "2026-09-17", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fromDay) != 2 {
+		t.Errorf("--days filter returned %d rows, want the 2 on and after 2026-09-17: %+v", len(fromDay), fromDay)
+	}
+
+	limited, err := s.Changes(ctx, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(limited) != 1 {
+		t.Errorf("limit 1 returned %d rows", len(limited))
+	}
+}
+
+// TestPendingSplitCountsStale pins what the completed-sweep check counts once a
+// publisher has moved on from a document we hold. An unattempted stale row is work
+// the sweep owes; past the retry ceiling it is stalled, and must not hold the
+// mirror's timestamp hostage forever.
+func TestPendingSplitCountsStale(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	if err := s.PutInventoryBatch(ctx, []Inventory{
+		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-09-18", Kind: "lta", State: StateStale, SHA256: "h1", Attempts: 1},
+		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-09-18", Kind: "lta", State: StateStale, SHA256: "h2", Attempts: 9},
+		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-09-18", Kind: "lta", State: StateFetched, SHA256: "h3", Attempts: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	owed, stalled, err := s.InventoryPendingSplit(ctx, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owed != 1 || stalled != 1 {
+		t.Errorf("owed %d stalled %d, want 1 and 1: the fresh stale row is owed work and the exhausted one is stalled, and the fetched row is neither", owed, stalled)
+	}
+}
+
+// TestPutInventoryBatchIgnoresOlderLastmod is the duplicate-entry guard.
+//
+// The sitemap advertises some resources twice per pass and the two entries do not
+// always carry the same date. Treating any difference as a change made the row
+// stale on the pass that saw the older date, so two passes an hour apart marked
+// 872 documents as amended and queued them for re-download. A lastmod that moves
+// backwards, or merely disagrees, is not the publisher saying the text changed.
+func TestPutInventoryBatchIgnoresOlderLastmod(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	if err := s.PutInventory(ctx, Inventory{
+		ELIURL: "https://x/eli/lta/9", LastMod: "2026-09-10", Kind: "lta", State: StateFetched,
+		Attempts: 1, Accession: "B20260000905", SHA256: "hash9", Bytes: 2500,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Two pages, same resource, disagreeing dates -- the older one arriving second.
+	if err := s.PutInventoryBatch(ctx, []Inventory{
+		{ELIURL: "https://x/eli/lta/9", LastMod: "2026-09-10", Kind: "lta", State: StatePending},
+		{ELIURL: "https://x/eli/lta/9", LastMod: "2026-05-01", Kind: "lta", State: StatePending},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, found, err := s.GetInventory(ctx, "https://x/eli/lta/9")
+	if err != nil || !found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+	if got.State != StateFetched || got.LastMod != "2026-09-10" {
+		t.Errorf("a disagreeing duplicate entry rewrote the row: %+v, want fetched with the newest date kept", got)
+	}
+
+	// A genuinely later date still counts, which is the point of the comparison.
+	if err := s.PutInventoryBatch(ctx, []Inventory{
+		{ELIURL: "https://x/eli/lta/9", LastMod: "2026-09-18", Kind: "lta", State: StatePending},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, err := s.GetInventory(ctx, "https://x/eli/lta/9"); err != nil {
+		t.Fatal(err)
+	} else if got.State != StateStale || got.LastMod != "2026-09-18" {
+		t.Errorf("a later lastmod did not mark the held row stale: %+v", got)
+	}
+}

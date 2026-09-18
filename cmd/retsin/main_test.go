@@ -348,7 +348,7 @@ func TestFetchBarPaints(t *testing.T) {
 
 	// The same order the command uses: count, build the bar, then paint counts,
 	// spaced further apart than the redraw throttle.
-	bar := newFetchBar(lim, progress.ModeAlways, 8)
+	bar := newFetchBar(lim, progress.ModeAlways, 8, "fetch")
 	if !bar.Enabled() {
 		t.Fatal("bar disabled in always mode")
 	}
@@ -357,7 +357,7 @@ func TestFetchBarPaints(t *testing.T) {
 		if err := bar.Set(i); err != nil {
 			t.Fatalf("Set(%d): %v", i, err)
 		}
-		bar.Describe(pacingLabel(lim))
+		bar.Describe(pacingLabel(lim, "fetch"))
 		time.Sleep(200 * time.Millisecond)
 	}
 	bar.Finish()
