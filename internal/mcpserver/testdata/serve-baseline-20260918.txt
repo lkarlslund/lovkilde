@@ -1,17 +1,14 @@
 # serving path baseline, before the compiled artifact
-# generated: 2026-09-18 17:02:55
+# generated: 2026-09-18 18:34:12
 # reproduce: RETSIN_SERVE_BENCH=1 RETSIN_SERVE_BENCH_DOCS=1000 go test ./internal/mcpserver -run TestServingBaselineCost -v
-# mirror: 191429 entries scanned in 1.581s; 1000 documents queried, 1000 answered text
-  open+parse+model (the share the artifact removes): p50 451µs, p95 7.884ms, p99 24.89ms, mean 1.987ms (n=1000)
-  whole-document lookup:                            p50 498µs, p95 8.691ms, p99 26.61ms, mean 2.158ms (n=1000)
-  addressed lookup:                                 p50 674µs, p95 10.461ms, p99 27.554ms, mean 2.292ms (n=190)
+# mirror: 191429 entries scanned in 1.522s; 1000 documents queried, 1000 answered text
+  open+parse+model (the share the artifact removes): p50 445µs, p95 7.809ms, p99 25.184ms, mean 1.966ms (n=1000)
+  whole-document lookup:                            p50 496µs, p95 8.517ms, p99 26.138ms, mean 2.135ms (n=1000)
+  addressed lookup:                                 p50 662µs, p95 8.246ms, p99 26.44ms, mean 2.33ms (n=369)
 
 ## addresses the shipped unitiser cites
-  440 of 1000 queried documents yielded a cited address; 250 of those (57%) do not open through lookup:
-  shape paragraph number   71 unresolved (recorded debt 71) e.g. [200723L00136 § 2, stk. 1 200812L00078 § 2, stk. 1]
-  shape stykke with no paragraph   44 unresolved (recorded debt 44) e.g. [B19700050705 , stk. 1 B19770058205 , stk. 1]
-  shape number missing after the word  135 unresolved (recorded debt 135) e.g. [199812L00177 bilag  200014L00160 bilag ]
+  369 of 1000 queried documents yielded a cited address; 0 of those (0%) do not open through lookup:
 
-  startup index build is 1.581s over 191429 documents, which is why it is rebuilt
+  startup index build is 1.522s over 191429 documents, which is why it is rebuilt
   at boot rather than cached; the cost a query feels is the parse, and that
   is the number the artifact has to move.

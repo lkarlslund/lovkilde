@@ -385,6 +385,37 @@ the harness re-runs an unmutated control around every mutation — an earlier ve
 it reported six holes that did not exist, because a mutation that fails to compile is
 not evidence and a mutation that changes nothing proves nothing.
 
+### The provision number the payload prints as prose
+
+The register's own XML keeps a provision's number in `<Explicatus>` beside its text. The
+payload prints it as the first words *of* the text, usually inside a bold run
+(`<P class="Paragraftekst"><B>§&nbsp;6.</B> Arbejdsformidlingen …`), and in the legacy SGML
+shape as an element of its own with no period (`<P CLASS=PARAB> <B>§ 5 </B> </P>`). Both
+`Sections()` and the model read the marker, so where the text comes only from the payload the
+reader had nothing to read from: over a 2,016-document sample, **236 of the 750 documents that
+have provisions gave no provision a number at all** — 4,587 of 11,402 provisions, 37 % of the
+`lta` shelf. Those documents have text you can search and no way to be told where in them you
+are standing.
+
+`attachBody` therefore promotes the printed number into the marker. It is a move and not a copy:
+the document's text stays what the page shows, and the number is now also where the XML body
+keeps it. Two rules keep the promotion from inventing names. The period decides number from
+citation — `§ 6.` names this provision, while `§ 3 finder ikke anvendelse` and
+`§ 3, stk. 2 finder …` name another one, so a missing period with prose following refuses. And
+the marker has to *be* the number: a numbered item inside a provision is emitted as an
+`Explicatus` too and its text quotes other provisions, which initially gave one bekendtgørelse
+the number 1 for its § 3, § 4, § 6 and § 11.
+
+Measured after, by `TestHTMLBodyProvisionsGetNumbers` and the serving baseline
+(`internal/mcpserver/testdata/serve-baseline-20260918.txt`): **171 of 7,805 provisions in
+payload-bodied documents still have no number (2.2 %)**, and the residual is the quoted shape —
+"§ 12, stk. 2, affattes således: …" inside a consolidated act, "§ 10, stk. 1, nr. 4: Mundtlig
+eksamen …" inside a ministry note — text that cites a provision rather than being one, which
+stays unnumbered on purpose. On the same 1,000-document serving sample the unitiser's citations
+went from 440 with 250 of them unopenable to **369 with none unopenable**, and the gate no
+longer carries an allowance: a cited address that cannot be re-opened is a defect from its first
+occurrence.
+
 ### Older versions of a law are already in the archive
 
 The obvious question for an archive is whether *superseded* versions of a still-current

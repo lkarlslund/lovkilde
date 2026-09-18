@@ -18,20 +18,27 @@ import (
 type Address struct {
 	Raw string
 
-	Chapter    int
-	Afsnit     int    // for "afsnit II", written in roman numerals in the older collections
-	Paragraph  string // number, possibly with a litra suffix: "267", "8a"
-	RangeTo    string // for "§§ 259-266"
-	Stk        int
-	StkTo      int // for "stk. 1-3"
-	Nr         int
-	Litra      string
-	Bilag      int
-	Heading    bool // "overskriften for § 12" / "rubrikaen"
-	Preamble   bool // "indledningen affattes således"
-	DocTitle   bool // "lovens titel affattes således"
-	Everywhere bool // "overalt i loven ændres »X« til: »Y«" — no address at all
-	Recognised bool
+	Chapter   int
+	Afsnit    int    // for "afsnit II", written in roman numerals in the older collections
+	Paragraph string // number, possibly with a litra suffix: "267", "8a"
+	RangeTo   string // for "§§ 259-266"
+	Stk       int
+	StkTo     int // for "stk. 1-3"
+	Nr        int
+	Litra     string
+	Bilag     int
+	Heading   bool // "overskriften for § 12" / "rubrikaen"
+
+	// EntryIntoForce names the effectivity series explicitly: "§ 2, ikrafttrædelsesbestemmelse".
+	// The series prints its own § 1, § 2, ... and is not the law's numbering, so a plain "§ 2"
+	// must never reach it. That refusal is load-bearing for consolidation, and it left the series
+	// with no address at all: 25,680 provisions the mirror prints could not be opened by name.
+	// Naming the series is what makes them reachable without making them ambiguous.
+	EntryIntoForce bool
+	Preamble       bool // "indledningen affattes således"
+	DocTitle       bool // "lovens titel affattes således"
+	Everywhere     bool // "overalt i loven ændres »X« til: »Y«" — no address at all
+	Recognised     bool
 }
 
 func (a Address) String() string {
@@ -71,6 +78,12 @@ func (a Address) String() string {
 	}
 	if a.Litra != "" {
 		fmt.Fprintf(&b, ", litra %s", a.Litra)
+	}
+	if a.EntryIntoForce {
+		// Printed after the number, because that is the only position ParseAddress accepts: an
+		// amendment sentence may mention the series in passing while citing some other §, and a
+		// marker that could appear anywhere would then move the edit.
+		b.WriteString(", ikrafttrædelsesbestemmelse")
 	}
 	if a.Heading {
 		b.WriteString(" (overskrift)")
@@ -221,6 +234,14 @@ func ParseAddress(s string) Address {
 		}
 		a.Recognised = true
 	}
+	if m := reParagraph.FindStringSubmatchIndex(s); m != nil && reIkraftMarker.MatchString(s[m[3]:]) {
+		// Only a marker printed after the § names the series. Amendments say things like
+		// "lovens ikrafttrædelsesbestemmelser affattes således" and quote a § in passing, and
+		// letting the word anywhere in the sentence redirect the edit would be the exact
+		// confusion the refusal in Find exists to prevent. The unitiser prints the marker as a
+		// trailing locator, which is the only place it is accepted.
+		a.EntryIntoForce = true
+	}
 	if m := reStk.FindStringSubmatch(s); len(m) > 0 {
 		a.Stk = Atoi(m[1])
 		a.StkTo = Atoi(m[2])
@@ -246,6 +267,11 @@ func ItemMarker(s string) (num int, litra string) {
 	}
 	return Atoi(m[1]), ""
 }
+
+// reIkraftMarker matches the words that name the effectivity series in an address. Both halves
+// of the printed heading are accepted, since the corpus writes "ikrafttrædelsesbestemmelse" and
+// "overgangsbestemmelse" for provisions in the same series.
+var reIkraftMarker = regexp.MustCompile(`(?i)ikrafttr[æa]delsesbestemmelse|overgangsbestemmelse`)
 
 // reItemMarker matches the marker a numbered item prints: "1)", "2.", "a)", "b.".
 var reItemMarker = regexp.MustCompile(`^([0-9]+|[a-zæøåA-ZÆØÅ])[\).]`)

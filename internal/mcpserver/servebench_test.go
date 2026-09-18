@@ -141,18 +141,17 @@ func TestServingBaselineCost(t *testing.T) {
 	fmt.Fprintf(&b, "  %d of %d queried documents yielded a cited address; %d of those (%.0f%%) do not open through lookup:\n",
 		cited, len(whole), failed, 100*float64(failed)/float64(max(cited, 1)))
 	for shape, examples := range unresolved {
-		// The bound is a ratchet: this class of address is measured debt with a number attached, so
-		// a change that made it worse fails rather than blending into a latency report, and a fix
-		// shows up as a bound that has to be lowered.
-		if len(examples) > unresolvedBound(shape) {
-			t.Errorf("%d cited addresses of shape %q do not resolve, the recorded debt was %d; first two: %v",
-				len(examples), shape, unresolvedBound(shape), examples[:min(len(examples), 2)])
-		} else if len(examples) < unresolvedBound(shape) {
-			t.Logf("shape %q fell to %d unresolved from its recorded %d: lower the bound to lock the gain in",
-				shape, len(examples), unresolvedBound(shape))
-		}
-		fmt.Fprintf(&b, "  shape %-12s %4d unresolved (recorded debt %d) e.g. %v\n",
-			shape, len(examples), unresolvedBound(shape), examples[:min(len(examples), 2)])
+		// There is no allowance left to fall back on. Over the 1,000-document sample every address
+		// the shipped unitiser emits now opens through lookup, so a citation that cannot be
+		// re-opened is a defect from its first occurrence rather than a share of a measured debt.
+		// The shapes stay named because each needed a different fix: the bare "bilag " and "kapitel "
+		// keys and the ", stk. 1" ones because they cited a number the document never gave (the
+		// unitiser now refuses to emit those), and the "§ 2, stk. 1" ones because the entry-into-force
+		// series had no address at all until it got one of its own.
+		t.Errorf("%d cited addresses of shape %q do not open through lookup; first two: %v",
+			len(examples), shape, examples[:min(len(examples), 2)])
+		fmt.Fprintf(&b, "  shape %-24s %4d unresolved e.g. %v\n",
+			shape, len(examples), examples[:min(len(examples), 2)])
 	}
 	fmt.Fprintf(&b, "\n  startup index build is %v over %d documents, which is why it is rebuilt\n", scanCost.Round(time.Millisecond), len(entries))
 	fmt.Fprintf(&b, "  at boot rather than cached; the cost a query feels is the parse, and that\n")
@@ -207,24 +206,6 @@ func addressShape(addr string) string {
 
 // unresolvedBound records how many cited addresses of each shape failed to open on 2026-09-18,
 // measured over 1,000 sampled documents. A number may only fall.
-func unresolvedBound(shape string) int {
-	switch shape {
-	case "number missing after the word":
-		// "bilag " and "kapitel " with the number left in the heading beside the element: the
-		// unitiser keys the section without a number, so nothing matches it.
-		return 135
-	case "stykke with no paragraph":
-		// ", stk. 1": a subsection of a section the document never numbers.
-		return 44
-	case "paragraph number":
-		// "§ 2, stk. 1" in documents whose provisions restart or are not the § series the
-		// address claims (parliamentary stages and proposals).
-		return 71
-	default:
-		return 0
-	}
-}
-
 func unresolvedFlatten(m map[string][]string) []string {
 	var out []string
 	for _, v := range m {

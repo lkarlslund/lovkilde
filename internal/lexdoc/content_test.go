@@ -102,6 +102,42 @@ func TestFindPrefersTheLawOverItsOwnAppendix(t *testing.T) {
 	}
 }
 
+// TestEntryIntoForceNeedsItsOwnName is the other half of the rule the test above states: refusing
+// a plain "§ 1" out of the effectivity series is right for an amendment and wrong for a reader,
+// because the series holds provisions the mirror prints and a search hit can land on. Naming the
+// series reaches them; a plain number still does not.
+func TestEntryIntoForceNeedsItsOwnName(t *testing.T) {
+	c := &Content{}
+	own := &Provision{Number: "1", Segments: []Segment{{Text: "§ 1. Lovens eget § 1."}}}
+	c.Order = []Node{{Provision: own}}
+	eif := &Provision{Number: "1", Printed: "§ 1.", Segments: []Segment{{Text: "§ 1. Ikrafttræden."}, {Text: "Stk. 2. Overgangsregel."}},
+		Stykker: []Stykke{{Nr: 1, Span: Span{From: 0, To: 1}}, {Nr: 2, Span: Span{From: 1, To: 2}}}}
+	c.EntryIntoForce = []Provision{*eif}
+
+	named := ParseAddress("§ 1, ikrafttrædelsesbestemmelse")
+	if !named.EntryIntoForce {
+		t.Fatal("the trailing locator did not name the effectivity series")
+	}
+	loc, ok := c.Find(named)
+	if !ok || loc.Provision == own {
+		t.Fatalf("the named address resolved to %s, want the effectivity provision", loc)
+	}
+	if loc, ok := c.Find(ParseAddress("§ 1, stk. 2, ikrafttrædelsesbestemmelse")); !ok || loc.Stykke == nil || loc.Stykke.Nr != 2 {
+		t.Errorf("the named address did not reach stk. 2 of the series: %s ok=%v", loc, ok)
+	}
+	if _, ok := c.Find(ParseAddress("§ 9, ikrafttrædelsesbestemmelse")); ok {
+		t.Error("a named series resolved to a provision it does not hold")
+	}
+	// An amendment sentence may mention the series while citing some other section, and must not be
+	// redirected by it: the marker counts only after the § it qualifies.
+	if a := ParseAddress("lovens ikrafttrædelsesbestemmelser ændres, og § 1 ophæves"); a.EntryIntoForce {
+		t.Error("an amendment naming the series in passing was aimed at it")
+	}
+	if a := ParseAddress("§ 1, ikrafttrædelsesbestemmelse"); a.String() != "§ 1, ikrafttrædelsesbestemmelse" {
+		t.Errorf("the printed address is %q, which ParseAddress would not read back", a.String())
+	}
+}
+
 func TestFindRefusesAnItemWithoutItsStykke(t *testing.T) {
 	// "§ 5, nr. 2" names no stykke, and items live under a stykke. Searching every stykke for
 	// a "nr. 2" would splice text into whichever one happened to have it, which is a guess

@@ -442,20 +442,36 @@ func (c *Content) Find(a Address) (Located, bool) {
 	// entry-into-force quotation of some amending act printed as "§ 3". Refusing the edit
 	// is visible in the unresolved count; editing the wrong provision is not.
 	want := strings.ToLower(a.Paragraph)
+	if a.EntryIntoForce {
+		// The named series is searched and nothing else is: "§ 2, ikrafttrædelsesbestemmelse"
+		// cannot satisfy itself against the law's § 2, which is the mirror image of the rule
+		// above that keeps a plain "§ 2" out of this series.
+		for i := range c.EntryIntoForce {
+			p := &c.EntryIntoForce[i]
+			if paragraphNumberMatches(p, want) {
+				return c.descend(p, a)
+			}
+		}
+		return Located{}, false
+	}
 	refs := c.Provisions()
 	for i := range refs {
 		p := refs[i].Provision
-		// The number is compared on its own, not on the printed "1b": an address for "§ 1"
-		// means the provision numbered 1, whether or not the corpus prints it as "§ 1 b.",
-		// and the second branch is the other spelling, where the litra arrived glued on.
-		if strings.ToLower(p.Number) == want {
-			return c.descend(p, a)
-		}
-		if len(want) > 1 && strings.EqualFold(p.Number, want[:len(want)-1]) && p.Litra == want[len(want)-1:] {
+		if paragraphNumberMatches(p, want) {
 			return c.descend(p, a)
 		}
 	}
 	return Located{}, false
+}
+
+// paragraphNumberMatches compares a § number on its own, not on the printed "1b": an address for
+// "§ 1" means the provision numbered 1, whether or not the corpus prints it as "§ 1 b.", and the
+// second branch is the other spelling, where the litra arrived glued on.
+func paragraphNumberMatches(p *Provision, want string) bool {
+	if strings.ToLower(p.Number) == want {
+		return true
+	}
+	return len(want) > 1 && strings.EqualFold(p.Number, want[:len(want)-1]) && p.Litra == want[len(want)-1:]
 }
 
 // part returns the first part of the given kind and number.

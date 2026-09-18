@@ -111,6 +111,7 @@ func (d *Document) attachBody(body *Node, sidecar string) {
 	// A Node interleaves text and children: len(Runs) is len(Elems)+1, so appending a
 	// child without the (empty) text run before it would break the invariant that
 	// checkInvariant asserts, and the reader's own tests rely on.
+	promotePrintedParagraphNumbers(body)
 	d.Root.Elems = append(d.Root.Elems, body)
 	d.Root.Runs = append(d.Root.Runs, "")
 	d.Body = append(d.Body, body)
