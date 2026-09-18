@@ -920,6 +920,18 @@ and its report is checked in at `internal/crawl/testdata/stale-census-20260918.t
 trap set is the number that will matter once the mirror has been running long enough to
 fall behind.
 
+**Whether the feed has to drive downloads is still open, and it is a rule rather than a taste.**
+The feed names an accession and never an ELI URL, so a change to a document this mirror has never
+seen cannot be fetched from the feed alone — only a sitemap pass can find it. The rule the decision
+is being made against: **one** such accession means the feed has to drive downloads; zero across
+every harvested day is the only evidence that leaves the feed as annotation and reconciliation.
+Measured so far, over the eight feed days the store holds (2026-09-09 to 2026-09-18, 424 distinct
+changes): 424 resolved to held resources, **0** named an unseen document, 0 were left queued or
+behind. The collection cycle harvests the rolling window on every run, so the days keep
+accumulating; `retsin changes --report` writes each reconciliation to a dated file under
+`data/reports/` that is never overwritten, so the decision is read off files rather than off
+whatever the last person to run the command remembers.
+
 ### Narrowing a run
 
 Pending resources are visited in ELI URL order by default, so a series that sorts late stays

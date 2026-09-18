@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -429,6 +430,7 @@ the feed has already forgotten.`,
 // question that decides whether the feed has to drive downloads at all.
 func changesCmd(open openFunc) *cobra.Command {
 	var days, list int
+	var report bool
 	cmd := &cobra.Command{
 		Use:   "changes",
 		Short: "Report change-feed entries and whether the mirror collected them",
@@ -439,7 +441,14 @@ to an ELI resource, whose inventory row then says what happened: still queued,
 already re-fetched, and -- from the stored content timestamp -- whether new bytes
 actually arrived. Entries whose accession is unknown are documents this mirror has
 never seen, which the sitemap finds by lastmod but the feed alone could not fetch,
-because the feed gives no ELI URL.`,
+because the feed gives no ELI URL.
+
+That last count is the whole question this command exists to answer, and it is answered by a rule:
+one unknown accession means the feed has to drive downloads, because nothing else can find such a
+document. Zero unknowns across every harvested day is the only evidence that leaves the feed as
+annotation and reconciliation. The collection cycle harvests the rolling ten-day window on every
+run, so the days accumulate; --report keeps each reconciliation as its own dated file so the
+decision is read off measurements rather than memory.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, _, err := open(cmd)
@@ -461,8 +470,7 @@ because the feed gives no ELI URL.`,
 
 			var unknown, queued, behind, refetched, freshContent, missingRow int
 			byDate := map[string]int{}
-			type unresolved struct{ date, accession, reason, docType string }
-			var unresolvedRows []unresolved
+			var unresolvedRows []unresolvedChange
 
 			for _, c := range changes {
 				byDate[c.Date]++
@@ -473,7 +481,7 @@ because the feed gives no ELI URL.`,
 				if !found {
 					unknown++
 					if list > 0 {
-						unresolvedRows = append(unresolvedRows, unresolved{c.Date, c.Accession, c.Reason, c.DocType})
+						unresolvedRows = append(unresolvedRows, unresolvedChange{c.Date, c.Accession, c.Reason, c.DocType})
 					}
 					continue
 				}
@@ -519,6 +527,18 @@ because the feed gives no ELI URL.`,
 			}
 			fmt.Printf("note: \"new bytes\" comes from the stored content timestamp, which a rebuild also rewrites; it measures bytes that arrived, not that the publisher amended the text.\n")
 
+			if report {
+				path, err := writeChangeReport(a.cfg.DataDir, changeReport{
+					Generated: time.Now().UTC(), Since: since, Total: len(changes), ByDate: byDate,
+					Unknown: unknown, Queued: queued, Behind: behind, Refetched: refetched,
+					FreshContent: freshContent, MissingRow: missingRow, Unresolved: unresolvedRows,
+				})
+				if err != nil {
+					return err
+				}
+				fmt.Printf("report written: %s\n", path)
+			}
+
 			if list > 0 && len(unresolvedRows) > 0 {
 				fmt.Printf("\nfirst %d unknown accessions (new to this mirror):\n", min(list, len(unresolvedRows)))
 				for _, u := range unresolvedRows[:min(list, len(unresolvedRows))] {
@@ -530,6 +550,7 @@ because the feed gives no ELI URL.`,
 	}
 	cmd.Flags().IntVar(&days, "days", 10, "how far back to report, capped by the feed's own 10-day window")
 	cmd.Flags().IntVar(&list, "list", 0, "also list up to N unknown accessions")
+	cmd.Flags().BoolVar(&report, "report", false, "write a dated copy under <data-dir>/reports, refusing to overwrite an earlier one")
 	return cmd
 }
 
@@ -678,3 +699,71 @@ func status(ctx context.Context, a *app, lim *limiter.Limiter) error {
 	fmt.Println()
 	return nil
 }
+
+// changeReport is one reconciliation of the change feed against the archive, kept whole so the
+// file says what was measured rather than what a later reader wishes it had.
+type changeReport struct {
+	Generated               time.Time
+	Since                   string
+	Total                   int
+	ByDate                  map[string]int
+	Unknown, Queued, Behind int
+	Refetched, FreshContent int
+	MissingRow              int
+	Unresolved              []unresolvedChange
+}
+
+// writeChangeReport puts the reconciliation in a dated file and never touches an existing one.
+//
+// The numbers decide an open question — whether the change feed has to drive downloads, or whether
+// the sitemap's lastmod already sees everything the feed names — and a question decided by a
+// measurement needs the measurements, not a remembered percentage. The feed covers a rolling ten
+// days and the collection cycle harvests it on every run, so each report adds days the earlier
+// ones could not have: this is how the evidence accumulates instead of being re-derived from
+// whoever last ran the command.
+//
+// The rule being tested is stated in the file it is tested against: one feed entry naming an
+// accession this mirror has never seen is enough to require accession resolution, because the feed
+// gives no ELI URL and only a sitemap pass can find such a document. Zero across enough days is
+// the only thing that justifies leaving the feed as annotation.
+func writeChangeReport(dataDir string, r changeReport) (string, error) {
+	dir := filepath.Join(dataDir, "reports")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	name := filepath.Join(dir, "changes-"+r.Generated.UTC().Format("20060102T150405Z")+".md")
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	fmt.Fprintf(f, "# Change feed reconciled against the archive\n\n")
+	fmt.Fprintf(f, "Generated %s, covering feed entries since %s.\n\n", r.Generated.UTC().Format(time.RFC3339), r.Since)
+	fmt.Fprintf(f, "| feed days | entries |\n|---|---|\n")
+	for _, d := range sortedKeys(r.ByDate) {
+		fmt.Fprintf(f, "| %s | %d |\n", d, r.ByDate[d])
+	}
+	fmt.Fprintf(f, "\n| outcome | count |\n|---|---|\n")
+	fmt.Fprintf(f, "| named an accession this mirror has never seen | %d |\n", r.Unknown)
+	fmt.Fprintf(f, "| resolved to a held resource | %d |\n", r.Total-r.Unknown)
+	fmt.Fprintf(f, "| queued by this reconciliation | %d |\n", r.Queued)
+	fmt.Fprintf(f, "| known changed, older text held | %d |\n", r.Behind)
+	fmt.Fprintf(f, "| already collected | %d |\n", r.Refetched)
+	fmt.Fprintf(f, "| of those, new bytes inside the window | %d |\n", r.FreshContent)
+	if r.MissingRow > 0 {
+		fmt.Fprintf(f, "| no usable inventory row | %d |\n", r.MissingRow)
+	}
+	if len(r.Unresolved) > 0 {
+		fmt.Fprintf(f, "\n## Accessions unknown to this mirror\n\n")
+		for _, u := range r.Unresolved {
+			fmt.Fprintf(f, "- %s %s (%s): %s\n", u.date, u.accession, u.docType, u.reason)
+		}
+	}
+	fmt.Fprintf(f, "\nThe new-bytes column reads the stored content timestamp, which a rebuild also rewrites: it says bytes arrived, not that the publisher amended the text.\n")
+	fmt.Fprintf(f, "\nDecision rule: one unknown accession requires the feed to drive downloads (it names no ELI URL, so only a sitemap pass can find such a document). Zero unknowns across every harvested day is the only evidence that leaves the feed as annotation and reconciliation.\n")
+	return name, nil
+}
+
+// unresolvedChange is a feed entry the archive has never heard of.
+type unresolvedChange struct{ date, accession, reason, docType string }
