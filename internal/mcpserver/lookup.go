@@ -98,20 +98,19 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 		return s.lookupAsOf(req, entry, res)
 	}
 
-	doc, path, ok := s.archive.Open(entry.Accession)
-	if !ok {
-		return nil, fmt.Errorf("%s is indexed but could not be read from %s: the file may be mid-write, re-run", entry.Accession, entry.Path)
+	m, path, err := s.model(entry)
+	if err != nil {
+		return nil, err
 	}
 	res.Path = path
-	res.provenance(doc, s.archive.Root)
-	res.noteAmendments(doc.Model(), s.horizon().Now)
+	res.provenance(m)
+	res.noteAmendments(m, s.horizon().Now)
 
 	// The text comes from the model, so an answer can say what the thing it found *is*: a
 	// chapter, a provision, one subsection of it. The flat section list cannot tell those
 	// apart — it carries whatever the publisher's elements happened to be — and its
 	// subsection addressing is off by one in places, which is a citation error waiting to be
 	// quoted.
-	m := doc.Model()
 	if req.Address != "" {
 		body, ok := m.Content.MarkdownProvisions(lexdoc.ParseAddress(req.Address))
 		if !ok {
@@ -122,7 +121,7 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 	} else {
 		res.Text = m.Content.Markdown()
 	}
-	res.Warnings = append(res.Warnings, doc.Warnings()...)
+	res.Warnings = append(res.Warnings, m.Diagnostics.Warnings...)
 	res.truncate(req.MaxChars)
 	return res, nil
 }
@@ -141,7 +140,7 @@ func (s *Server) lookupAsOf(req LookupRequest, entry lexdania.Entry, res *Lookup
 	res.AsOf = asOf.Format("2006-01-02")
 	res.AppliedEdits = view.AppliedCount()
 	res.ChainComplete = view.Trustworthy()
-	res.provenance(view.Doc, s.archive.Root)
+	res.provenance(view.Doc.Model())
 
 	if req.Address != "" {
 		sec := view.Section(req.Address)
@@ -225,30 +224,58 @@ func (r *LookupResult) noteAmendments(m *lexdoc.Document, now time.Time) {
 // a bill with a hundred sittings should not be served as a hundred words.
 const maxNamedAmendments = 6
 
-// provenance records which text this is, in the words a client will read.
-func (r *LookupResult) provenance(doc *lexdania.Document, mirrorRoot string) {
-	switch doc.Source {
-	case lexdania.TextFromHTML:
-		r.Provenance = string(lexdania.TextFromHTML)
-		r.ProvenanceNote = "recovered from the site's HTML payload (" + doc.Sidecar + "). " +
+// model reads the document an answer is made of.
+//
+// With an artifact configured the read is a seek, a decompression and a decode of the model the
+// builder compiled — the publisher's XML is what a *builder* reads, not what a lookup reads. Without
+// one it parses, and says so through Status. A document the artifact does not hold is an error
+// naming the remedy: the artifact's coverage is a claim about the mirror, and an answer that quietly
+// came back empty would turn a stale file into a law with nothing in it.
+func (s *Server) model(entry lexdania.Entry) (*lexdoc.Document, string, error) {
+	if s.docs != nil {
+		m, err := s.docs.Document(entry.Accession)
+		if err != nil {
+			return nil, "", fmt.Errorf("%s is indexed but not in the compiled artifact (%s): %w. Rebuild it with `retsin artifact build`",
+				entry.Accession, s.docs.Artifact().Path(), err)
+		}
+		return m, s.docs.Artifact().Path(), nil
+	}
+	doc, path, ok := s.archive.Open(entry.Accession)
+	if !ok {
+		return nil, "", fmt.Errorf("%s is indexed but could not be read from %s: the file may be mid-write, re-run", entry.Accession, entry.Path)
+	}
+	return doc.Model(), path, nil
+}
+
+// provenance records which text this is, in the words a client will read. It reads the model's own
+// provenance rather than the reader's, because the same answer is served from the artifact and from
+// a parse, and the distinction that matters to a reader — whose text is this — is a property of the
+// document, not of how it was read.
+func (r *LookupResult) provenance(m *lexdoc.Document) {
+	switch m.Provenance.Source {
+	case lexdoc.SourceHTMLPayload:
+		r.Provenance = string(lexdoc.SourceHTMLPayload)
+		r.ProvenanceNote = "recovered from the site's HTML payload (" + m.Provenance.Sidecar + "). " +
 			"This is our reader's reconstruction rather than the register's structured text: " +
 			"it matched the canonical body byte for byte in 84.9% of the paired sample, so it is fine to read and search, " +
 			"and has to be identified as HTML-derived when quoted."
-	case lexdania.TextFromNone:
-		r.Provenance = string(lexdania.TextFromNone)
+	case lexdoc.SourceNone:
+		r.Provenance = string(lexdoc.SourceNone)
 		r.ProvenanceNote = "the mirror holds this document's metadata but no text at all: " +
 			"neither a canonical body nor an HTML payload. Fetch the body before relying on an answer about its contents."
 	default:
-		r.Provenance = string(doc.Source)
+		r.Provenance = string(m.Provenance.Source)
 		if r.Provenance == "" {
-			r.Provenance = string(lexdania.TextFromXML)
+			r.Provenance = string(lexdoc.SourceXML)
 		}
-		r.ProvenanceNote = "the register's own <DokumentIndhold>, decoded from canonical ELI XML"
+		// The register's own name for its body element is not a word an answer needs: it is one
+		// spelling in one format, and what a reader needs to know is that this is the structured
+		// text the register publishes rather than a reconstruction.
+		r.ProvenanceNote = "the register's own structured body, decoded from canonical ELI XML"
 	}
 	if r.Path == "" {
-		r.Path = doc.Sidecar
+		r.Path = m.Provenance.Sidecar
 	}
-	_ = mirrorRoot
 }
 
 func (r *LookupResult) truncate(max int) {

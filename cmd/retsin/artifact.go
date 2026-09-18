@@ -151,13 +151,30 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 			)
 			// The coverage claim is the number a reader of an answer cannot see for themselves, so
 			// it is printed with what was left out rather than as a bare count.
-			fmt.Fprintf(gate.LogWriter(), "%s: %d documents, %.1f MB, built %s, %s; left out: %d without an accession, %d duplicate, %d unreadable\n",
+			fmt.Fprintf(gate.LogWriter(), "%s: %d documents, %.1f MB, built %s by %s, %s; left out: %d without an accession, %d duplicate, %d unreadable\n",
 				out, wr.Documents(), float64(st.Size())/1e6,
-				opened.Header.Created.Format(time.RFC3339), time.Since(start).Round(time.Millisecond),
+				opened.Header.Created.Format(time.RFC3339), stampedAs(opened.Header),
+				time.Since(start).Round(time.Millisecond),
 				noAccession, duplicates, unreadable)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&out, "out", "", "where to write the artifact (default <data-dir>/"+artifactDefaultName+")")
 	return cmd
+}
+
+// stampedAs names the build that wrote an artifact the way the refusal names it, so the line an
+// operator reads after a build matches the line they read after a server refuses the file.
+func stampedAs(h compiled.ArtifactHeader) string {
+	stamp := h.Build
+	if len(stamp) > 12 {
+		stamp = stamp[:12]
+	}
+	if stamp == "" {
+		return "an unstamped build"
+	}
+	if h.Modified {
+		return stamp + "-dirty"
+	}
+	return stamp
 }

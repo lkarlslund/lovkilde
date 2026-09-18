@@ -9,7 +9,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
 
@@ -27,6 +29,12 @@ type Server struct {
 	// index is the built full-text index, or nil. Search is not advertised when it is
 	// nil, because a tool that cannot answer is worse than no tool.
 	index *search.Index
+
+	// docs is the compiled artifact the document text is read from, when one was given. Without it
+	// every lookup re-parses the publisher's XML, which answers correctly and slowly, so the
+	// status line says which of the two a client is being served from rather than leaving it to be
+	// guessed from how long the answer took.
+	docs *compiled.Cache
 
 	// MaxChars caps every answer when the request does not ask for a different cap.
 	// Zero keeps the package default.
@@ -89,8 +97,69 @@ func (s *Server) Status() string {
 	if s.index != nil && s.index.Built > 0 {
 		built = time.Unix(s.index.Built, 0).Format(time.RFC3339)
 	}
-	return fmt.Sprintf("%d documents in %s (media: %s), index built %s",
-		s.archive.Len(), s.archive.Root, s.kinds, built)
+	return fmt.Sprintf("%d documents in %s (media: %s), index built %s, %s",
+		s.archive.Len(), s.archive.Root, s.kinds, built, s.textSource())
+}
+
+// textSource names where a document's text is read from, in the words an operator reads in a log
+// line and a client reads in a search answer. Serving by parse is allowed but not invisible: it is
+// the difference between a lookup costing a seek and a decompression and one costing an XML parse,
+// and a server that said nothing about it would be a server people run slowly for years.
+func (s *Server) textSource() string {
+	if s.docs == nil {
+		return "text by parsing XML (run `retsin artifact build` and restart to serve from the compiled artifact)"
+	}
+	return fmt.Sprintf("text from the compiled artifact at %s", s.docs.Artifact().Path())
+}
+
+// DefaultArtifactCacheBytes is how much payload the serving cache may hold. The bound is in bytes
+// because that is what a cache costs: a document's compressed payload is its own size, so the
+// budget is arithmetic rather than a guess about struct widths.
+const DefaultArtifactCacheBytes = 64 << 20
+
+// UseArtifact serves document text out of a compiled artifact instead of parsing the publisher's
+// XML per read.
+//
+// The artifact has to be this build's own. Its payload is the JSON form of the model's Go types, so
+// a file from another revision decodes into today's struct with yesterday's meaning and answers
+// questions about a law with fields that no longer say what they said. The refusal therefore names
+// which side is stale, since the operator can rebuild either one and only the artifact's timestamp
+// says which needs it.
+func (s *Server) UseArtifact(path string, cacheBytes int64) error {
+	if cacheBytes <= 0 {
+		cacheBytes = DefaultArtifactCacheBytes
+	}
+	c, err := compiled.OpenCached(path, cacheBytes)
+	if err != nil {
+		return err
+	}
+	if err := c.Artifact().CheckCurrentBuild(); err != nil {
+		c.Close()
+		return err
+	}
+	s.docs = c
+	return nil
+}
+
+// unitSource is where a search hit's text comes from: the artifact when serving has one, and the
+// XML reader otherwise. The index itself stores no text either way.
+func (s *Server) unitSource() search.Documents {
+	if s.docs != nil {
+		return artifactDocs{cache: s.docs}
+	}
+	return search.XMLDocuments{}
+}
+
+// artifactDocs reads a hit's document out of the compiled artifact. The cache hands out a freshly
+// decoded model per read — it caches payloads, not documents — so two searches running at once
+// cannot edit each other's copy of a law while grading proximity.
+type artifactDocs struct{ cache *compiled.Cache }
+
+func (a artifactDocs) Document(meta search.DocMeta) (*lexdoc.Document, error) {
+	if meta.Accession == "" {
+		return nil, fmt.Errorf("hit for %s carries no accession, so the artifact has no key to look it up by", meta.ELI)
+	}
+	return a.cache.Document(meta.Accession)
 }
 
 // lookupInput is the tool's argument object. The jsonschema tags are what a client

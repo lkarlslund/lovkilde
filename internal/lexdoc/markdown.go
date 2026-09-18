@@ -24,79 +24,146 @@ import (
 // mirror has no concept for belongs in the open, where a reader can see the model is incomplete,
 // rather than missing quietly.
 
+// renderer writes the model's text either as markdown, which is the form an answer to a reader is
+// served in, or as plain text, which is what a search snippet is cut from and what proximity is
+// measured on. One walker serves both because two walkers drift: the plain mode drops only the
+// characters markdown needs, never a word, so a snippet of a provision is the provision's own text
+// rather than an approximation of it.
+type renderer struct {
+	b     *strings.Builder
+	plain bool
+}
+
+// heading states what a block is. Markdown gets a level; plain text gets the words, because
+// "## Kapitel 5" quoted into an answer is markup the law does not contain.
+func (r renderer) heading(level int, text string) {
+	if r.plain {
+		fmt.Fprintf(r.b, "\n%s\n\n", text)
+		return
+	}
+	fmt.Fprintf(r.b, "\n%s %s\n\n", strings.Repeat("#", level), text)
+}
+
+// emphasis sets a line apart without giving it weight: a rubric, or a note about the model.
+func (r renderer) emphasis(text string) {
+	if r.plain {
+		fmt.Fprintf(r.b, "%s\n\n", text)
+		return
+	}
+	fmt.Fprintf(r.b, "*%s*\n\n", text)
+}
+
+// quote holds content the model has no concept for, so it reads as quoted rather than as the
+// law's own words. Plain text cannot mark that, so the block boundary is all it keeps.
+func (r renderer) quote(text string) {
+	if r.plain {
+		fmt.Fprintf(r.b, "%s\n\n", text)
+		return
+	}
+	fmt.Fprintf(r.b, "> %s\n\n", text)
+}
+
 // Markdown renders the whole content, in reading order.
 func (c *Content) Markdown() string {
+	s, _ := c.render(Address{}, false)
+	return s
+}
+
+// PlainText is the whole content without markup.
+func (c *Content) PlainText() string {
+	s, _ := c.render(Address{}, true)
+	return s
+}
+
+// MarkdownProvisions renders one provision, or the part an address named, without the rest of the
+// document: what an answer to "what does § 27 say?" is made of.
+func (c *Content) MarkdownProvisions(a Address) (string, bool) { return c.render(a, false) }
+
+// PlainTextProvisions is the same rendering without markup, for a hit whose snippet has to be the
+// text the document holds rather than the text the answer wrapper adds around it.
+func (c *Content) PlainTextProvisions(a Address) (string, bool) { return c.render(a, true) }
+
+// render is the one walker both forms go through, so the words a search snippet shows and the
+// words an answer shows cannot come from different places.
+func (c *Content) render(a Address, plain bool) (string, bool) {
 	var b strings.Builder
-	writeSegments(&b, c.Title, "")
-	writeSegments(&b, c.Preamble, "\n")
-	writeNodes(&b, c.Order, 0)
-	writeSegments(&b, c.Signature, "\n")
+	r := renderer{b: &b, plain: plain}
+	if !a.Recognised {
+		renderWhole(r, c)
+		return collapse(b.String()), true
+	}
+	loc, ok := c.Find(a)
+	if !ok {
+		return "", false
+	}
+	renderLocated(r, c, loc)
+	return collapse(b.String()), true
+}
+
+// renderWhole prints everything the document has, in reading order.
+func renderWhole(r renderer, c *Content) {
+	writeSegments(r, c.Title, "")
+	writeSegments(r, c.Preamble, "\n")
+	writeNodes(r, c.Order, 0)
+	writeSegments(r, c.Signature, "\n")
 
 	if len(c.EntryIntoForce) > 0 {
 		// These are provisions, and they are cited — but their numbering is its own series, so
 		// they are not shown as part of the law's sequence.
-		b.WriteString("\n## Entry into force and transitional provisions\n\n")
-		b.WriteString("*Numbered in their own series: citing them as a section of the law would reach a different provision.*\n\n")
+		r.heading(2, "Entry into force and transitional provisions")
+		r.emphasis("Numbered in their own series: citing them as a section of the law would reach a different provision.")
 		for i := range c.EntryIntoForce {
-			writeProvision(&b, &c.EntryIntoForce[i])
+			writeProvision(r, &c.EntryIntoForce[i])
 		}
 	}
 
 	for i := range c.Appendices {
 		ap := &c.Appendices[i]
-		fmt.Fprintf(&b, "\n## %s\n\n", appendixLabel(ap))
-		writeSegments(&b, ap.Segments, "")
-		writeNodes(&b, ap.Order, 0)
+		r.heading(2, appendixLabel(ap))
+		writeSegments(r, ap.Segments, "")
+		writeNodes(r, ap.Order, 0)
 	}
 
-	writeUnmapped(&b, c.Unmapped)
-	return collapse(b.String())
+	writeUnmapped(r, c.Unmapped)
 }
 
-// MarkdownProvisions renders one provision, or the part an address named, without the rest of the
-// document: what an answer to "what does § 27 say?" is made of.
-func (c *Content) MarkdownProvisions(a Address) (string, bool) {
-	loc, ok := c.Find(a)
-	if !ok {
-		return "", false
-	}
-	var b strings.Builder
+// renderLocated prints the narrowest unit an address names, and nothing else.
+func renderLocated(r renderer, c *Content, loc Located) {
 	switch {
 	case loc.Item != nil:
 		// The narrowest answer wins: a caller asking for "§ 5, stk. 2, nr. 3" is quoting that
 		// entry, and getting the whole section back is an answer they have to search again.
 		// The provision's rubric goes above it anyway, since an entry without its section is
 		// not a citation.
-		writeProvisionHead(&b, loc.Provision)
-		fmt.Fprintf(&b, "%s\n\n", loc.Provision.SpanText(loc.Item.Span))
+		writeProvisionHead(r, loc.Provision)
+		fmt.Fprintf(r.b, "%s\n\n", loc.Provision.SpanText(loc.Item.Span))
 	case loc.Stykke != nil:
-		writeProvisionHead(&b, loc.Provision)
-		fmt.Fprintf(&b, "%s\n\n", loc.Provision.SpanText(loc.Stykke.Span))
+		writeProvisionHead(r, loc.Provision)
+		fmt.Fprintf(r.b, "%s\n\n", loc.Provision.SpanText(loc.Stykke.Span))
 	case loc.Part != nil:
-		writePart(&b, loc.Part)
+		writePart(r, loc.Part)
 	case loc.Appendix != nil:
-		fmt.Fprintf(&b, "## %s\n\n", appendixLabel(loc.Appendix))
-		writeSegments(&b, loc.Appendix.Segments, "")
-		writeNodes(&b, loc.Appendix.Order, 0)
+		r.heading(2, appendixLabel(loc.Appendix))
+		writeSegments(r, loc.Appendix.Segments, "")
+		writeNodes(r, loc.Appendix.Order, 0)
 	case loc.Preamble:
-		writeSegments(&b, c.Preamble, "")
+		writeSegments(r, c.Preamble, "")
 	case loc.Title:
-		writeSegments(&b, c.Title, "")
+		writeSegments(r, c.Title, "")
 	case loc.Provision != nil:
-		writeProvision(&b, loc.Provision)
+		writeProvision(r, loc.Provision)
 	}
-	return collapse(b.String()), true
 }
 
 // writeNodes emits parts and provisions in the order the document puts them.
-func writeNodes(b *strings.Builder, nodes []Node, depth int) {
+func writeNodes(r renderer, nodes []Node, depth int) {
 	for _, n := range nodes {
 		switch {
 		case n.Part != nil:
-			writePart(b, n.Part)
-			writeNodes(b, n.Part.Order, depth+1)
+			writePart(r, n.Part)
+			writeNodes(r, n.Part.Order, depth+1)
 		case n.Provision != nil:
-			writeProvision(b, n.Provision)
+			writeProvision(r, n.Provision)
 		}
 	}
 }
@@ -105,7 +172,7 @@ func writeNodes(b *strings.Builder, nodes []Node, depth int) {
 // that is what the reader gets, because it is what the page says and what an amendment quotes.
 // Where it printed nothing, the mirror's own word for the kind stands in, so the answer still says
 // what the thing is instead of leaving it to be guessed from a heading's font size.
-func writePart(b *strings.Builder, p *Part) {
+func writePart(r renderer, p *Part) {
 	label := strings.TrimSpace(p.Printed)
 	if label == "" {
 		kind := "section"
@@ -119,29 +186,29 @@ func writePart(b *strings.Builder, p *Part) {
 		}
 		label = strings.TrimSpace(kind + " " + p.Number)
 	}
-	fmt.Fprintf(b, "\n## %s\n\n", label)
+	r.heading(2, label)
 	if p.Heading != "" && !strings.EqualFold(p.Heading, label) {
-		fmt.Fprintf(b, "*%s*\n\n", p.Heading)
+		r.emphasis(p.Heading)
 	}
 }
 
 // writeProvision prints a provision. The text already carries the number the document printed —
 // "§ 2." is the first thing on the page — so a rubric is what earns a heading of its own, and a
 // provision without one is printed as it stands rather than with a duplicate number above it.
-func writeProvision(b *strings.Builder, p *Provision) {
-	writeProvisionHead(b, p)
-	writeProvisionBody(b, p)
+func writeProvision(r renderer, p *Provision) {
+	writeProvisionHead(r, p)
+	writeProvisionBody(r, p)
 }
 
 // writeProvisionHead is the line a provision is cited by, so that a narrower answer can say what
 // it is a part of.
-func writeProvisionHead(b *strings.Builder, p *Provision) {
+func writeProvisionHead(r renderer, p *Provision) {
 	if p.Heading != "" {
 		head := strings.TrimSpace(p.Printed)
 		if head == "" {
 			head = "§ " + p.Address()
 		}
-		fmt.Fprintf(b, "\n### %s %s\n\n", head, p.Heading)
+		r.heading(3, head+" "+p.Heading)
 	}
 }
 
@@ -151,7 +218,8 @@ func writeProvisionHead(b *strings.Builder, p *Provision) {
 // has one, and would then disagree with any amendment that quotes the real one. The spans are what
 // make the break — nothing here re-reads the text for a "Stk." which would turn one written inside
 // a sentence into a subsection.
-func writeProvisionBody(b *strings.Builder, p *Provision) {
+func writeProvisionBody(r renderer, p *Provision) {
+	b := r.b
 	boundary := map[int]bool{}
 	for i := range p.Stykker {
 		st := &p.Stykker[i]
@@ -191,7 +259,7 @@ func appendixLabel(ap *Appendix) string {
 
 // writeUnmapped prints the content the model has no concept for, counted by what the mirror called
 // it. Leaving it out would make an incomplete model look complete.
-func writeUnmapped(b *strings.Builder, unmapped []Unmapped) {
+func writeUnmapped(r renderer, unmapped []Unmapped) {
 	if len(unmapped) == 0 {
 		return
 	}
@@ -208,18 +276,19 @@ func writeUnmapped(b *strings.Builder, unmapped []Unmapped) {
 	for _, k := range kinds {
 		labels = append(labels, fmt.Sprintf("%s ×%s", k, strconv.Itoa(counts[k])))
 	}
-	fmt.Fprintf(b, "\n## Other content the model has no concept for (%d pieces)\n\n", len(unmapped))
-	fmt.Fprintf(b, "*%s*\n\n", strings.Join(labels, ", "))
+	r.heading(2, fmt.Sprintf("Other content the model has no concept for (%d pieces)", len(unmapped)))
+	r.emphasis(strings.Join(labels, ", "))
 	for _, u := range unmapped {
 		if strings.TrimSpace(u.Text) == "" {
 			continue
 		}
-		fmt.Fprintf(b, "> %s\n\n", strings.TrimSpace(u.Text))
+		r.quote(strings.TrimSpace(u.Text))
 	}
 }
 
 // writeSegments renders a run of segments, optionally separated from what came before.
-func writeSegments(b *strings.Builder, segs []Segment, sep string) {
+func writeSegments(r renderer, segs []Segment, sep string) {
+	b := r.b
 	if len(segs) == 0 {
 		return
 	}

@@ -104,7 +104,7 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 		Source:  req.Source,
 		Limit:   fetch,
 	})
-	texts := search.NewUnitTexts()
+	texts := search.NewUnitTexts(s.unitSource())
 	if !req.NoNear {
 		hits = s.index.GradeNear(hits, req.Query, func(h *search.Hit) string {
 			return texts.Unit(h.Doc, h.Addr)

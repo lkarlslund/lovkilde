@@ -64,6 +64,12 @@ type ArtifactHeader struct {
 	Compression string    `json:"compression"`
 	Created     time.Time `json:"created"`
 	Source      string    `json:"source"`
+
+	// Build and Modified name the source the document model was compiled from. The payload is the
+	// JSON form of this repository's Go types, so a file from another revision decodes into today's
+	// struct with yesterday's meaning: see build.go.
+	Build    string `json:"build,omitempty"`
+	Modified bool   `json:"modified,omitempty"`
 }
 
 // DocRef is where one document sits in the artifact.
@@ -115,6 +121,9 @@ func newWriter(w io.Writer, source string, version int) (*Writer, error) {
 			Created:     time.Now().UTC().Truncate(time.Second),
 			Source:      source,
 		},
+	}
+	if stamp, ok := CurrentBuild(); ok {
+		wr.header.Build, wr.header.Modified = stamp.Revision, stamp.Modified
 	}
 	payload, err := json.Marshal(wr.header)
 	if err != nil {

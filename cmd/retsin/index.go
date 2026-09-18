@@ -177,7 +177,9 @@ func searchCmd(resolve configFunc) *cobra.Command {
 				Source:  source,
 				Limit:   fetch,
 			})
-			texts := search.NewUnitTexts()
+			// The CLI reads through the XML reader: it is a one-off query against the mirror, and
+			// the compiled artifact is what a *server* builds once and reuses across queries.
+			texts := search.NewUnitTexts(search.XMLDocuments{})
 			if !noNear {
 				hits = idx.GradeNear(hits, query, func(h *search.Hit) string {
 					return texts.Unit(h.Doc, h.Addr)

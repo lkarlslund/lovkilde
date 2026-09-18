@@ -26,6 +26,8 @@ type configFunc func() (config.Config, error)
 func mcpCmd(resolve configFunc) *cobra.Command {
 	var maxChars int
 	var index string
+	var artifact string
+	var artifactCacheMB int
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "Serve the mirror over the Model Context Protocol on stdin/stdout",
@@ -51,6 +53,13 @@ decoration: the mirror holds both the register's own structured body and, for do
 whose XML has none, text our reader recovered from the site's HTML. The paired sample
 says the recovered text reproduces the canonical wording byte for byte in 84.9 % of
 documents, which is worth reading and not worth quoting without saying so.
+
+The document text is read from the compiled artifact ("retsin artifact build") when one is
+there, which is what makes a lookup a seek and a decompression instead of an XML parse; without
+one the server parses and says so in every answer's dataset line. An artifact written by another
+build is refused outright, with a message naming which side is stale: the artifact holds the
+document model as JSON, so a file from another revision decodes into this server's types with
+another revision's meaning.
 
 Stdout is reserved for the protocol; logs go to stderr either way.`,
 		Args: cobra.NoArgs,
@@ -92,6 +101,24 @@ Stdout is reserved for the protocol; logs go to stderr either way.`,
 			default:
 				return fmt.Errorf("search index %s: %w — rebuild it with `retsin index build`, or omit --index to serve lookups only", index, err)
 			}
+			// Document text comes from the artifact when one is there. A missing one downgrades to
+			// parsing the XML — correct, slower, and named in the status line a client reads — while
+			// an artifact from another build is an error: the operator asked for that file by name,
+			// and serving a model compiled from other code is not a degradation anyone should miss.
+			if artifact == "" {
+				artifact = cfg.DataDir + "/" + artifactDefaultName
+			}
+			err = srv.UseArtifact(artifact, int64(artifactCacheMB)<<20)
+			switch {
+			case err == nil:
+				slog.Info("serving document text from the compiled artifact", "path", artifact)
+			case os.IsNotExist(err):
+				slog.Warn("no compiled artifact, serving lookups by parsing XML",
+					"looked_for", artifact, "remedy", "run `retsin artifact build`")
+			default:
+				return err
+			}
+
 			// One line of orientation on stderr: what a client is about to be served,
 			// and from where. A server that answers silently cannot be debugged.
 			fmt.Fprintf(gate.LogWriter(), "serving %s over stdio\n", srv.Status())
@@ -103,5 +130,9 @@ Stdout is reserved for the protocol; logs go to stderr either way.`,
 			mcpserver.DefaultMaxChars))
 	cmd.Flags().StringVar(&index, "index", "",
 		"full-text index to serve (default <data-dir>/"+indexDefaultName+"); if it is missing, only lookup is advertised")
+	cmd.Flags().StringVar(&artifact, "artifact", "",
+		"compiled document artifact to read text from (default <data-dir>/"+artifactDefaultName+"); if it is missing, lookups parse the XML instead and say so")
+	cmd.Flags().IntVar(&artifactCacheMB, "artifact-cache-mb", mcpserver.DefaultArtifactCacheBytes>>20,
+		"megabytes of artifact payloads the serving cache may hold; the bound is in bytes, because that is what a cached document costs")
 	return cmd
 }

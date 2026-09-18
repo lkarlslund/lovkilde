@@ -1160,6 +1160,12 @@ Three properties are deliberate:
   crawl out, or fail to start while the crawl runs. Serving needs the file archive, so
   that is all it opens — and a process that cannot write is easier to trust in front of
   a legal corpus.
+- **Text comes from the compiled artifact when one exists.** `retsin mcp` reads
+  `<data-dir>/artifact.bin` — `--artifact` and `--artifact-cache-mb` move it — so a lookup is a
+  seek and a decode rather than an XML parse, and the status line says which of the two a client
+  is being served from. An artifact written by another build is refused at startup with the side
+  that is stale named, because the file holds the model as JSON and would otherwise decode into
+  this server's types with another revision's meaning.
 - **Every answer is markdown, and names its text.** `- **Text source:** xml|html|none` with
   the payload path for `html`, plus the mirror's document count and index time; the statute
   itself is fenced so nothing in it is re-read as markup. `html` means the sentence was
@@ -1280,7 +1286,8 @@ element name or attribute map is in the file: the refusal reasons an answer give
 the model's vocabulary, and the artifact cannot leak the schema by accident.
 
 Three properties are enforced by the reader rather than by discipline. An artifact from a
-different build is **refused**, with the version numbers and the remedy in the message. The
+different build is **refused**, with both commits named, the side that is out of date identified
+from the artifact's own timestamp, and the remedy in the message. The
 document table and the frame table are **cross-checked against each other** on open, so a
 build that wrote one without the other fails instead of serving half a mirror. A document
 the artifact does not hold is an **error**, not an empty answer, because coverage is the one
@@ -1300,9 +1307,40 @@ The codec bench's earlier note that a compiled form would be *bigger* than the X
 property of the struct it measured: `cDoc` copied a section's run text out per section, while
 the model keeps one segment slice per provision and its subsections and conditions are spans
 over it. The artifact is argued for on lookup speed, but it does not cost size either — and
-the difference between those two claims is a measurement rather than a hope. Serving does not
-read it yet; that is the next task, and it will not claim a latency improvement without a
-before-and-after number.
+the difference between those two claims is a measurement rather than a hope.
+
+### Serving from the artifact
+
+`retsin mcp` reads `data/artifact.bin` when it is there, and says in every answer's dataset
+line which of the two it is reading. What moved onto it: whole-document lookup, addressed
+lookup, the provenance and warnings an answer carries, and the unit text a search answer cuts
+its snippets from and grades proximity on — which was the second XML parse per query. What did
+not: an `as_of` answer still consolidates through the tree engine and parses the files it
+splices into, because M012T011 has not yet decided that the model's subsection numbering is
+the one to serve; and building an index reads XML, since the artifact is what a build produces.
+
+The version pin is the commit the artifact was compiled from plus whether that tree was
+uncommitted, both stamped by the Go toolchain and recorded in the header. Same commit with a
+different working tree counts as a different build — that is the state where a model type was
+edited and not committed. A mismatch names the side that is out of date, using the artifact's
+own timestamp against the binary's commit date, because the operator can rebuild either one and
+only the file says which needs it.
+
+Measured in one run over the same 1,000 documents, both paths, same machine and file cache
+(`internal/mcpserver/testdata/serve-baseline-20260918.txt`):
+
+| query | by parse | by artifact |
+|---|---|---|
+| whole document, p50 | 471 µs | 69 µs (6.8x) |
+| whole document, mean | 2.016 ms | 188 µs (10.7x) |
+| one provision addressed, p50 | 626 µs | 69 µs (9.1x) |
+| one hit's unit text, p50 | 625 µs | 72 µs (8.7x) |
+
+Speed is the argument, so it is measured; agreement is the requirement, so it is gated: of 1,369
+answers and 369 snippets served through both paths, none differed. The payload cache's own share
+of that is 0 µs at this resolution — for documents of a few kilobytes it saves the seek and one
+frame decompression out of ~178 µs, so the win is over the XML parse and not over the cache,
+which is worth saying out loud because the cache is the part that looks like the optimisation.
 
 ### Text provenance: which documents have real text, and where it came from
 

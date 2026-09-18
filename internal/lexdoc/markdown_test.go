@@ -3,6 +3,7 @@ package lexdoc
 import (
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // The shape an answer is made of, pinned as a whole so a change to the renderer is a decision
@@ -130,4 +131,43 @@ func TestMarkdownScopesToTheAddress(t *testing.T) {
 	if !ok || !strings.Contains(got, "2) Nr to.") || strings.Contains(got, "1) Nr een.") {
 		t.Errorf("item answer wrong: ok=%v\n%s", ok, got)
 	}
+}
+
+// The plain form is the same walk with the markup left out, so an answer and a search snippet
+// cannot disagree about what a provision says: they differ only in characters neither the law nor
+// a reader needs. One walker is what makes that a fact rather than a hope.
+func TestPlainRenderingKeepsTheWords(t *testing.T) {
+	c := sampleLaw()
+
+	md, plain := c.Markdown(), c.PlainText()
+	for _, marker := range []string{"#", ">", "*"} {
+		if strings.Contains(plain, marker) {
+			t.Errorf("plain rendering carries markup %q:\n%s", marker, plain)
+		}
+	}
+	if squashRendered(md) != squashRendered(plain) {
+		t.Errorf("the two forms disagree about the words:\nplain:\n%s\nmarkdown:\n%s", plain, md)
+	}
+
+	// The same addresses resolve — and refuse — in both forms, so a hit whose snippet rendered
+	// cannot be an address the answer refuses to open.
+	for _, addr := range []string{"§ 1", "§ 2, stk. 1", "§ 2, stk. 1, nr. 1", "kapitel 1", "bilag 1", "indledningen", "titel", "§ 99", "bilag 7"} {
+		_, mdOK := c.MarkdownProvisions(ParseAddress(addr))
+		_, plainOK := c.PlainTextProvisions(ParseAddress(addr))
+		if mdOK != plainOK {
+			t.Errorf("%q resolves in one form only: markdown=%v plain=%v", addr, mdOK, plainOK)
+		}
+	}
+}
+
+// squashRendered leaves only the words a reader of either form sees: whitespace and the characters
+// markdown uses for structure carry no content of their own.
+func squashRendered(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '#' || r == '>' || r == '*' || unicode.IsSpace(r):
+			return -1
+		}
+		return r
+	}, s)
 }

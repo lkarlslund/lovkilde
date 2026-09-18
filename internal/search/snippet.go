@@ -4,29 +4,38 @@ import (
 	"strings"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // DefaultSnippetRunes is how much text a hit shows around the match.
 const DefaultSnippetRunes = 320
 
-// Snippet renders the matched passage by reading the document out of the archive.
-//
-// This costs a document parse per hit, which is the price of the index storing no text: the
-// alternative would duplicate 12.6 GB of legal text into a derived file that then needs its
-// own invalidation story, and the archive is the product. The cost is bounded by the result
-// limit, so a page of ten hits is ten parses of files that are already on disk. Where a
-// caller needs the same text twice — to grade proximity and then to render the passage — it
-// uses UnitTexts, which parses each document once per search instead of once per hit.
-//
-// It returns "" rather than an error when the document cannot be read: a hit whose snippet
-// failed to render is still a hit, and the caller has the address to open it directly.
-// Silence would be the wrong trade here, so the caller is given "" and the command prints the
-// address instead of invented text.
-func Snippet(meta DocMeta, addr string, terms []string, window int) string {
-	return SnippetFrom(UnitText(meta, addr), terms, window)
+// Documents reads the document a hit names. The index deliberately stores no text, so somebody
+// has to: serving passes the compiled artifact (internal/compiled.Cache), which reads one document
+// without parsing anything, and the offline paths pass XMLDocuments, which reads the publisher's
+// file because there the parse is the point.
+type Documents interface {
+	Document(meta DocMeta) (*lexdoc.Document, error)
 }
 
-// SnippetFrom centres a window on text that has already been read.
+// XMLDocuments reads documents through the archive's own reader. It is the building and grading
+// path: the artifact does not exist yet while an index is being built, and a snippet graded
+// against a document that was just parsed does not need it either way.
+type XMLDocuments struct{}
+
+// Document parses the file the index says the document is in.
+func (XMLDocuments) Document(meta DocMeta) (*lexdoc.Document, error) {
+	if meta.Path == "" {
+		return nil, nil
+	}
+	doc, err := lexdania.LoadWithBody(meta.Path)
+	if err != nil {
+		return nil, err
+	}
+	return doc.Model(), nil
+}
+
+// SnippetFrom centres a window on text that has already been read.// SnippetFrom centres a window on text that has already been read.
 func SnippetFrom(text string, terms []string, window int) string {
 	if text == "" {
 		return ""
@@ -37,50 +46,45 @@ func SnippetFrom(text string, terms []string, window int) string {
 	return centerWindow(text, terms, window)
 }
 
-// UnitText returns the whole provision a hit names, with no window applied.
+// UnitTexts reads document text for a batch of hits, reading each document once.
 //
-// Proximity has to be measured on the provision rather than on a snippet, because a 320-rune
-// window can cut one of the two words off and the grade would then report "could not see"
-// about words that are plainly there.
-func UnitText(meta DocMeta, addr string) string {
-	if meta.Path == "" {
-		return ""
-	}
-	doc, err := lexdania.LoadWithBody(meta.Path)
-	if err != nil {
-		return ""
-	}
-	return unitTextOf(doc, meta, addr)
-}
-
-// UnitTexts reads provision text for a batch of hits, parsing each document once.
-//
-// Its lifetime is one search: the cache is deliberately not shared between searches, because
-// a document that changed on disk between two queries must not keep answering with the first
-// reading, and because a bounded per-request cache needs no eviction policy to reason about.
+// Its lifetime is one search: the cache is deliberately not shared between searches, because a
+// document that changed since the last query must not keep answering with the first reading, and
+// because a bounded per-request cache needs no eviction policy to reason about. The document it
+// caches is the model, so a hit's snippet, its proximity grade and the answer that opens it are
+// all resolutions of the same address.
 type UnitTexts struct {
-	docs map[string]*lexdania.Document
+	src  Documents
+	docs map[string]*lexdoc.Document
 }
 
-// NewUnitTexts starts a cache for one search.
-func NewUnitTexts() *UnitTexts { return &UnitTexts{docs: map[string]*lexdania.Document{}} }
+// NewUnitTexts starts a cache for one search over the documents src can read.
+func NewUnitTexts(src Documents) *UnitTexts {
+	return &UnitTexts{src: src, docs: map[string]*lexdoc.Document{}}
+}
 
-// Unit returns the text of the provision the hit names, or "" if it cannot be read.
+// Unit returns the text of the unit the hit names, or "" if it cannot be read.
 func (u *UnitTexts) Unit(meta DocMeta, addr string) string {
-	if meta.Path == "" {
+	key := meta.Accession
+	if key == "" {
+		key = meta.Path
+	}
+	if key == "" {
 		return ""
 	}
-	doc, ok := u.docs[meta.Path]
+	doc, ok := u.docs[key]
 	if !ok {
-		loaded, err := lexdania.LoadWithBody(meta.Path)
+		loaded, err := u.src.Document(meta)
 		if err != nil {
-			// A document that fails to parse is not retried for every later hit from the
-			// same file: the answer is "" and it stays "".
-			u.docs[meta.Path] = nil
+			// A document that cannot be read is not retried for every later hit from the
+			// same file: the answer is "" and it stays "". A hit whose snippet failed is still
+			// a hit, and the caller has the address to open it directly, so the failure is
+			// reported as empty text rather than as an error that would drop the hit.
+			u.docs[key] = nil
 			return ""
 		}
 		doc = loaded
-		u.docs[meta.Path] = doc
+		u.docs[key] = doc
 	}
 	if doc == nil {
 		return ""
@@ -88,25 +92,24 @@ func (u *UnitTexts) Unit(meta DocMeta, addr string) string {
 	return unitTextOf(doc, meta, addr)
 }
 
-// unitTextOf is the one join between an index address and a document: the rendered address is
-// matched against the sections the document rebuilds, so snippet, grading and lookup all
-// resolve a hit the same way and cannot drift apart.
-func unitTextOf(doc *lexdania.Document, meta DocMeta, addr string) string {
+// unitTextOf is the one join between an index address and a document. The address is resolved
+// through the model rather than matched against a rebuilt section list, which is what makes a hit
+// and the answer it opens agree: the same Find, the same scope, the same words, minus the markup
+// an answer needs and a snippet does not.
+func unitTextOf(doc *lexdoc.Document, meta DocMeta, addr string) string {
 	switch addr {
 	case "titel":
 		return meta.Title
 	case "":
-		return lexdania.DisplayText(doc.Root)
+		return doc.Content.PlainText()
 	}
-	for _, s := range doc.Sections() {
-		if AddressOf(s) == addr {
-			return s.Display()
-		}
+	if text, ok := doc.Content.PlainTextProvisions(lexdoc.ParseAddress(addr)); ok {
+		return text
 	}
-	// The section moved or the address did not survive the round-trip. Saying so with the
+	// The unit moved or the address did not survive the round-trip. Saying so with the
 	// document's own text is more useful than an empty hit, but it has to be the document's
-	// text and not a passage claimed to be the section.
-	return lexdania.DisplayText(doc.Root)
+	// text and not a passage claimed to be the unit.
+	return doc.Content.PlainText()
 }
 
 // centerWindow returns a window of text around the first term that appears in it.
