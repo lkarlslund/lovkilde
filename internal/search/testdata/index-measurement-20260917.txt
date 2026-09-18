@@ -1,0 +1,80 @@
+# retsin search index measurement
+# generated: 2026-09-18 09:37:22
+# reproduce: RETSIN_SEARCH_MEASURE=1 RETSIN_SEARCH_SAMPLE=50 go test ./internal/search -run TestMeasureIndex -v
+# corpus sample: 2907 documents, 28264 index units, 27.0 MB of indexed text, sampled in 6.465s
+# sources: html=2207 none=1 xml=699
+# baseline: brute-force substring scan over the same unit texts (grep-equivalent),
+# so recall below is recall against what grep would find, in the same normalised case.
+# caveat: recall@10 against a grep baseline measures ORDERING AGREEMENT where a query
+# has far more than ten matches. Both orderings can be correct. Read the match counts.
+
+## no-index baseline
+brute-force scan of the sample: 279ms total, 11ms per query
+extrapolated to the full mirror (191394 documents): 707ms per query, single process
+
+## variant raw
+build: 677ms   write: 29ms   load: 13ms
+index size: 5.5 MB (0.20 bytes per indexed rune)
+extrapolated to the full mirror by document count: 360.2 MB. This is a per-document average,
+not a per-byte one, and folketingssager are over-represented per MB in the sample, so treat
+it as an order of magnitude rather than an estimate.
+terms: 94040   postings: 1417368
+
+query latency over 26 queries: p50 187µs, p95 3.75ms
+recall@10 by query group:
+  aa-spelling    0.750 over 2 queries
+  citation       0.500 over 2 queries  worst: lov nr. 1399 (0/1 of 1 corpus matches), bekendtgørelse nr. 1399 (nothing in the sample to find)
+  compound-head  1.000 over 4 queries
+  inflected      1.000 over 5 queries
+  other-language (no measurable queries)
+  phrase         0.967 over 3 queries  worst: ubetinget råderet (nothing in the sample to find)
+  term           0.720 over 5 queries  worst: persondata (4/10 of 12 corpus matches), råden (2/10 of 141 corpus matches)
+  trap           0.900 over 2 queries
+phrase queries whose top 10 actually contain the words adjacent: 3 of 3
+(below 1.0 means term-AND ranks units where the phrase is not contiguous, which is what a
+ position-storing index would buy)
+
+## variant raw+folded
+build: 882ms   write: 35ms   load: 24ms
+index size: 7.2 MB (0.26 bytes per indexed rune)
+extrapolated to the full mirror by document count: 471.8 MB. This is a per-document average,
+not a per-byte one, and folketingssager are over-represented per MB in the sample, so treat
+it as an order of magnitude rather than an estimate.
+terms: 130472   postings: 1928201
+
+query latency over 26 queries: p50 154µs, p95 3.797ms
+recall@10 by query group:
+  aa-spelling    0.750 over 2 queries
+  citation       0.500 over 2 queries  worst: lov nr. 1399 (0/1 of 1 corpus matches), bekendtgørelse nr. 1399 (nothing in the sample to find)
+  compound-head  1.000 over 4 queries
+  inflected      1.000 over 5 queries
+  other-language (no measurable queries)
+  phrase         0.967 over 3 queries  worst: ubetinget råderet (nothing in the sample to find)
+  term           0.700 over 5 queries  worst: persondata (4/10 of 12 corpus matches), råden (1/10 of 141 corpus matches)
+  trap           0.900 over 2 queries
+phrase queries whose top 10 actually contain the words adjacent: 3 of 3
+(below 1.0 means term-AND ranks units where the phrase is not contiguous, which is what a
+ position-storing index would buy)
+
+## length-normalisation sweep (same index, scoring only)
+  b=0.75  citation 0.500 term 0.700 compound-head 1.000 phrase 0.967
+  b=0.45  citation 0.500 term 0.700 compound-head 1.000 phrase 1.000
+  b=0.20  citation 0.500 term 0.700 compound-head 1.000 phrase 1.000
+  b=0.00  citation 1.000 term 0.740 compound-head 1.000 phrase 1.000
+
+## fold suffix audit
+candidate endings, measured over the sampled vocabulary:
+  -ernes  folds 3845 token occurrences; 287 distinct folds that are themselves corpus words
+  -erede  folds 5037 token occurrences; 66 distinct folds that are themselves corpus words
+  -endes  folds 5297 token occurrences; 10 distinct folds that are themselves corpus words
+  -ernes  folds 3845 token occurrences; 287 distinct folds that are themselves corpus words
+  -ende   folds 53518 token occurrences; 162 distinct folds that are themselves corpus words
+  -else   folds 76349 token occurrences; 85 distinct folds that are themselves corpus words
+  -ere    folds 23188 token occurrences; 191 distinct folds that are themselves corpus words
+  -ede    folds 20792 token occurrences; 179 distinct folds that are themselves corpus words
+  -et     folds 125740 token occurrences; 1717 distinct folds that are themselves corpus words
+  -en     folds 166938 token occurrences; 3422 distinct folds that are themselves corpus words
+  -er     folds 354134 token occurrences; 2966 distinct folds that are themselves corpus words
+  -es     folds 103656 token occurrences; 590 distinct folds that are themselves corpus words
+  -te     folds 52643 token occurrences; 211 distinct folds that are themselves corpus words
+  -s      folds 209286 token occurrences; 7145 distinct folds that are themselves corpus words
