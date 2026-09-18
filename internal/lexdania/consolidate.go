@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // Version is one published state of a law.
@@ -333,7 +335,7 @@ func (v *View) applyOne(e Edit) {
 				v.reject(e, fmt.Sprintf("could not replace %s", describe(t)))
 				return
 			}
-			if after := firstNumber(t.Node.Elem("Explicatus").TextOrNull()); after != "" && after != t.Number {
+			if after := lexdoc.FirstNumber(t.Node.Elem("Explicatus").TextOrNull()); after != "" && after != t.Number {
 				note = fmt.Sprintf("numbering moved: was %s, new text is numbered %s", t.Number, after)
 			}
 			v.Applied = append(v.Applied, AppliedEdit{Edit: e, Section: describe(t), Note: note})
@@ -506,16 +508,18 @@ func (v *View) applyRenumber(e Edit) {
 		describe(par), counted, kind, Squeeze(e.Definition)))
 }
 
-// renumberTarget returns the first number after "herefter", i.e. the number the
-// provision is told to become.
+// renumberTarget returns the first number after "herefter", i.e. the number the provision is
+// told to become. It asks the same parser every other citation reads, rather than keeping a
+// private pair of patterns that could disagree with it about what "stk. 3" means.
 func renumberTarget(after string) int {
-	if m := reStk.FindStringSubmatch(after); len(m) > 0 {
-		return atoi(m[1])
+	a := ParseAddress(after)
+	switch {
+	case a.Stk != 0:
+		return a.Stk
+	case a.Nr != 0:
+		return a.Nr
 	}
-	if m := reNr.FindStringSubmatch(after); len(m) > 0 {
-		return atoi(m[1])
-	}
-	return atoi(digitRun.FindString(after))
+	return atoi(lexdoc.FirstNumber(after))
 }
 
 // spliceAll replaces every occurrence of old, right to left so that the positions of the

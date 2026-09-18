@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // fixtureHandledLaw exercises the shapes the whole-archive scan reported as
@@ -232,8 +234,8 @@ func TestRomanAfsnitNumbering(t *testing.T) {
 		"i": "1", "iv": "4", "ix": "9", "viii": "8", "xxiv": "24",
 		"iiii": "", "id": "", "ic": "", "vid": "", "": "",
 	} {
-		if got := romanToNumber(token); got != want {
-			t.Errorf("romanToNumber(%q) = %q, want %q", token, got, want)
+		if got := lexdoc.RomanToNumber(token); got != want {
+			t.Errorf("lexdoc.RomanToNumber(%q) = %q, want %q", token, got, want)
 		}
 	}
 }

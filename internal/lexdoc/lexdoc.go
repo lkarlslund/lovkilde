@@ -41,6 +41,9 @@ type Document struct {
 	Identity    Identity
 	Provenance  Provenance
 	Diagnostics Diagnostics
+
+	// Content is what the document says: its provisions, in the mirror's own structure.
+	Content Content
 }
 
 // Identity is what a document is, as distinct from what it says.

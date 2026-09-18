@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // difficulty is one law's stress profile. Every field is a shape that has either
@@ -500,7 +502,7 @@ func localIDMismatches(secs []*Section) int {
 		if s.Kind != "paragraf" || s.Appendix || s.RawNumber == "" {
 			continue
 		}
-		printed := firstNumber(s.RawNumber)
+		printed := lexdoc.FirstNumber(s.RawNumber)
 		if printed != "" && s.Number != "" && printed != s.Number {
 			n++
 		}

@@ -56,6 +56,7 @@ func (d *Document) Model() *lexdoc.Document {
 		},
 		Diagnostics: lexdoc.Diagnostics{Warnings: d.Warnings()},
 	}
+	out.Content = contentOf(d.Root)
 
 	// A date the register wrote but nobody can read is a finding, not a zero: a zero
 	// time sorts like 1 January year 1 and would silently order a version chain wrong.

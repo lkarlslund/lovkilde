@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // pairedTruthEnv points the run at a directory of sampled payloads laid out like
@@ -113,7 +115,7 @@ func stkMarkersAgainstPosition(n *Node, out map[string]int) {
 			if e := c.Elem("Explicatus"); e != nil {
 				marker = strings.TrimSpace(e.Text())
 			}
-			num := firstNumber(marker)
+			num := lexdoc.FirstNumber(marker)
 			switch {
 			case num == "":
 				out["no_marker"]++
