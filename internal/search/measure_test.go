@@ -73,12 +73,95 @@ var measurementQueries = []measurementQuery{
 	{Text: "environmental protection", Group: "other-language"},
 }
 
+// Boolean and proximity queries, measured separately because their truth is a different
+// question. For a plain query the grep baseline is "text contains the word"; for these it is
+// "text contains both", "text contains one and not the other", or "text contains them next to
+// each other", which is what the operators promise and what the index alone cannot guarantee —
+// it stores no word positions.
+//
+// These are constructed from the shapes a legal search box receives, not from real query logs:
+// the service keeps no logs, so claiming they came from users would be invented evidence. Each
+// group's truth-set size is printed alongside its recall, because a boolean query that matches
+// nothing in the sample measures nothing and a reader has to be able to see that.
+type booleanMeasurement struct {
+	Text  string
+	Group string
+	All   []string // words that must all occur
+	None  []string // words none of which may occur
+
+	// Adjacent names a pair that must sit next to each other for a unit to be a real answer.
+	// It is what a quoted span promises, and term co-occurrence does not deliver.
+	Adjacent []string
+}
+
+var booleanQueries = []booleanMeasurement{
+	{Text: "pligt AND virksomhed", Group: "and", All: []string{"pligt", "virksomhed"}},
+	{Text: "erstatning AND ekspropriering", Group: "and", All: []string{"erstatning", "ekspropriering"}},
+	{Text: "miljøbeskyttelse AND virksomhed", Group: "and", All: []string{"miljøbeskyttelse", "virksomhed"}},
+	{Text: "persondata AND behandling", Group: "and", All: []string{"persondata", "behandling"}},
+	{Text: "sundhed AND kostvaner", Group: "and", All: []string{"sundhed", "kostvaner"}},
+	{Text: "uigenkaldelig AND pantehæftelse", Group: "and", All: []string{"uigenkaldelig", "pantehæftelse"}},
+
+	// Quoted spans: the promise is adjacency, so the truth is adjacency.
+	{Text: `"offentlige veje"`, Group: "quoted", All: []string{"offentlige", "veje"}, Adjacent: []string{"offentlige", "veje"}},
+	{Text: `"ubetinget råderet"`, Group: "quoted", All: []string{"ubetinget", "råderet"}, Adjacent: []string{"ubetinget", "råderet"}},
+	{Text: `"særlig indkomstskat"`, Group: "quoted", All: []string{"særlig", "indkomstskat"}, Adjacent: []string{"særlig", "indkomstskat"}},
+	{Text: `"henvendt til"`, Group: "quoted", All: []string{"henvendt", "til"}, Adjacent: []string{"henvendt", "til"}},
+
+	// Exclusions: the answer must contain the first word and not the second, which is a
+	// claim about absence that an OR query cannot make at all.
+	{Text: "andel -boliganpart", Group: "not", All: []string{"andel"}, None: []string{"boliganpart"}},
+	{Text: "skyld -skyldner", Group: "not", All: []string{"skyld"}, None: []string{"skyldner"}},
+	{Text: "råden -ejendom", Group: "not", All: []string{"råden"}, None: []string{"ejendom"}},
+}
+
+// booleanTruth is the grep-equivalent truth set for one boolean query.
+func booleanTruth(texts []string, q booleanMeasurement) []int {
+	var out []int
+	for i, text := range texts {
+		ok := true
+		for _, w := range q.All {
+			if !strings.Contains(text, w) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			for _, w := range q.None {
+				if strings.Contains(text, w) {
+					ok = false
+					break
+				}
+			}
+		}
+		if ok && len(q.Adjacent) == 2 && !adjacentPair(text, q.Adjacent[0], q.Adjacent[1]) {
+			ok = false
+		}
+		if ok {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// adjacentPair is the strict form: the two words with nothing but a space, hyphen or slash
+// between them. containsPhrase is deliberately looser because it audits a ranking; this one
+// defines truth, so it does not give the index credit for a near miss.
+func adjacentPair(text, first, second string) bool {
+	for _, sep := range []string{" ", "-", "/"} {
+		if strings.Contains(text, first+sep+second) {
+			return true
+		}
+	}
+	return false
+}
+
 // TestMeasureIndex compares index variants against brute-force truth and writes the
 // report this milestone's decision rests on.
 //
-// Gated on RETSIN_SEARCH_MEASURE because it reads the real mirror: it needs the
-// corpus, and an ordinary `go test ./...` must not depend on 14 GB of data that CI
-// and fresh clones do not have.
+// Gated on RETSIN_SEARCH_MEASURE because it reads the real mirror: it needs the corpus, and an
+// ordinary `go test ./...` must not depend on 14 GB of data that CI and fresh clones do not
+// have.
 func TestMeasureIndex(t *testing.T) {
 	if os.Getenv("RETSIN_SEARCH_MEASURE") == "" {
 		t.Skip("set RETSIN_SEARCH_MEASURE=1 to measure the index against the real mirror")
@@ -157,9 +240,16 @@ func TestMeasureIndex(t *testing.T) {
 	fmt.Fprintf(&out, "extrapolated to the full mirror (%d documents): %s per query, single process\n\n",
 		fullDocs, (perQuery * time.Duration(fullDocs) / time.Duration(len(docs))).Round(time.Millisecond))
 
-	dest := "testdata/index-measurement-20260917.txt"
+	// Each run writes its own dated report rather than overwriting the previous one: these
+	// files are the evidence behind constants cited in source comments, and a re-measurement
+	// that silently replaced the numbers somebody quoted would destroy the audit trail it is
+	// supposed to extend. RETSIN_MEASURE_OUT overrides the name.
+	dest := fmt.Sprintf("testdata/index-measurement-%s.txt", time.Now().UTC().Format("20060102"))
+	if env := os.Getenv("RETSIN_MEASURE_OUT"); env != "" {
+		dest = env
+	}
 	if _, err := os.Stat("internal/search/testdata"); err == nil {
-		dest = "internal/search/testdata/index-measurement-20260917.txt"
+		dest = "internal/search/" + dest
 	}
 	// checkpoint writes the report after every variant: a measurement that panics on
 	// the second of three would otherwise lose the numbers it had already earned.
@@ -314,6 +404,85 @@ func TestMeasureIndex(t *testing.T) {
 			fmt.Fprintf(&out, "phrase queries whose top 10 actually contain the words adjacent: %d of %d\n", phraseOK, phraseChecked)
 			fmt.Fprintf(&out, "(below 1.0 means term-AND ranks units where the phrase is not contiguous, which is what a\n position-storing index would buy)\n")
 		}
+
+		// Boolean operators and the proximity grade, against the same grep baseline. The
+		// question is not whether they work — the unit tests settle that — but whether each
+		// one beats the ranking that already existed. An operator that costs reads and
+		// returns worse answers than plain OR is a feature to delete, so both numbers go on
+		// the report side by side.
+		fmt.Fprintf(&out, "\nboolean operators and proximity grading (grep truth over the same texts)\n")
+		type boolRow struct {
+			group                                          string
+			miss                                           []string
+			n, truthUnits, gradedUnits                     int
+			plainRecall, gradedRecall                      float64
+			plainGaps, gradedGaps                          []int
+			adjacentPlain, adjacentGraded, adjacentQueries int
+		}
+		bGroups := map[string]*boolRow{}
+		for _, q := range booleanQueries {
+			row := bGroups[q.Group]
+			if row == nil {
+				row = &boolRow{group: q.Group}
+				bGroups[q.Group] = row
+			}
+			truth := booleanTruth(normalised, q)
+			row.truthUnits += len(truth)
+			if len(truth) == 0 {
+				row.miss = append(row.miss, q.Text+" (nothing in the sample to find)")
+				continue
+			}
+			row.n++
+			plain := loaded.Search(Query{Text: q.Text, Limit: 10})
+			graded := loaded.Search(Query{Text: q.Text, Limit: 2 * 10})
+			graded = loaded.GradeNear(graded, q.Text, func(h *Hit) string { return units[h.Unit].Text })
+			if len(graded) > len(plain) {
+				graded = graded[:len(plain)]
+			}
+			row.plainRecall += recallOf(truth, plain)
+			row.gradedRecall += recallOf(truth, graded)
+			row.gradedUnits += min(len(graded), NearWindow)
+			words := loaded.queryWords(q.Text)
+			for _, h := range plain {
+				row.plainGaps = append(row.plainGaps, MinWordGap(units[h.Unit].Text, words))
+			}
+			for _, h := range graded {
+				row.gradedGaps = append(row.gradedGaps, MinWordGap(units[h.Unit].Text, words))
+			}
+			if len(q.Adjacent) == 2 {
+				row.adjacentQueries++
+				if anyAdjacent(plain, normalised, q.Adjacent) {
+					row.adjacentPlain++
+				}
+				if anyAdjacent(graded, normalised, q.Adjacent) {
+					row.adjacentGraded++
+				}
+			}
+		}
+		bnames := make([]string, 0, len(bGroups))
+		for g := range bGroups {
+			bnames = append(bnames, g)
+		}
+		sort.Strings(bnames)
+		for _, g := range bnames {
+			r := bGroups[g]
+			fmt.Fprintf(&out, "  %-6s %2d queries, %d truth units in the sample\n", g, r.n, r.truthUnits)
+			if r.n == 0 {
+				fmt.Fprintf(&out, "    nothing measurable: %s\n", strings.Join(r.miss, ", "))
+				continue
+			}
+			fmt.Fprintf(&out, "    recall@10 index-only %.3f -> graded %.3f\n",
+				r.plainRecall/float64(r.n), r.gradedRecall/float64(r.n))
+			fmt.Fprintf(&out, "    median word gap in the top %d: %s -> %s  (%d text reads per query)\n",
+				10, medianGap(r.plainGaps), medianGap(r.gradedGaps), r.gradedUnits/r.n)
+			if r.adjacentQueries > 0 {
+				fmt.Fprintf(&out, "    quoted queries whose top 10 contains the words adjacent: %d -> %d of %d\n",
+					r.adjacentPlain, r.adjacentGraded, r.adjacentQueries)
+			}
+			if len(r.miss) > 0 {
+				fmt.Fprintf(&out, "    not measurable: %s\n", strings.Join(r.miss, ", "))
+			}
+		}
 		out.WriteString("\n")
 		checkpoint()
 	}
@@ -372,6 +541,57 @@ func TestMeasureIndex(t *testing.T) {
 	checkpoint()
 	t.Log("report written to " + dest)
 	fmt.Print(out.String())
+}
+
+// recallOf is recall@len(hits) of one result list against a grep truth set: what fraction of
+// the ten units grep would have shown first are actually in this list. The denominator is
+// capped the same way the harness caps it everywhere else, so the number means "agreement about
+// the visible page", not "found everything".
+func recallOf(truth []int, hits []Hit) float64 {
+	if len(truth) == 0 {
+		return 0
+	}
+	denom := min(len(truth), len(hits))
+	if denom == 0 {
+		return 0
+	}
+	got := 0
+	for _, h := range hits {
+		for _, u := range truth {
+			if u == h.Unit {
+				got++
+				break
+			}
+		}
+	}
+	return float64(got) / float64(denom)
+}
+
+// anyAdjacent reports whether any hit in the list is a unit where the pair really does sit next
+// to each other.
+func anyAdjacent(hits []Hit, normalised []string, pair []string) bool {
+	for _, h := range hits {
+		if h.Unit < len(normalised) && adjacentPair(normalised[h.Unit], pair[0], pair[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+// medianGap summarises how close the query words sat across a result page. "none" means the
+// words could not be located in the returned text at all, which is a finding, not a zero.
+func medianGap(gaps []int) string {
+	seen := make([]int, 0, len(gaps))
+	for _, g := range gaps {
+		if g >= 0 {
+			seen = append(seen, g)
+		}
+	}
+	if len(seen) == 0 {
+		return "none"
+	}
+	sort.Ints(seen)
+	return fmt.Sprintf("%d over %d hits", seen[len(seen)/2], len(seen))
 }
 
 // bruteForce returns the unit indexes whose lower-cased text contains every query

@@ -127,7 +127,11 @@ func (s *Server) Serve(ctx context.Context) error {
 			Name: "search",
 			Description: "Full-text search over the mirror. Returns provisions, not documents: " +
 				"each hit names its ELI path, section address, and the text source of that " +
-				"document, and the address can be passed straight back to lookup.",
+				"document, and the address can be passed straight back to lookup. " +
+				"Plain words combine with coverage-weighted OR and every hit reports how many of " +
+				"the words it answers, so use AND when a word must be present: '+ord AND andet " +
+				"NOT tredje', or '-ord' to exclude. A quoted span requires its words in one " +
+				"provision, and hits then report how many words apart they sat.",
 		}, s.searchTool)
 	}
 	return srv.Run(ctx, &mcp.StdioTransport{})
@@ -135,12 +139,18 @@ func (s *Server) Serve(ctx context.Context) error {
 
 // searchInput is the search tool's argument object.
 type searchInput struct {
-	Query  string `json:"query" jsonschema:"required" jsonschema_description:"Danish words to search for, e.g. 'miljøbeskyttelse pligt'. Inflected forms and compounds are matched; æ/ø/å are distinct letters and are not folded"`
-	Kind   string `json:"kind,omitempty" jsonschema_description:"limit to one medium: lta, ltb, ltc, mt, retsinfo, ft, fob, accn"`
-	Since  int    `json:"since,omitempty" jsonschema_description:"only documents published from this year"`
-	Until  int    `json:"until,omitempty" jsonschema_description:"only documents published up to this year"`
+	Query string `json:"query" jsonschema:"required" jsonschema_description:"Danish words to search for, e.g. 'miljøbeskyttelse pligt'. Inflected forms and compounds are matched; æ/ø/å are distinct letters and are not folded. Operators: 'a AND b' requires both, '+a' requires one, '-a' and 'NOT a' exclude, 'a OR b' unions, and 'a b' in double quotes requires both words in the same provision"`
+	Kind  string `json:"kind,omitempty" jsonschema_description:"limit to one medium: lta, ltb, ltc, mt, retsinfo, ft, fob, accn"`
+	Since int    `json:"since,omitempty" jsonschema_description:"only documents published from this year"`
+	Until int    `json:"until,omitempty" jsonschema_description:"only documents published up to this year"`
+
+	// Source and NoNear are the two ways to ask for less work rather than more: an
+	// xml-only search reads fewer documents, and an ungraded one skips the text reads that
+	// proximity needs.
 	Source string `json:"source,omitempty" jsonschema_description:"'xml' for the register's own structured text only, 'html' for reader-recovered text"`
 	Limit  int    `json:"limit,omitempty" jsonschema_description:"maximum hits, default 10, cap 50"`
+
+	NoNear bool `json:"no_near,omitempty" jsonschema_description:"rank from the index alone and skip the text reads that measure word distance"`
 }
 
 func (s *Server) searchTool(_ context.Context, _ *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, any, error) {
@@ -151,6 +161,7 @@ func (s *Server) searchTool(_ context.Context, _ *mcp.CallToolRequest, in search
 		Until:  in.Until,
 		Source: in.Source,
 		Limit:  in.Limit,
+		NoNear: in.NoNear,
 	})
 	if err != nil {
 		return &mcp.CallToolResult{

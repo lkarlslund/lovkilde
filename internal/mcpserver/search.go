@@ -15,12 +15,19 @@ import (
 
 // SearchRequest is a full-text query over the mirror.
 type SearchRequest struct {
+	// Query carries the operator syntax documented in internal/search/query.go: +word,
+	// -word, AND, OR, NOT, and a "quoted span" meaning its words in one provision. Plain
+	// words stay a coverage-weighted OR.
 	Query  string
 	Kind   string
 	Since  int
 	Until  int
 	Source string
 	Limit  int
+
+	// NoNear turns off proximity grading, which is the one part of a search that reads text
+	// before the answer is rendered. Ranking then comes from the index alone.
+	NoNear bool
 }
 
 // SearchHit is one provision the query matched, with the provenance an answer needs.
@@ -33,6 +40,16 @@ type SearchHit struct {
 	Score      float64
 	Matched    []string
 	Snippet    string
+
+	// Covered of Requested says how much of the query this provision answers. For an AND
+	// query it is always full, which is exactly the difference between the two readings.
+	Covered   int
+	Requested int
+
+	// Gap is how many words apart the query words sat, when proximity was graded: 0 or 1 is
+	// the phrase case, -1 means not graded. It is reported rather than buried in the score,
+	// because the distance is the fact the asker wanted, not a detail of ranking.
+	Gap int
 
 	// Reference is what to pass back to lookup: the ELI path when it identifies one
 	// document, and the accession when it does not. Bills store every stage under the
@@ -68,21 +85,42 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
+	// The index cannot see distance between words, so the page it ranks best is not
+	// necessarily the page a reader wants. Over-fetching gives the proximity grade a front to
+	// reorder, and the extra reads are bounded by search.NearWindow — which is the cost the
+	// grading was designed to keep small by not needing an index change at all.
+	fetch := limit
+	if !req.NoNear {
+		fetch = limit * 2
+		if fetch > 50 {
+			fetch = 50
+		}
+	}
 	hits := s.index.Search(search.Query{
 		Text:    req.Query,
 		Kind:    req.Kind,
 		MinYear: req.Since,
 		MaxYear: req.Until,
 		Source:  req.Source,
-		Limit:   limit,
+		Limit:   fetch,
 	})
+	texts := search.NewUnitTexts()
+	if !req.NoNear {
+		hits = s.index.GradeNear(hits, req.Query, func(h *search.Hit) string {
+			return texts.Unit(h.Doc, h.Addr)
+		})
+	}
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
 	res := &SearchResult{Query: req.Query, Mirror: s.Status()}
 	for _, h := range hits {
 		label := h.Doc.Title
 		if entry, ok := s.archive.Find(h.Doc.Accession); ok {
 			label = citation(entry)
 		}
-		snippet := search.Snippet(h.Doc, h.Addr, h.Matched, 0)
+		unitText := texts.Unit(h.Doc, h.Addr)
+		snippet := search.SnippetFrom(unitText, h.Matched, 0)
 		ref := h.Doc.ELI
 		if len(s.ambiguous(h.Doc.ELI)) > 1 {
 			ref = h.Doc.Accession
@@ -96,6 +134,9 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 			Provenance: h.Doc.Source,
 			Score:      h.Score,
 			Matched:    h.Matched,
+			Covered:    h.Covered,
+			Requested:  h.Requested,
+			Gap:        h.Gap,
 			Snippet:    snippet,
 		})
 	}
@@ -141,8 +182,15 @@ func (r *SearchResult) String() string {
 			fmt.Fprintf(&b, " — %s", h.Address)
 		}
 		b.WriteString("\n\n")
-		fmt.Fprintf(&b, "`%s` · accession `%s` · **%s** · score %.2f · matched: %s\n\n",
-			h.ELI, h.Accession, provenanceLabel(h.Provenance), h.Score, strings.Join(h.Matched, ", "))
+		fmt.Fprintf(&b, "`%s` · accession `%s` · **%s** · score %.2f · matched %d of %d: %s",
+			h.ELI, h.Accession, provenanceLabel(h.Provenance), h.Score, h.Covered, h.Requested,
+			strings.Join(h.Matched, ", "))
+		if h.Gap >= 0 {
+			// The gap is the answer to "did they really occur together", so it goes on the
+			// line the reader looks at, not in a field they have to know to ask for.
+			fmt.Fprintf(&b, " · words %d apart", h.Gap)
+		}
+		b.WriteString("\n\n")
 		if h.Snippet != "" {
 			fmt.Fprintf(&b, "> %s\n\n", strings.ReplaceAll(strings.TrimSpace(h.Snippet), "\n", " "))
 		}

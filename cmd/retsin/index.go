@@ -135,14 +135,15 @@ half-built index.`,
 func searchCmd(resolve configFunc) *cobra.Command {
 	var index, kind, source string
 	var since, until, limit int
-	var noSnippet bool
+	var noSnippet, noNear bool
 
 	cmd := &cobra.Command{
 		Use:   "search <words>",
 		Short: "Full-text search the mirror: hits are provisions, not documents",
 		Example: `  retsin search "miljøbeskyttelse pligt"
   retsin search "lov nr. 1399" --kind lta --since 2015
-  retsin search "ubetinget råderet" --source xml   # only the register's own text`,
+  retsin search "ubetinget råderet" --source xml   # only the register's own text
+  retsin search "pligt AND virksomhed -lejlighed"  # require, require-not; plain words are OR`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolve()
@@ -159,14 +160,32 @@ func searchCmd(resolve configFunc) *cobra.Command {
 				}
 				return err
 			}
+			// The index cannot see how far apart two words sit, so the page it ranks best
+			// is not necessarily the page worth reading. Over-fetching gives the proximity
+			// grade something to reorder, and the reads it needs are the same ones the
+			// snippets were going to do.
+			query := strings.Join(args, " ")
+			fetch := limit
+			if !noNear {
+				fetch = limit * 2
+			}
 			hits := idx.Search(search.Query{
-				Text:    strings.Join(args, " "),
+				Text:    query,
 				Kind:    kind,
 				MinYear: since,
 				MaxYear: until,
 				Source:  source,
-				Limit:   limit,
+				Limit:   fetch,
 			})
+			texts := search.NewUnitTexts()
+			if !noNear {
+				hits = idx.GradeNear(hits, query, func(h *search.Hit) string {
+					return texts.Unit(h.Doc, h.Addr)
+				})
+			}
+			if len(hits) > limit {
+				hits = hits[:limit]
+			}
 			w := gate.LogWriter()
 			if len(hits) == 0 {
 				fmt.Fprintf(w, "no provision matches %q in %s (%d documents indexed)\n",
@@ -174,14 +193,20 @@ func searchCmd(resolve configFunc) *cobra.Command {
 				return nil
 			}
 			for i, h := range hits {
-				fmt.Fprintf(w, "%2d. %s — %s\n     %s [%s] score %.2f matched: %s\n",
-					i+1, h.Doc.Title, h.Addr, h.Doc.ELI, h.Doc.Source, h.Score, strings.Join(h.Matched, ","))
+				extra := ""
+				if h.Gap >= 0 {
+					extra = fmt.Sprintf(" %d apart", h.Gap)
+				}
+				fmt.Fprintf(w, "%2d. %s — %s\n     %s [%s] score %.2f matched %d/%d: %s%s\n",
+					i+1, h.Doc.Title, h.Addr, h.Doc.ELI, h.Doc.Source, h.Score,
+					h.Covered, h.Requested, strings.Join(h.Matched, ","), extra)
 				if noSnippet {
 					continue
 				}
-				// The snippet re-reads the document. A hit whose snippet cannot be
-				// rendered still prints its address rather than disappearing.
-				if s := search.Snippet(h.Doc, h.Addr, h.Matched, 0); s != "" {
+				// The snippet re-reads the document, sharing one parse per document with the
+				// proximity grade above. A hit whose snippet cannot be rendered still prints
+				// its address rather than disappearing.
+				if s := search.SnippetFrom(texts.Unit(h.Doc, h.Addr), h.Matched, 0); s != "" {
 					fmt.Fprintf(w, "     %s\n", strings.ReplaceAll(s, "\n", " "))
 				} else {
 					fmt.Fprintf(w, "     (no snippet: %s)\n", h.Doc.Path)
@@ -197,6 +222,7 @@ func searchCmd(resolve configFunc) *cobra.Command {
 	cmd.Flags().IntVar(&until, "until", 0, "only documents up to this year")
 	cmd.Flags().IntVar(&limit, "limit", 10, "maximum hits")
 	cmd.Flags().BoolVar(&noSnippet, "no-snippet", false, "skip rendering passages (each one re-reads a document from the mirror)")
+	cmd.Flags().BoolVar(&noNear, "no-near", false, "rank from the index alone: skip the text reads that measure how far apart the words sit")
 	return cmd
 }
 
