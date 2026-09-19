@@ -111,6 +111,14 @@ func (s *Server) LookupPage(req LookupRequest) (*LookupResult, error) {
 	return s.lookup(req, true)
 }
 
+// lookup answers one request. wantHTML decides the one thing that differs between the two public
+// shapes: a page gets the rendering and the table of contents, an answer gets text alone.
+//
+// The character cap applies to the answer and not to the page. It exists to keep a reply inside an
+// agent's context, and applying it here produced a page whose HTML held the whole document while
+// its text said "Svaret er afkortet" — measured on 202223L00057, whose page is 12.5 MB. A page is
+// bounded by what the publisher published; that is a deliberate choice, and the document's own size
+// is the number it is bounded by, not a cap borrowed from the tool.
 func (s *Server) lookup(req LookupRequest, wantHTML bool) (*LookupResult, error) {
 	entry, err := s.find(req.Document)
 	if err != nil {
@@ -172,7 +180,9 @@ func (s *Server) lookup(req LookupRequest, wantHTML bool) (*LookupResult, error)
 		}
 	}
 	res.Warnings = append(res.Warnings, m.Diagnostics.Warnings...)
-	res.truncate(req.MaxChars)
+	if !wantHTML {
+		res.truncate(req.MaxChars)
+	}
 	return res, nil
 }
 

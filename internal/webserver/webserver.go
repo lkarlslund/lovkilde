@@ -208,7 +208,6 @@ type documentPage struct {
 	Anchor         string
 	Addr           string
 	Groups         []relatedGroupView
-	Truncated      bool
 	FullLink       string
 }
 
@@ -247,8 +246,10 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "et dokument skal peges på med ?ref=…", http.StatusBadRequest)
 		return
 	}
+	// No character cap: a page shows the document whole, which is the difference between this path
+	// and the tool's (see mcpserver.Server.lookup).
 	res, err := h.srv.LookupPage(mcpserver.LookupRequest{
-		Document: ref, Address: addr, AsOf: q.Get("as_of"), MaxChars: pageMaxChars,
+		Document: ref, Address: addr, AsOf: q.Get("as_of"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -267,7 +268,6 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 		Warnings:       res.Warnings,
 		Anchor:         res.Anchor,
 		Addr:           addr,
-		Truncated:      res.Truncated,
 		FullLink:       documentLink(orString(res.Accession, res.ELIURL), ""),
 	}
 	// The renderer escapes everything it takes from the document on the way in, so the body is
@@ -410,11 +410,6 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprint(w, h.srv.Status())
 }
-
-// pageMaxChars is deliberately far above the tool's cap: that limit exists to keep an answer
-// inside an agent's context, and a browser page has no context. Documents are bounded by what
-// the publisher published, not by this number.
-const pageMaxChars = 4_000_000
 
 // documentLink is the one way a link to a provision gets built, so every link in the interface
 // carries its address the same way.

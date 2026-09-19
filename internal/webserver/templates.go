@@ -201,7 +201,6 @@ const documentBody = `{{define "content"}}
 </nav>{{end}}
 {{if .Body}}<article class="law">{{.Body}}</article>{{end}}
 {{if .PlainText}}<pre class="plain">{{.PlainText}}</pre>{{end}}
-{{if .Truncated}}<p class="warn">Svaret er afkortet.</p>{{end}}
 {{if .Groups}}<aside class="related">
 {{range .Groups}}
 <h2>{{.Name}}</h2>

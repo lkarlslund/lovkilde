@@ -12,16 +12,34 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/lkarlslund/retsinformation/internal/archive"
 	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 )
 
 // artifactDefaultName is where the artifact goes under --data-dir.
 const artifactDefaultName = "artifact.bin"
+
+// sizeHistogram renders the compiled document sizes as one log field, e.g.
+// "<8 KiB:152310 <64 KiB:31000 <1 MiB:6012 <8 MiB:990 <64 MiB:13 >=64 MiB:4". The last band is
+// open at the top because it is the one that matters: it holds the documents the old bound refused.
+func sizeHistogram(bands []int, counts []int64) string {
+	parts := make([]string, 0, len(counts))
+	for i, c := range counts {
+		if i < len(bands) {
+			parts = append(parts, fmt.Sprintf("<%s:%d", archive.SizeHint(int64(bands[i])), c))
+			continue
+		}
+		parts = append(parts, ">="+archive.SizeHint(int64(bands[len(bands)-1]))+":"+strconv.FormatInt(c, 10))
+	}
+	return strings.Join(parts, " ")
+}
 
 func artifactCmd(resolve configFunc) *cobra.Command {
 	cmd := &cobra.Command{
@@ -110,6 +128,9 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 				// filed under the address the archive gave it.
 				if err := wr.Add(e.Accession, doc.Model()); err != nil {
 					f.Close()
+					// The half-written file is 400 MB of nothing on a build that died this way once
+					// already; leaving it is a second problem the same failure has to cause.
+					os.Remove(tmp)
 					return fmt.Errorf("%s: %w", e.Accession, err)
 				}
 				seen[e.Accession] = true
@@ -138,10 +159,17 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
+			// The size distribution is printed because the bound on a document's size is a claim
+			// about this corpus, and a claim of that kind was previously asserted at 8 MiB without
+			// ever having been counted — which is what made a whole-mirror build impossible.
+			bands, counts, largest, rawTotal := wr.SizeDistribution()
 			slog.Info("artifact built",
 				"path", out,
 				"documents", wr.Documents(),
 				"bytes", st.Size(),
+				"model_json", archive.SizeHint(int64(rawTotal)),
+				"largest_document_json", archive.SizeHint(int64(largest)),
+				"document_sizes", sizeHistogram(bands, counts),
 				"entries without an accession", noAccession,
 				"duplicate accessions", duplicates,
 				"unreadable", unreadable,
@@ -151,10 +179,11 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 			)
 			// The coverage claim is the number a reader of an answer cannot see for themselves, so
 			// it is printed with what was left out rather than as a bare count.
-			fmt.Fprintf(gate.LogWriter(), "%s: %d documents, %.1f MB, built %s by %s, %s; left out: %d without an accession, %d duplicate, %d unreadable\n",
+			fmt.Fprintf(gate.LogWriter(), "%s: %d documents, %.1f MB, built %s by %s, %s; model JSON %s, largest document %s (%s); left out: %d without an accession, %d duplicate, %d unreadable\n",
 				out, wr.Documents(), float64(st.Size())/1e6,
 				opened.Header.Created.Format(time.RFC3339), stampedAs(opened.Header),
 				time.Since(start).Round(time.Millisecond),
+				archive.SizeHint(int64(rawTotal)), archive.SizeHint(int64(largest)), sizeHistogram(bands, counts),
 				noAccession, duplicates, unreadable)
 			return nil
 		},

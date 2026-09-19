@@ -38,10 +38,20 @@ const (
 	// document table produces offsets that look entirely plausible.
 	artifactVersion = 1
 
-	// frameSplitSize is the seekable format's own frame boundary. Documents are far smaller, so
-	// hitting it means something has gone wrong with one document rather than with the layout,
-	// and a frame over the boundary would make the sizes in the seek table wrong.
-	frameSplitSize = 8 << 20
+	// maxFrameBytes is the boundary the container itself enforces: the seek table records each
+	// frame's compressed and uncompressed size as a uint32, so a frame of 4 GiB or more cannot be
+	// described at all. Checking it where the cast happens is the only place it can be checked —
+	// see frame().
+	maxFrameBytes = 1 << 32
+
+	// maxDocumentJSON is this build's own refusal, not a format limit. A lookup decodes a document
+	// whole, so this number is also the memory one answer can cost, which is why it is not simply
+	// the container's limit. Measured over the whole mirror (191,429 documents, 6.9 GiB of model
+	// JSON): the largest single document is 42.2 MiB, twenty documents exceed 8 MiB, and 417 more
+	// fall between 1 and 8 MiB — so this bound is roughly three times the largest thing the register
+	// publishes, and a model that grew past it is a bug in the model rather than a law. Refusing it
+	// names the accession instead of the server spending a tenth of a gigabyte on one answer.
+	maxDocumentJSON = 1 << 27
 
 	// From the Zstandard Seekable Format, version 0.1.0: the seek table is a skippable frame
 	// whose content ends with these, so a reader can find it in the last bytes of a file.
@@ -51,6 +61,13 @@ const (
 	// seekableFooter is Number_Of_Frames, Seek_Table_Descriptor and Seekable_Magic_Number.
 	seekableFooter = 4 + 1 + 4
 )
+
+// documentSizeBands are the sizes the build counts documents in, with the last band holding
+// everything at or above it. The bound above is a claim about the corpus, so the build reports the
+// distribution that justifies it rather than a lone maximum: "documents are far smaller than 8 MiB"
+// was written down as a fact and turned out to be false for the mirror's own largest documents and
+// for the artifact's own document table.
+var documentSizeBands = []int{1 << 13, 1 << 16, 1 << 20, 8 << 20, 64 << 20}
 
 // ArtifactHeader is the artifact's first frame: what it holds and which build wrote it.
 //
@@ -92,7 +109,14 @@ type Writer struct {
 	sizes   [][2]uint32
 	refs    []DocRef
 	scratch []byte
-	done    bool
+
+	// Size accounting for the build report: what the documents cost to hold decompressed, how that
+	// is distributed, and the largest one. See documentSizeBands.
+	largest   int
+	rawBytes  uint64
+	bandCount []int64
+
+	done bool
 }
 
 // NewWriter writes the header frame and returns the writer.
@@ -156,16 +180,43 @@ func (wr *Writer) Add(accession string, doc *lexdoc.Document) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", accession, err)
 	}
-	if len(payload) >= frameSplitSize {
-		return fmt.Errorf("%s: %d bytes of JSON, over the seekable format's %d byte frame boundary",
-			accession, len(payload), frameSplitSize)
+	if len(payload) >= maxDocumentJSON {
+		return fmt.Errorf("%s: %d bytes of JSON, over this build's %d byte document bound. The document is served by decoding it whole, so this is the memory one answer would cost; if the mirror really holds a document this large, the bound is the thing to raise, not the file to skip",
+			accession, len(payload), maxDocumentJSON)
 	}
 	start, compressed, err := wr.frame(payload)
 	if err != nil {
 		return err
 	}
+	wr.recordSize(len(payload))
 	wr.refs = append(wr.refs, DocRef{Accession: accession, Offset: start, Length: compressed, Raw: uint64(len(payload))})
 	return nil
+}
+
+// recordSize keeps what the build report needs about one document's compiled size.
+func (wr *Writer) recordSize(n int) {
+	if n > wr.largest {
+		wr.largest = n
+	}
+	wr.rawBytes += uint64(n)
+	if wr.bandCount == nil {
+		wr.bandCount = make([]int64, len(documentSizeBands)+1)
+	}
+	for i, band := range documentSizeBands {
+		if n < band {
+			wr.bandCount[i]++
+			return
+		}
+	}
+	wr.bandCount[len(documentSizeBands)]++
+}
+
+// SizeDistribution reports the document-size histogram in the same order as the bands it was
+// counted against: band sizes, counts per band with the last holding everything at or above the
+// last band, the largest single document, and the total decompressed bytes.
+func (wr *Writer) SizeDistribution() (bands []int, counts []int64, largest int, total uint64) {
+	counts = append(counts, wr.bandCount...)
+	return documentSizeBands, counts, wr.largest, wr.rawBytes
 }
 
 // Documents is how many documents the writer has taken so far, for progress reporting.
@@ -189,10 +240,12 @@ func (wr *Writer) Close() error {
 		wr.enc.Close()
 		return err
 	}
-	if len(table) >= frameSplitSize {
-		wr.enc.Close()
-		return fmt.Errorf("document table is %d bytes, over the frame boundary", len(table))
-	}
+	// The table is bounded by frame()'s own limit rather than a second number of its own: it grows
+	// with the mirror — about a hundred bytes of JSON per document, so the current 191,429 documents
+	// make roughly 21 MB — and the only boundary that is real for it is the one the seek table
+	// imposes on every frame. The first build refused it anyway, against the 8 MiB it had decided a
+	// document's size was, which is how a whole-mirror artifact turned out never to have been
+	// buildable at all.
 	if _, _, err := wr.frame(table); err != nil {
 		wr.enc.Close()
 		return err
@@ -205,14 +258,34 @@ func (wr *Writer) Close() error {
 
 // frame compresses one payload as one complete zstd frame and records its sizes.
 func (wr *Writer) frame(payload []byte) (start, compressed uint64, err error) {
+	// The container's real boundary is checked here, at the cast into the seek table's uint32
+	// sizes, rather than as a smaller figure assumed elsewhere about what a document's size happens
+	// to be. Refusing before encoding keeps a frame the table could not describe out of the file.
+	if err := frameSizeFits("uncompressed", len(payload)); err != nil {
+		return 0, 0, err
+	}
 	start = wr.w.n
 	wr.scratch = wr.enc.EncodeAll(payload, wr.scratch[:0])
 	if _, err = wr.w.Write(wr.scratch); err != nil {
 		return 0, 0, err
 	}
 	compressed = wr.w.n - start
+	if err := frameSizeFits("compressed", int(compressed)); err != nil {
+		return 0, 0, err
+	}
 	wr.sizes = append(wr.sizes, [2]uint32{uint32(compressed), uint32(len(payload))})
 	return start, compressed, nil
+}
+
+// frameSizeFits reports whether a frame of n bytes can be described by the seek table at all. Its
+// two sizes per frame are uint32, so 4 GiB is the limit and reaching it means the artifact is not
+// the right container for whatever produced this.
+func frameSizeFits(what string, n int) error {
+	if uint64(n) >= maxFrameBytes {
+		return fmt.Errorf("%s frame of %d bytes cannot be described by the seek table, whose sizes are uint32: %d is the largest representable",
+			what, n, maxFrameBytes-1)
+	}
+	return nil
 }
 
 // Header reports what the writer put in the header frame.

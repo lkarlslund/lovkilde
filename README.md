@@ -7,10 +7,11 @@ without getting rate-limited or blocked.
 
 ## Status
 
-Bootstrap has **not** been run yet. The pipeline is verified end-to-end against
-production (inventory, harvest feed, document fetch, resume, state rebuild), but the
-full ~200k-document collection is deliberately left for a human to start — see
-[Running it](#running-it).
+The mirror is running. **191,429 documents** of canonical ELI XML — 14 GB under `data/xml`, split
+`fob` 2,865 · `ft` 41,464 · `lta` 63,275 · `ltb` 45 · `ltc` 4,777 · `mt` 6,407 · `retsinfo` 72,596 —
+last pulled 2026-09-18 with 14 issues past the retry ceiling, a full-text index of 4,493,745 terms
+over those same documents, and a compiled artifact holding all 191,429 of them. Bootstrap was run by
+a human, as [Running it](#running-it) describes; the numbers above are what that left behind.
 
 ## What the site actually offers
 
@@ -1257,6 +1258,14 @@ documents, 4,493,745 index terms, no artifact, so text came from parsing XML):
 | pages with a live `<script>` | **0** |
 | a document page | 2–29 ms for the small documents in that sample, 53 ms for a 765 KB one; a search 78–1,417 ms; warm file cache |
 
+A page shows a document whole. The character cap that keeps an MCP answer inside an agent's context
+had been carried over to pages, where it cut the one thing the page does not render — the mirror's
+largest document page, 13,090,321 bytes, printed "Svaret er afkortet" beside a complete document. The
+cap belongs to the answer path alone (`TestLookupTruncatesAnAnswerButNotAPage`); the bound on a page
+is whatever the publisher published. And the page is the same page whichever path serves it: 138 of
+138 pages were identical byte for byte from the artifact and from the XML, apart from the line that
+names where the text came from.
+
 The first version of that crawl found two bugs the fixture tests had missed, and both are
 gone: 522 contents links pointed at an anchor the page did not hold (a narrowed view shows
 one provision but lists the whole document, so its table of contents has to point *forward*
@@ -1416,7 +1425,7 @@ Measured over the same 1,000 documents as the codec bench
 | raw | 59.9 MB | 28.5 MB of model JSON |
 | on disk (zstd 3) | 5.7 MB | 5.6 MB |
 | per lookup | 691 µs (parse) | 122 µs (read + decode) |
-| whole mirror projected | — | ~1.07 GB |
+| whole mirror | — | 1.58 GB built and measured below; the sample projected 1.07 GB |
 
 The codec bench's earlier note that a compiled form would be *bigger* than the XML was a
 property of the struct it measured: `cDoc` copied a section's run text out per section, while
@@ -1424,17 +1433,25 @@ the model keeps one segment slice per provision and its subsections and conditio
 over it. The artifact is argued for on lookup speed, but it does not cost size either — and
 the difference between those two claims is a measurement rather than a hope.
 
-One limit is not met yet: a whole-mirror build does not finish. `retsin artifact build` over
-all 191,429 documents stopped after 2 m 7 s on `202223L00057`, whose model is 16,356,009 bytes
-of JSON — over the 8,388,608-byte frame boundary the writer refuses. That boundary is a chosen
-invariant ("documents are far smaller"), not a limit of the format: the seek table records each
-frame's sizes as `uint32`, so it represents frames up to 4 GiB. It is not one document either —
-the mirror holds XML up to 88,120,531 bytes (`ft/2024/202412L00023.xml`) — and `Close` checks
-the document table against the same boundary, so 191,429 rows at roughly a hundred bytes of
-JSON each is another crossing, that one arithmetic rather than measured. The ~1.07 GB figure
-above is therefore a projection from a 1,000-document sample, not a build that has been seen to
-finish. Until it is settled, `retsin mcp` and `retsin serve` run without the artifact, read text
-by parsing XML, and say so in their status line.
+Two limits had to be lifted before a whole-mirror build could finish, and one of them had been
+written down as a fact about documents when it was a fact about the container. The writer refused any
+frame of 8 MiB or more; what the seekable format actually imposes is its seek table's two `uint32`
+sizes per frame, so a frame of 4 GiB is the thing that cannot be described at all — and that check
+now sits in `frame()`, at the cast, rather than as a smaller number assumed elsewhere. The
+per-document refusal stays, at 128 MiB, chosen from measurement: a lookup decodes a document whole,
+so the bound is also the memory one answer can cost, and the mirror's largest document is 42.2 MiB.
+
+What the old bound made impossible, counted over the whole mirror rather than argued: **20 documents**
+have more than 8 MiB of model JSON (the one that stopped the first build, `202223L00057`, has
+16,356,009 bytes), and `Close` checked the document table against the same 8 MiB, which 191,429 rows
+at roughly a hundred bytes each exceeds nearly three times over. So the artifact had never been
+buildable for the mirror it describes.
+
+The build that this fixes produced, measured: 191,429 documents in **6 m 49 s**, 6.9 GiB of model
+JSON into **1.58 GB** on disk, peak RSS 3.4 GB, and nothing left out — 0 entries without an
+accession, 0 duplicate, 0 unreadable. The ~1.07 GB projection above came from a 1,000-document
+sample, and the miss is the distribution rather than the average: 86,780 documents are under 8 KiB of
+JSON, 83,151 under 64 KiB, 21,061 under 1 MiB, 417 under 8 MiB, 20 above it.
 
 ### Serving from the artifact
 
@@ -1483,6 +1500,26 @@ moving that render behind `LookupPage`, which the web server calls and the MCP t
 brought the path back to within 2 µs of the figures recorded the day before it (75 and 52 µs,
 a different morning and so a comparison to read as noise, not as a measurement). The later run
 is kept as `testdata/serve-baseline-20260919.txt`.
+
+Those are lookup costs. What a person waiting on a page pays was measured on the running mirror,
+over the same 138 pages through two servers — one reading the artifact, one reading the publisher's
+XML — in the same minutes and sharing the operating system's file cache. The sample is the pages a
+reader actually reaches from browse and search, including the mirror's five largest documents and the
+provision views a search hit names:
+
+| | by parse | by artifact |
+|---|---|---|
+| median page | 1.8 ms | 1.4 ms |
+| p90 page | 79.2 ms | 31.4 ms |
+| the largest page, 12.5 MB of HTML | 1,101 ms | 463 ms |
+| all 138 pages, total | 22.8 s | 8.0 s |
+
+Agreement again rather than assertion: **138 of 138** pages came out identical byte for byte apart
+from the one line that names where the text came from. And the shape of the win is worth stating
+plainly, because it is not the same shape as the table above — the median barely moves, since a small
+page is dominated by work the artifact does not remove, while the tail is where the parse goes: 2.5x
+at p90 and 2.8x over the run. The 6–12x figures above measure the lookup alone; a page also pays for
+the walk, the render and the template, which are identical on both paths.
 
 ### Text provenance: which documents have real text, and where it came from
 
@@ -1885,6 +1922,14 @@ found (below).
 
 ## Notes and limitations
 
+- **191,430 XML files, 191,429 documents.** Two of them carry the same accession —
+  `data/xml/ltc/1963/7.xml` (1,298 bytes) and `data/xml/lta/1963/7.xml` (22,574 bytes) both print
+  `B19630000705` — and the archive indexes by accession, keeping whichever medium path it scanned
+  first. Counted over the whole mirror, that is the only collision in 191,430 files. The copy that
+  survives is the one with a text in it, which is the lucky order, but nothing reported the loss and
+  the dropped path answers 404 while `eli/lta/1963/7` and the accession both open the same
+  bekendtgørelse. Reporting the count is the first fix; whether two ELI paths for one accession
+  should each answer is a decision still open.
 - The 12 s harvest pace is a constant with no flag, so the published 1 call / 10 s
   obligation cannot be configured away. The 200 ms document floor is a **default**, not
   a limit: `Validate()` only refuses a non-positive value, and pushing it lower is a

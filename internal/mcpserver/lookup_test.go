@@ -195,6 +195,36 @@ func TestLookupLeavesThePageRenderingToThePage(t *testing.T) {
 	}
 }
 
+// The character cap exists to keep an answer inside an agent's context. Applying it to a page
+// produced a page whose HTML held the whole document while its text claimed it had been cut —
+// measured on the mirror's 12.5 MB document page — so the cap belongs to the answer path only.
+func TestLookupTruncatesAnAnswerButNotAPage(t *testing.T) {
+	s := newTestServer(t)
+	req := LookupRequest{Document: "lta/1998/2", MaxChars: 40}
+	answer, err := s.Lookup(req)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if !answer.Truncated || len(answer.Text) > 40 {
+		t.Errorf("the answer did not respect the cap: %d bytes, truncated=%v", len(answer.Text), answer.Truncated)
+	}
+	page, err := s.LookupPage(req)
+	if err != nil {
+		t.Fatalf("LookupPage: %v", err)
+	}
+	if page.Truncated {
+		t.Error("a page reported itself truncated; a page shows the document whole")
+	}
+	if len(page.Text) <= len(answer.Text) {
+		t.Errorf("page text is %d bytes against the capped answer's %d: the page was capped too",
+			len(page.Text), len(answer.Text))
+	}
+	if len(page.HTML) <= len(answer.Text) {
+		t.Errorf("page HTML is %d bytes against the capped answer's %d: the rendering was capped as well",
+			len(page.HTML), len(answer.Text))
+	}
+}
+
 // Addressing has to work on recovered text as well as on the register's own, because
 // most of the mirror has nothing else. A body that can be read but not cited is the
 // failure the census counted 255,828 times, so this is the assertion that keeps the

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -60,6 +61,109 @@ func TestArtifactRoundTrip(t *testing.T) {
 	}
 	if _, err := a.Document("A29990000009"); err == nil || !strings.Contains(err.Error(), "not in this artifact") {
 		t.Errorf("a document the artifact does not hold answered anyway: %v", err)
+	}
+}
+
+// The first build refused any document whose model JSON reached 8 MiB and died on the mirror's own
+// largest documents. That size was an assumption about documents, not a limit of the container, so
+// the document that used to be refused now has to go in and come back out unchanged, with the table
+// describing where its frame sits.
+func TestArtifactCarriesADocumentTheFirstBuildRefused(t *testing.T) {
+	d := fixtureDocument()
+	body := "Stk. 3. Der ydes tilskud til de formål der er beskrevet i bilaget, og som kan ændres ved styrelsens bekendtgørelse. "
+	d.Content.Appendices = []lexdoc.Appendix{{
+		Number: "9", Label: "Bilag 9", Heading: "Tillægsliste",
+		Segments: []lexdoc.Segment{{Text: strings.Repeat(body, 80_000)}},
+	}}
+	raw, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) <= 8<<20 {
+		t.Fatalf("the fixture is only %d bytes of JSON, which is not over the 8 MiB the first build refused", len(raw))
+	}
+
+	path := filepath.Join(t.TempDir(), "artifact.bin")
+	if err := writeArtifactFile(t, path, "", []ArtifactDoc{{Accession: "A20260000001", Document: d}}); err != nil {
+		t.Fatal(err)
+	}
+	a, err := OpenArtifact(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+
+	ref, ok := a.Ref("A20260000001")
+	if !ok {
+		t.Fatal("the large document is not in the table")
+	}
+	if ref.Raw != uint64(len(raw)) {
+		t.Errorf("the table records %d raw bytes, the document is %d", ref.Raw, len(raw))
+	}
+	back, err := a.Document("A20260000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(back, d) {
+		got, _ := json.Marshal(back)
+		t.Errorf("the large document did not come back as it went in: %d bytes out against %d in, first difference at byte %d",
+			len(got), len(raw), firstDiffByte(got, raw))
+	}
+	if got, want := back.Content.Markdown(), d.Content.Markdown(); got != want {
+		t.Errorf("markdown changed through the artifact (%d bytes against %d)", len(got), len(want))
+	}
+}
+
+// The container's real boundary is the seek table's two uint32 sizes per frame, so the guard is
+// tested where it lives rather than by writing four gigabytes into a temporary file.
+func TestFrameSizeGuardMatchesTheSeekTablesSizes(t *testing.T) {
+	if err := frameSizeFits("uncompressed", 1<<32-1); err != nil {
+		t.Errorf("the largest size the table can describe was refused: %v", err)
+	}
+	for _, n := range []int{1 << 32, 1 << 33} {
+		if err := frameSizeFits("uncompressed", n); err == nil {
+			t.Errorf("a frame of %d bytes was accepted although the seek table stores uint32", n)
+		} else if !strings.Contains(err.Error(), "uint32") {
+			t.Errorf("the refusal does not name the limit it hit: %v", err)
+		}
+	}
+}
+
+// The build report prints the size distribution because a bound on a document's size is a claim
+// about the corpus, and the last band is the one that says how many documents the old bound made
+// impossible.
+func TestSizeDistributionCountsDocumentsInTheirBands(t *testing.T) {
+	wr, err := newWriter(io.Discard, "test", artifactVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sizes := []int{100, 1 << 12, 1 << 15, 1 << 17, 1 << 21, 1 << 23, 100 << 20}
+	for _, n := range sizes {
+		wr.recordSize(n)
+	}
+	bands, counts, largest, total := wr.SizeDistribution()
+	if largest != 100<<20 {
+		t.Errorf("largest = %d, want %d", largest, 100<<20)
+	}
+	var want uint64
+	for _, n := range sizes {
+		want += uint64(n)
+	}
+	if total != want {
+		t.Errorf("total = %d, want %d", total, want)
+	}
+	if len(counts) != len(bands)+1 {
+		t.Fatalf("%d counts for %d bands: the last band has to be open at the top", len(counts), len(bands))
+	}
+	var counted int64
+	for _, c := range counts {
+		counted += c
+	}
+	if counted != int64(len(sizes)) {
+		t.Errorf("the bands hold %d documents, %d were recorded", counted, len(sizes))
+	}
+	if counts[len(counts)-1] != 1 {
+		t.Errorf("the open band holds %d, want the one document over the last band", counts[len(counts)-1])
 	}
 }
 
