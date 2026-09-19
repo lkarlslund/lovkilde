@@ -22,7 +22,21 @@ type Query struct {
 	// Kind, MinYear, MaxYear and Source narrow the result set. Source is the provenance
 	// filter — an agent that must quote canonical text can ask for xml-only hits and get an
 	// honest empty result rather than HTML text it has to notice was HTML.
-	Kind      string
+	Kind string
+
+	// Status filters on the register's own claim: "Valid", "Historic", or "unknown" for a
+	// document whose payload does not say. The empty string means no opinion from the
+	// caller. "unknown" has to be selectable, because a filter that silently drops the
+	// documents the register says nothing about turns "only current law" into "only law
+	// the register happens to label", and reports both as the same result.
+	Status string
+
+	// TypeCode is a substring of the publisher's document-type code, because the box beside
+	// it searches titles by substring and a code field next to it that behaved differently
+	// would be a trap. Substring rather than equality because the codes come in families
+	// ("KEN#LOKDOK23") and the mirror has no name table to offer as a dropdown.
+	TypeCode string
+
 	MinYear   int
 	MaxYear   int
 	Source    string
@@ -328,6 +342,12 @@ func (idx *Index) accept(u *UnitMeta, q Query) bool {
 	if q.Source != "" && d.Source != q.Source {
 		return false
 	}
+	if q.Status != "" && statusKey(d.Status) != statusKey(q.Status) {
+		return false
+	}
+	if q.TypeCode != "" && !strings.Contains(d.TypeCode, q.TypeCode) {
+		return false
+	}
 	if q.MinYear > 0 && d.Year < q.MinYear {
 		return false
 	}
@@ -341,6 +361,21 @@ func (idx *Index) accept(u *UnitMeta, q Query) bool {
 		return false
 	}
 	return true
+}
+
+// statusKey folds the ways a caller may name the register's status into one form, so that
+// "valid", "Valid" and "gældende" all mean what the payload says. "unknown" and "" mean the
+// same thing: the register did not say.
+func statusKey(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "valid", "gældende", "gaeldende":
+		return "Valid"
+	case "historic", "historisk", "ophævet", "ophaevet":
+		return "Historic"
+	case "", "unknown", "ukendt":
+		return ""
+	}
+	return s
 }
 
 // findTerm binary-searches the dictionary for an exact term in one stream.

@@ -41,6 +41,8 @@ func (idx *Index) Save(path string) error {
 		putString(&buf, d.Title)
 		putString(&buf, d.Source)
 		putString(&buf, d.Path)
+		putString(&buf, d.Status)
+		putString(&buf, d.TypeCode)
 		putUvarint(&buf, uint64(d.Year))
 		putUvarint(&buf, uint64(d.Number))
 	}
@@ -113,6 +115,8 @@ func Load(path string) (*Index, error) {
 		idx.Docs[i].Title = r.str()
 		idx.Docs[i].Source = r.str()
 		idx.Docs[i].Path = r.str()
+		idx.Docs[i].Status = r.str()
+		idx.Docs[i].TypeCode = r.str()
 		idx.Docs[i].Year = int(r.uvarint())
 		idx.Docs[i].Number = int(r.uvarint())
 	}

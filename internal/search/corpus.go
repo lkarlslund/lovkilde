@@ -43,6 +43,19 @@ type DocMeta struct {
 	Title     string
 	Source    string // xml | html | none
 	Path      string
+
+	// Status is the register's own claim about the document, carried through from the
+	// file's Meta block: "Valid", "Historic", or "" when the payload does not say. It is
+	// the register's assertion, not a verification, and the UI says so: a reader who
+	// filters to "kun gældende" is asking the register what it thinks, not asking us to
+	// prove the act has not been repealed by something we have not crawled.
+	Status string
+
+	// TypeCode is the publisher's own document-type code ("LOKDOK01", "KEN#LOKDOK23").
+	// It is stored untranslated and unlabelled on purpose: the mirror holds the code and
+	// no name table, so inventing Danish labels for it would be our invention, not the
+	// register's word.
+	TypeCode string
 }
 
 // Sample reads a balanced subset of the mirror and turns each document into units.
@@ -105,6 +118,8 @@ func Sample(root string, perStratum int) (docs []DocMeta, units []Unit, err erro
 			Title:     e.Title,
 			Source:    string(doc.Source),
 			Path:      path,
+			Status:    string(e.Status),
+			TypeCode:  e.DocumentType,
 		}
 		docID := len(docs)
 		docs = append(docs, meta)

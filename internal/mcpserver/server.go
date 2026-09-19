@@ -310,6 +310,11 @@ type searchInput struct {
 	// xml-only search reads fewer documents, and an ungraded one skips the text reads that
 	// proximity needs.
 	Source string `json:"source,omitempty" jsonschema:"'xml' for the register's own structured text only, 'html' for reader-recovered text"`
+
+	// Status is the register's own label, and the description says whose claim it is,
+	// because "only what is in force" is exactly the question a model gets wrong by
+	// assuming the answer means the law has not been touched since the crawl.
+	Status string `json:"status,omitempty" jsonschema:"only documents the register labels 'Valid' (current), 'Historic' (repealed or superseded), or 'unknown' (the payload says nothing). The register's own claim, not a verification that nothing newer has changed it"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"maximum hits, default 10, cap 50"`
 
 	NoNear bool `json:"no_near,omitempty" jsonschema:"rank from the index alone and skip the text reads that measure word distance"`
@@ -322,6 +327,7 @@ func (s *Server) searchTool(_ context.Context, _ *mcp.CallToolRequest, in search
 		Since:  in.Since,
 		Until:  in.Until,
 		Source: in.Source,
+		Status: in.Status,
 		Limit:  in.Limit,
 		NoNear: in.NoNear,
 	})

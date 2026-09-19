@@ -28,6 +28,17 @@ type BrowseRequest struct {
 	Title  string // substring, case-insensitive; Danish letters are not folded
 	Offset int
 	Limit  int
+
+	// Status is "Valid", "Historic" or "unknown" (or the Danish spelling of any of them):
+	// the register's own claim about the document, read from the file's Meta block. It is
+	// the register's opinion, and the UI words it that way — filtering to "kun gældende"
+	// asks what Retsinformation believes, not whether we have verified that nothing newer
+	// has repealed the act.
+	Status string
+
+	// TypeCode is a substring of the publisher's document-type code ("LOKDOK", "#LOKDOK").
+	// Substring rather than a dropdown because the mirror holds the codes and no name table.
+	TypeCode string
 }
 
 // BrowseItem is one document in a listing. Reference is the accession, because it is the only
@@ -40,6 +51,53 @@ type BrowseItem struct {
 	Year         int
 	Number       int
 	DocumentType string
+
+	// Status is the register's claim about this document: "Valid", "Historic", or "" when
+	// the payload says nothing.
+	Status string
+}
+
+// statusFacetName names one status bucket for a facet. "unknown" is a name a <select> can
+// carry: an empty option value would collide with "no filter chosen", which is a different
+// thing — and a reader who cannot select the unlabelled documents gets a filter that quietly
+// drops them.
+func statusFacetName(s lexdania.Status) string {
+	switch s {
+	case lexdania.StatusValid:
+		return "Valid"
+	case lexdania.StatusHistoric:
+		return "Historic"
+	}
+	return "unknown"
+}
+
+// statusFilter turns the caller's word into a predicate, or nil for "no opinion".
+func statusFilter(want string) func(lexdania.Status) bool {
+	switch strings.ToLower(strings.TrimSpace(want)) {
+	case "":
+		return nil
+	case "valid", "gældende", "gaeldende":
+		return func(s lexdania.Status) bool { return s == lexdania.StatusValid }
+	case "historic", "historisk", "ophævet", "ophaevet":
+		return func(s lexdania.Status) bool { return s == lexdania.StatusHistoric }
+	case "unknown", "ukendt":
+		return func(s lexdania.Status) bool {
+			return s != lexdania.StatusValid && s != lexdania.StatusHistoric
+		}
+	}
+	return nil
+}
+
+// statusFacets orders the three buckets by size, with the unknown bucket last: it is the one
+// that needs explaining, so it should not be the first number a reader compares.
+func statusFacets(counts map[string]int) []Facet {
+	out := make([]Facet, 0, 3)
+	for _, name := range []string{"Valid", "Historic", "unknown"} {
+		if n := counts[name]; n > 0 {
+			out = append(out, Facet{Name: name, Count: n})
+		}
+	}
+	return out
 }
 
 // Facet is a count beside a filter choice.
@@ -63,6 +121,15 @@ type BrowseResult struct {
 	// told about a year that disappears the moment they pick a shelf.
 	Kinds []Facet
 	Years []Facet
+
+	// Status is the filter that was applied, and Statuses counts the archive three ways:
+	// the count for "unknown" is the reason a status filter cannot be read as a guarantee.
+	Status   string
+	Statuses []Facet
+
+	// TypeCode echoes the code filter so paging keeps it: a link that drops a filter shows the
+	// reader a total they did not ask for.
+	TypeCode string
 }
 
 // Browse lists documents newest-first, paging over the scanned archive index. The index is
@@ -74,14 +141,23 @@ func (s *Server) Browse(req BrowseRequest) *BrowseResult {
 		limit = 50
 	}
 	needle := strings.ToLower(strings.TrimSpace(req.Title))
-	res := &BrowseResult{Offset: max(req.Offset, 0), Limit: limit, Kind: req.Kind, Year: req.Year, Title: req.Title}
+	res := &BrowseResult{Offset: max(req.Offset, 0), Limit: limit, Kind: req.Kind, Year: req.Year, Title: req.Title, Status: req.Status, TypeCode: req.TypeCode}
 
 	var matches []lexdania.Entry
 	kindCounts := map[string]int{}
 	yearCounts := map[string]int{}
+	statusCounts := map[string]int{}
+	wantStatus := statusFilter(req.Status)
 	for _, e := range s.archive.Entries() {
 		kindCounts[e.Kind]++
+		statusCounts[statusFacetName(e.Status)]++
 		if req.Kind != "" && e.Kind != req.Kind {
+			continue
+		}
+		if wantStatus != nil && !wantStatus(e.Status) {
+			continue
+		}
+		if req.TypeCode != "" && !strings.Contains(e.DocumentType, req.TypeCode) {
 			continue
 		}
 		yearCounts[fmt.Sprint(e.Year)]++
@@ -111,8 +187,10 @@ func (s *Server) Browse(req BrowseRequest) *BrowseResult {
 		res.Items = append(res.Items, BrowseItem{
 			Reference: e.Accession, ELI: e.ELIPath(), Title: e.Title, Kind: e.Kind,
 			Year: e.Year, Number: e.Number, DocumentType: e.DocumentType,
+			Status: string(e.Status),
 		})
 	}
+	res.Statuses = statusFacets(statusCounts)
 	res.Kinds = facets(kindCounts, false)
 	if req.Kind != "" {
 		res.Years = facets(yearCounts, true)

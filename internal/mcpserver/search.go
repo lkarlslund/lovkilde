@@ -23,6 +23,11 @@ type SearchRequest struct {
 	Since  int
 	Until  int
 	Source string
+
+	// Status narrows to what the register itself calls current ("valid"/"gældende"),
+	// historic, or unlabelled ("unknown"). Like Source it is a claim about provenance, and
+	// like the register's dates it is the register's, not ours.
+	Status string
 	Limit  int
 
 	// NoNear turns off proximity grading, which is the one part of a search that reads text
@@ -102,6 +107,7 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 		MinYear: req.Since,
 		MaxYear: req.Until,
 		Source:  req.Source,
+		Status:  req.Status,
 		Limit:   fetch,
 	})
 	texts := search.NewUnitTexts(s.unitSource())

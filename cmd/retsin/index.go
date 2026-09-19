@@ -133,7 +133,7 @@ half-built index.`,
 }
 
 func searchCmd(resolve configFunc) *cobra.Command {
-	var index, kind, source string
+	var index, kind, source, status, typeCode string
 	var since, until, limit int
 	var noSnippet, noNear bool
 
@@ -170,12 +170,14 @@ func searchCmd(resolve configFunc) *cobra.Command {
 				fetch = limit * 2
 			}
 			hits := idx.Search(search.Query{
-				Text:    query,
-				Kind:    kind,
-				MinYear: since,
-				MaxYear: until,
-				Source:  source,
-				Limit:   fetch,
+				Text:     query,
+				Kind:     kind,
+				MinYear:  since,
+				MaxYear:  until,
+				Source:   source,
+				Status:   status,
+				TypeCode: typeCode,
+				Limit:    fetch,
 			})
 			// The CLI reads through the XML reader: it is a one-off query against the mirror, and
 			// the compiled artifact is what a *server* builds once and reuses across queries.
@@ -220,6 +222,8 @@ func searchCmd(resolve configFunc) *cobra.Command {
 	cmd.Flags().StringVar(&index, "index", "", "index file (default <data-dir>/"+indexDefaultName+")")
 	cmd.Flags().StringVar(&kind, "kind", "", "limit to one medium: lta, ltb, ltc, mt, retsinfo, ft, fob, accn")
 	cmd.Flags().StringVar(&source, "source", "", "limit to one text source: xml or html")
+	cmd.Flags().StringVar(&status, "status", "", "only what the register labels current (valid/gældende), repealed or superseded (historic/historisk), or unlabelled (unknown/ukendt); the register's own claim, not a check that nothing newer has changed the text")
+	cmd.Flags().StringVar(&typeCode, "type-code", "", "only documents whose publisher type code contains this, e.g. LOKDOK or KEN# (the codes are the register's own and are not translated)")
 	cmd.Flags().IntVar(&since, "since", 0, "only documents from this year")
 	cmd.Flags().IntVar(&until, "until", 0, "only documents up to this year")
 	cmd.Flags().IntVar(&limit, "limit", 10, "maximum hits")

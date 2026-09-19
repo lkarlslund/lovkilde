@@ -18,7 +18,10 @@ import (
 var templateFuncs = template.FuncMap{
 	// provenanceLabel says how trustworthy the text on screen is, in the words the README
 	// uses. A page that showed "xml" would be showing a filename instead of a warning.
-	"provenanceLabel": provenanceLabel,
+	"provenanceLabel":     provenanceLabel,
+	"provenanceNoteLabel": provenanceNoteLabel,
+	"statusShort":         statusShort,
+	"statusClass":         statusClass,
 	// coverageText states how much of the question a provision answers, which is the fact
 	// that distinguishes an AND search's hits from its almost-hits.
 	"coverageText": coverageText,
@@ -29,9 +32,11 @@ var templateFuncs = template.FuncMap{
 	// The facet links are built here rather than in the templates so that a filter value is
 	// URL-escaped by the one function that builds every link.
 	"yearLink": func(kind, year string) string {
-		return browseQueryArgs(kind, yearOf(year), "", 0)
+		return browseQueryArgs(kind, yearOf(year), "", "", "", 0)
 	},
-	"kindLink": func(kind string) string { return browseQueryArgs(kind, 0, "", 0) },
+	// kindLink is used on the index page, where no other filter is active yet, so the two
+	// empty filter arguments are the truth rather than a dropped choice.
+	"kindLink": func(kind string) string { return browseQueryArgs(kind, 0, "", "", "", 0) },
 }
 
 func statusLabel(status string) string {
@@ -45,6 +50,50 @@ func statusLabel(status string) string {
 	default:
 		return status
 	}
+}
+
+// provenanceNoteLabel puts the register's own words for a text into Danish. The machine field
+// stays English on purpose — "xml" is what a client branches on and the README documents it — but
+// a Danish reading page that drops an English gloss into the middle of a sentence asks the reader
+// to be bilingual to find out whether the text in front of them is official.
+func provenanceNoteLabel(note string) string {
+	switch note {
+	case "the register's own structured body, decoded from canonical ELI XML":
+		return "læst fra registerets egen strukturerede XML"
+	case "HTML-only document: the publisher never supplied XML, so this text is our parse of the register's page. Informal: cite from the official source.":
+		return "registeret har kun en html-side for dette dokument, så teksten er vores læsning af den — citér fra den officielle kilde"
+	case "no compiled text is available for this document, so it is listed but not readable here":
+		return "der er ingen tekst i spejlet til dette dokument, så det kan listes men ikke læses her"
+	}
+	return note
+}
+
+// statusShort is the one-word Danish form, for a facet option or a table row. The document page
+// spells the longer form because it also says whose claim the status is; in a list the column
+// heading says that already, and a word that fits is what a row needs.
+func statusShort(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "valid", "gældende", "gaeldende":
+		return "gældende"
+	case "historic", "historisk", "ophævet", "ophaevet":
+		return "historisk"
+	case "", "unknown", "ukendt":
+		return "ukendt"
+	}
+	return s
+}
+
+// statusClass keeps the colour scale honest: green is the register saying "in force", amber a
+// document that no longer governs, and no colour at all the case where the register says nothing
+// — which is not a bad result, it is an absent one.
+func statusClass(s string) string {
+	switch statusShort(s) {
+	case "gældende":
+		return "ok"
+	case "historisk":
+		return "warn"
+	}
+	return ""
 }
 
 func provenanceLabel(source string) string {
@@ -123,6 +172,10 @@ ul.kinds { list-style: none; display: flex; flex-wrap: wrap; gap: .3rem .9rem; p
 .hit p.snip { margin: .4rem 0 .3rem; font-size: .97rem; }
 .hit .meta { font-size: .84rem; }
 .prov { display: inline-block; font-size: .76rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 .5rem; white-space: nowrap; }
+.pill { border: 1px solid var(--line); border-radius: 999px; padding: .05rem .45rem; font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.pill.ok { border-color: var(--accent); color: var(--accent); }
+.pill.warn { border-color: #b0763a; color: #b0763a; }
+.note { font-size: .88rem; color: var(--muted); border-left: 3px solid var(--line); padding-left: .7rem; }
 .prov.xml { border-color: var(--accent); color: var(--accent); }
 .prov.html, .prov.none { border-color: #a12a2a; color: #a12a2a; }
 .meta { font-size: .9rem; color: var(--muted); }
@@ -141,7 +194,6 @@ nav.toc a:hover { color: var(--accent); text-decoration: underline; }
 nav.toc .lvl2 { padding-left: .9rem; }
 nav.toc .lvl3 { padding-left: 1.8rem; }
 nav.toc .count { color: var(--muted); font-weight: 400; }
-@media (min-width: 60rem) { nav.toc details > ol { display: block; } }
 @media (max-width: 60rem) { .doc-grid { display: block; } nav.toc { position: static; max-height: none; margin-bottom: 1.2rem; } }
 article.law { min-width: 0; }
 article.law section { margin: .1rem 0; }
@@ -225,14 +277,15 @@ citerede gåser kræver at ordene står sammen.</p>{{end}}
 const documentBody = `{{define "content"}}
 <h1 id="top">{{.Citation}}</h1>
 <p class="kv">{{if .Kind}}<span><b>{{.Kind}}</b></span>{{end}}{{if .Year}} · <span>{{.Year}}</span>{{end}} · <span>{{statusLabel .Status}}</span>{{if .Accession}} · <span>{{.Accession}}</span>{{end}}{{if .ELI}} · <span><a href="{{.ELI}}">Retsinformation</a></span>{{end}}</p>
-<p class="kv">Kilde: <span class="prov {{.Provenance}}">{{provenanceLabel .Provenance}}</span>{{if .ProvenanceNote}} <span class="hint">({{.ProvenanceNote}})</span>{{end}}</p>
+<p class="kv">Kilde: <span class="prov {{.Provenance}}">{{provenanceLabel .Provenance}}</span>{{if .ProvenanceNote}} <span class="hint">{{provenanceNoteLabel .ProvenanceNote}}</span>{{end}}</p>
 <p class="mirror">{{.Mirror}}</p>
+{{if .AmendmentsNote}}<p class="note">{{.AmendmentsNote}}</p>{{end}}
 {{range .Warnings}}<p class="warn">{{.}}</p>{{end}}
 {{if .Addr}}<p class="note">Adressen <b>{{.Addr}}</b> er vist alene.
 {{if .Anchor}}Det faste anker er <a href="{{.FullLink}}#{{.Anchor}}">#{{.Anchor}}</a>.{{end}}
 <a href="{{.FullLink}}">Se hele dokumentet</a>.</p>{{end}}
 {{if .Contents}}<div class="doc-grid">
-<nav class="toc" aria-label="Indhold"><details><summary>Indhold <span class="count">({{len .Contents}})</span></summary>
+<nav class="toc" aria-label="Indhold"><details open><summary>Indhold <span class="count">({{len .Contents}})</span></summary>
 <ol>{{range .Contents}}<li class="lvl{{.Level}}"><a href="{{.Href}}">{{.Label}}</a></li>{{end}}</ol></details></nav>{{end}}
 {{if .Body}}<article class="law">{{.Body}}</article>{{end}}
 {{if .PlainText}}<pre class="plain">{{.PlainText}}</pre>{{end}}

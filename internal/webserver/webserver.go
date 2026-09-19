@@ -114,13 +114,19 @@ type searchPage struct {
 	Kind      string
 	Since     string
 	Until     string
-	Hits      []hitView
-	Total     int
-	Mirror    string
-	Kinds     []mcpserver.Facet
-	Warn      []string
-	HasQuery  bool
-	NoIndex   bool
+
+	// Status is the register's own label the results were narrowed to, and Statuses are the
+	// three counts beside the choice. The counts come from the archive's metadata rather than
+	// the index, so they describe the mirror, not the subset a text query could reach.
+	Status   string
+	Hits     []hitView
+	Total    int
+	Mirror   string
+	Kinds    []mcpserver.Facet
+	Statuses []mcpserver.Facet
+	Warn     []string
+	HasQuery bool
+	NoIndex  bool
 }
 
 type hitView struct {
@@ -138,10 +144,11 @@ type hitView struct {
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	req := mcpserver.SearchRequest{
-		Query: q,
-		Kind:  r.URL.Query().Get("kind"),
-		Since: yearOf(r.URL.Query().Get("since")),
-		Until: yearOf(r.URL.Query().Get("until")),
+		Query:  q,
+		Kind:   r.URL.Query().Get("kind"),
+		Since:  yearOf(r.URL.Query().Get("since")),
+		Until:  yearOf(r.URL.Query().Get("until")),
+		Status: r.URL.Query().Get("status"),
 	}
 	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil {
 		req.Limit = n
@@ -151,8 +158,10 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		Kind:      req.Kind,
 		Since:     r.URL.Query().Get("since"),
 		Until:     r.URL.Query().Get("until"),
+		Status:    req.Status,
 		HasQuery:  q != "",
 		Kinds:     h.srv.Browse(mcpserver.BrowseRequest{Limit: 1}).Kinds,
+		Statuses:  h.srv.Browse(mcpserver.BrowseRequest{Limit: 1}).Statuses,
 		PageTitle: "Søgning",
 	}
 	if q != "" {
@@ -219,6 +228,7 @@ type documentPage struct {
 	ProvenanceNote string
 	Mirror         string
 	Warnings       []string
+	AmendmentsNote string
 	Body           template.HTML
 	PlainText      string
 	Contents       []contentsLink
@@ -287,6 +297,8 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 		Addr:           addr,
 		FullLink:       documentLink(orString(res.Accession, res.ELIURL), ""),
 	}
+	page.AmendmentsNote = amendmentsNoteInDanish(res)
+	page.Warnings = withoutAmendmentSentence(page.Warnings)
 	page.PageTitle = res.Citation
 	if addr != "" {
 		// A tab that says only the law's title is useless with twenty provision tabs open.
@@ -354,11 +366,17 @@ type browsePage struct {
 	Kind      string
 	Year      string
 	Title     string
-	Kinds     []mcpserver.Facet
-	Years     []mcpserver.Facet
-	Pages     []pageLink
-	From      int
-	To        int
+
+	// Status is the register's label the list was narrowed to, TypeCode the publisher-code
+	// substring, and Statuses the counts beside the choice.
+	Status   string
+	TypeCode string
+	Statuses []mcpserver.Facet
+	Kinds    []mcpserver.Facet
+	Years    []mcpserver.Facet
+	Pages    []pageLink
+	From     int
+	To       int
 }
 
 type browseRow struct {
@@ -368,6 +386,10 @@ type browseRow struct {
 	Year   string
 	Number string
 	Type   string
+
+	// Status is the register's own claim about the document: "Valid", "Historic", or ""
+	// when its payload does not say.
+	Status string
 }
 
 type pageLink struct {
@@ -379,24 +401,29 @@ type pageLink struct {
 func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	req := mcpserver.BrowseRequest{
-		Kind:   q.Get("kind"),
-		Year:   yearOf(q.Get("year")),
-		Title:  q.Get("title"),
-		Offset: offsetOf(q.Get("offset")),
-		Limit:  pageSize,
+		Kind:     q.Get("kind"),
+		Year:     yearOf(q.Get("year")),
+		Title:    q.Get("title"),
+		Status:   q.Get("status"),
+		TypeCode: q.Get("type"),
+		Offset:   offsetOf(q.Get("offset")),
+		Limit:    pageSize,
 	}
 	res := h.srv.Browse(req)
 	page := browsePage{
-		Total:  res.Total,
-		Offset: res.Offset,
-		Kind:   res.Kind,
-		Year:   yearText(res.Year),
-		Title:  res.Title,
-		Kinds:  res.Kinds,
-		Years:  res.Years,
-		Pages:  pages(res),
-		From:   min(res.Offset+1, max(res.Total, 1)),
-		To:     min(res.Offset+len(res.Items), res.Total),
+		Total:    res.Total,
+		Offset:   res.Offset,
+		Kind:     res.Kind,
+		Year:     yearText(res.Year),
+		Title:    res.Title,
+		Status:   res.Status,
+		TypeCode: req.TypeCode,
+		Statuses: res.Statuses,
+		Kinds:    res.Kinds,
+		Years:    res.Years,
+		Pages:    pages(res),
+		From:     min(res.Offset+1, max(res.Total, 1)),
+		To:       min(res.Offset+len(res.Items), res.Total),
 	}
 	page.PageTitle = "Alle dokumenter"
 	switch {
@@ -413,6 +440,7 @@ func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
 			Year:   strconv.Itoa(item.Year),
 			Number: strconv.Itoa(item.Number),
 			Type:   item.DocumentType,
+			Status: item.Status,
 		})
 	}
 	h.render(w, "browse", page)
@@ -424,13 +452,13 @@ func pages(res *mcpserver.BrowseResult) []pageLink {
 	}
 	out := []pageLink{{
 		Label:   fmt.Sprintf("1–%d", min(pageSize, res.Total)),
-		Href:    browseQueryArgs(res.Kind, res.Year, res.Title, 0),
+		Href:    browseQueryArgs(res.Kind, res.Year, res.Title, res.Status, res.TypeCode, 0),
 		Current: res.Offset == 0,
 	}}
 	for start := pageSize; start < res.Total; start += pageSize {
 		out = append(out, pageLink{
 			Label:   fmt.Sprintf("%d–%d", start+1, min(start+pageSize, res.Total)),
-			Href:    browseQueryArgs(res.Kind, res.Year, res.Title, start),
+			Href:    browseQueryArgs(res.Kind, res.Year, res.Title, res.Status, res.TypeCode, start),
 			Current: start == res.Offset,
 		})
 	}
@@ -453,10 +481,16 @@ func documentLink(ref, addr string) string {
 	return "/dok?" + values.Encode()
 }
 
-func browseQueryArgs(kind string, year int, title string, offset int) string {
+func browseQueryArgs(kind string, year int, title, status, typeCode string, offset int) string {
 	values := url.Values{}
 	if kind != "" {
 		values.Set("kind", kind)
+	}
+	if status != "" {
+		values.Set("status", status)
+	}
+	if typeCode != "" {
+		values.Set("type", typeCode)
 	}
 	if year > 0 {
 		values.Set("year", strconv.Itoa(year))
@@ -500,4 +534,32 @@ func orString(primary, fallback string) string {
 		return primary
 	}
 	return fallback
+}
+
+// amendmentsNoteInDanish says what the document's own metadata claims about later documents, in
+// the language of the page. The English sentence stays in the MCP answer, where it belongs to the
+// documented contract; a Danish reading page that mixes languages gives the reader two places to
+// be careful, and the fact is not an error — it is the register's own metadata, which is why it
+// prints as a note and not a warning.
+func amendmentsNoteInDanish(res *mcpserver.LookupResult) string {
+	if res.Amendments == "" {
+		return ""
+	}
+	return "Ifølge dokumentets egne metadata ændres det af " + res.Amendments +
+		". Teksten her er denne accession, som den er publiceret; spørg med as_of for den tekst, der gjaldt på et givent tidspunkt."
+}
+
+// withoutAmendmentSentence drops the English sentence this page now states in Danish. It matches a
+// phrase rather than a kind because the server's warnings are plain strings: when the answer grows
+// typed notes, this function and amendmentsNoteInDanish should be deleted in the same commit, and
+// the page should render the structured field directly.
+func withoutAmendmentSentence(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, w := range in {
+		if strings.Contains(w, "amend it on or before") {
+			continue
+		}
+		out = append(out, w)
+	}
+	return out
 }

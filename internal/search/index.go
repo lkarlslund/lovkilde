@@ -91,7 +91,11 @@ const (
 
 	// formatVersion is 2. Version 1 had no scoring parameter and no build time in its
 	// header, so every table behind it starts eight bytes earlier.
-	formatVersion = 2
+	// formatVersion 3 adds the register's status and document-type code to each document
+	// row. The rows are positional, so an old file cannot be read as a new one: bumping the
+	// number is what turns "this index lacks the field you are filtering on" from a wrong
+	// answer into an error that names the command to run.
+	formatVersion = 3
 )
 
 // builder accumulates postings.
