@@ -1758,6 +1758,29 @@ fail. A guard that still passes describes a bug the code no longer has, and two 
 did exactly that, which is how a case-sensitive matcher and a duplicated fallback were
 found (below).
 
+### What each check is allowed to prove
+
+Four corpus tests compare two of our own implementations, and agreement between two
+implementations is a migration guard, not ground truth: engines built on the same wrong
+assumption agree perfectly. One pair of them did -- both numbered `stykker` by position, so
+both printed item numbers that cannot exist in 21 BR18 provisions while
+`TestModelConsolidationParityOnCorpus` stayed green. The tests say so in their own headers now.
+
+The checks that read the register rather than ourselves:
+
+| check | the external fact it reads | what it measured |
+|---|---|---|
+| `tools/pairs` | each amendment's own quoted `»old« → »new«`, tested against the states that act names | BR18: 410 assertions, 0 violations; but 0 auditable edits on `B19950050705`, so structural edits are a blind spot |
+| `data/paired-truth` | the register's own second format for the same document, JSON API beside XML, thousands of documents | gated behind `RETSIN_PAIRED_TRUTH` |
+| `tools/goldenpair` | a later document the ministry actually promulgated after amending the earlier one | 16,398 candidate supersession pairs, 71 re-enacting at least half the base; over the top 10, 371 successor provisions: 263 copied unchanged, 0 copies of the amended state we failed to produce, 3 identical except in their digits, 34 real changes |
+
+The `goldenpair` digits-only bucket is the interesting one, because it is the numbering
+defect's own signature and it showed up in data we do not control: in
+`B19950050705 → B19950082405` the ministry's § 6 cites `§ 2, stk. 5, 7 og 8` where our
+consolidation of the base still cites `stk. 5, 6 og 7`. A stykke was inserted into § 2 and the
+cross-reference moved with it; we inserted nothing wrong and renumbered nothing, so the stale
+citation is exactly what an unexecuted renumber clause looks like from the outside (M024).
+
 ### Bugs the tests caught
 
 - **The answers could not see their own horizon, twice over.** Giving every answer a
