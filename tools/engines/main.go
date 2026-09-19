@@ -55,17 +55,37 @@ func main() {
 	treeDoc := tree.Doc.Model()
 	report("tree ", before, provisionLens(&treeDoc.Content))
 	report("model", before, provisionLens(model.Content))
+	// The total count matters as much as the shortened ones: a consolidation that quietly
+	// loses whole provisions does not show up in the shorter-text count at all.
+	fmt.Printf("  provisions: as promulgated %d, tree %d, model %d\n",
+		len(before), len(provisionLens(&treeDoc.Content)), len(provisionLens(model.Content)))
 
 	// A named provision is how the question really arrives — "what does § 21 say today" — and
-	// answering it from the compiled dataset would answer with the old build.
+	// answering it from the compiled dataset would answer with the old build. The address is
+	// normalised on both sides because the model writes "§ 5 stk. 2" and the shell argument
+	// arrives with a non-breaking space, several spaces, or no § at all.
 	if len(os.Args) > 3 {
-		want := os.Args[3]
+		want := normaliseAddress(os.Args[3])
 		for _, ref := range treeDoc.Content.Provisions() {
-			if ref.Provision.Address() == want {
-				fmt.Printf("\nTREE says at § %s:\n%s\n", want, strings.TrimSpace(ref.Provision.Text()))
+			if normaliseAddress(ref.Provision.Address()) == want {
+				fmt.Printf("\nTREE says at %s:\n%s\n", os.Args[3], strings.TrimSpace(ref.Provision.Text()))
 			}
 		}
 	}
+}
+
+// normaliseAddress puts an address into the form the model prints: "§" with an ordinary space,
+// one space before a letter suffix, no trailing period.
+func normaliseAddress(s string) string {
+	s = strings.ReplaceAll(s, "\u00a0", " ")
+	s = strings.Join(strings.Fields(s), " ")
+	s = strings.TrimSuffix(strings.TrimSpace(s), ".")
+	s = strings.TrimPrefix(s, "§")
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, "abcdefghijklmnopqrstuvwxyzæøå"); i > 0 && i < len(s)-1 {
+		s = s[:i] + " " + strings.TrimSpace(s[i:])
+	}
+	return "§ " + s
 }
 
 // report counts provisions whose text got shorter than the text as promulgated. Some of that is
