@@ -95,7 +95,10 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 	// reorder, and the extra reads are bounded by search.NearWindow — which is the cost the
 	// grading was designed to keep small by not needing an index change at all.
 	fetch := limit
-	if !req.NoNear {
+	// Extra candidates whenever something after ranking can remove hits: the proximity grade
+	// re-ranks, and a forbidden word can make a passage unshowable. Asking for ten and returning
+	// seven because three passages had to be refused is a worse answer than twenty and ten.
+	if !req.NoNear || len(search.ExcludedWords(req.Query)) > 0 {
 		fetch = limit * 2
 		if fetch > 50 {
 			fetch = 50
@@ -116,17 +119,23 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 			return texts.Unit(h.Doc, h.Addr)
 		})
 	}
-	if len(hits) > limit {
-		hits = hits[:limit]
-	}
 	res := &SearchResult{Query: req.Query, Mirror: s.Status()}
+	forbidden := search.ExcludedWords(req.Query)
+	refused := 0
 	for _, h := range hits {
 		label := h.Doc.Title
 		if entry, ok := s.archive.Find(h.Doc.Accession); ok {
 			label = citation(entry)
 		}
 		unitText := texts.Unit(h.Doc, h.Addr)
-		snippet := search.SnippetFrom(unitText, h.Matched, 0)
+		snippet := search.SnippetFromWithout(unitText, h.Matched, forbidden, 0)
+		if snippet == "" && unitText != "" {
+			// The passage that would be shown contains a word the query forbids, so this hit is
+			// not shown: the index excluded the unit it matched, which is not always the span a
+			// passage is cut from, and the reader only ever sees the passage.
+			refused++
+			continue
+		}
 		ref := h.Doc.ELI
 		if len(s.ambiguous(h.Doc.ELI)) > 1 {
 			ref = h.Doc.Accession
@@ -146,8 +155,16 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 			Snippet:    snippet,
 		})
 	}
+	if len(res.Hits) > limit {
+		res.Hits = res.Hits[:limit]
+	}
 	h := s.horizon()
 	res.Mirror = h.Line()
+	if refused > 0 {
+		res.Warnings = append(res.Warnings, fmt.Sprintf(
+			"%d hit(s) were dropped because the passage shown for them contains a word the query forbids: the index excludes the provision it matched, which is not always the span a passage is cut from",
+			refused))
+	}
 	if len(res.Hits) == 0 {
 		// An empty result has to say what it searched rather than looking like a
 		// statute that does not mention the words.

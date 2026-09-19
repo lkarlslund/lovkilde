@@ -152,3 +152,129 @@ func centerWindow(text string, terms []string, window int) string {
 	}
 	return prefix + strings.TrimSpace(string(runes[start:end])) + suffix
 }
+
+// SnippetFromWithout cuts a passage that contains none of the forbidden words, and returns ""
+// when the text offers no such passage.
+//
+// It exists because a hit is matched against a unit while a reader is shown a passage, and the two
+// are not always the same span: a unit whose address no longer resolves is rendered from the
+// document, and a whole-document unit is the document. The index then correctly keeps a unit that
+// lacks the forbidden word while the page displays a passage that has it, which is how a search
+// for "miljø NOT miljøbeskyttelse" answered with a paragraph about miljøbeskyttelse. The reader
+// cannot see which span was excluded, so the only honest fix is to refuse to show the passage.
+//
+// A forbidden word counts when it begins a word, not when it sits inside a longer one: the index
+// itself distinguishes "barn" from "barnepenge", and a reader who excluded the first is not
+// being answered with the second, but neither is it what they asked to be rid of.
+func SnippetFromWithout(text string, terms, forbidden []string, window int) string {
+	if text == "" {
+		return ""
+	}
+	if window <= 0 {
+		window = DefaultSnippetRunes
+	}
+	if len(forbidden) == 0 {
+		return centerWindow(text, terms, window)
+	}
+	original := []rune(text)
+	if len(original) <= window {
+		if containsAnyWord(text, forbidden) {
+			return ""
+		}
+		return strings.TrimSpace(text)
+	}
+	for _, start := range candidateStarts([]rune(strings.ToLower(text)), terms, window) {
+		end := start + window
+		if end > len(original) {
+			end = len(original)
+		}
+		piece := string(original[start:end])
+		if containsAnyWord(piece, forbidden) {
+			continue
+		}
+		prefix, suffix := "", ""
+		if start > 0 {
+			prefix = "…"
+		}
+		if end < len(original) {
+			suffix = "…"
+		}
+		return prefix + strings.TrimSpace(piece) + suffix
+	}
+	return ""
+}
+
+// candidateStarts lists where a window could begin, nearest a matched word first, so the reader is
+// still shown the text they asked for rather than the first clean corner of a document.
+//
+// Lowercasing Danish text changes no rune counts -- æ, ø and å have no shorter form -- so an offset
+// found in the lowered text indexes the original rune slice directly.
+func candidateStarts(lowered []rune, terms []string, window int) []int {
+	hay := string(lowered)
+	out := make([]int, 0, 8)
+	seen := map[int]bool{}
+	for _, term := range terms {
+		needle := strings.ToLower(term)
+		if needle == "" {
+			continue
+		}
+		from := 0
+		for from <= len(hay) {
+			i := strings.Index(hay[from:], needle)
+			if i < 0 {
+				break
+			}
+			at := from + i
+			start := len([]rune(hay[:at])) - window/3
+			if start < 0 {
+				start = 0
+			}
+			if !seen[start] {
+				seen[start] = true
+				out = append(out, start)
+			}
+			from = at + len(needle)
+			if len(out) >= 8 {
+				return out
+			}
+		}
+	}
+	if !seen[0] {
+		out = append([]int{0}, out...)
+	}
+	return out
+}
+
+// containsAnyWord reports whether any forbidden word begins a word inside the passage.
+func containsAnyWord(piece string, forbidden []string) bool {
+	lowered := strings.ToLower(piece)
+	for _, word := range forbidden {
+		needle := strings.ToLower(strings.TrimSpace(word))
+		if needle == "" {
+			continue
+		}
+		at := 0
+		for at < len(lowered) {
+			i := strings.Index(lowered[at:], needle)
+			if i < 0 {
+				break
+			}
+			pos := at + i
+			// The passage's own start counts as a word boundary; inside the passage the
+			// previous rune has to be a non-letter for the word to be a word.
+			if pos == 0 || !isWordRune(rune(lowered[pos-1])) {
+				return true
+			}
+			at = pos + len(needle)
+		}
+	}
+	return false
+}
+
+func isWordRune(r rune) bool {
+	switch r {
+	case 'æ', 'ø', 'å':
+		return true
+	}
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+}

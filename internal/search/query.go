@@ -216,3 +216,16 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ExcludedWords returns the words a query forbids, in the spelling the reader typed. The index
+// applies exclusions to the unit it matched; this serves the reader, who is shown a passage
+// rather than a unit and has no way to tell the two apart.
+func ExcludedWords(text string) []string {
+	out := make([]string, 0, 4)
+	for _, o := range parseQuery(text) {
+		if o.op == opNot && o.word != "" {
+			out = append(out, o.word)
+		}
+	}
+	return out
+}

@@ -165,8 +165,11 @@ func searchCmd(resolve configFunc) *cobra.Command {
 			// grade something to reorder, and the reads it needs are the same ones the
 			// snippets were going to do.
 			query := strings.Join(args, " ")
+			forbidden := search.ExcludedWords(query)
 			fetch := limit
-			if !noNear {
+			// Extra candidates whenever something after ranking can remove hits: grading
+			// re-ranks, and a forbidden word can make a passage unshowable.
+			if !noNear || len(forbidden) > 0 {
 				fetch = limit * 2
 			}
 			hits := idx.Search(search.Query{
@@ -210,9 +213,17 @@ func searchCmd(resolve configFunc) *cobra.Command {
 				// The snippet re-reads the document, sharing one parse per document with the
 				// proximity grade above. A hit whose snippet cannot be rendered still prints
 				// its address rather than disappearing.
-				if s := search.SnippetFrom(texts.Unit(h.Doc, h.Addr), h.Matched, 0); s != "" {
-					fmt.Fprintf(w, "     %s\n", strings.ReplaceAll(s, "\n", " "))
-				} else {
+				unitText := texts.Unit(h.Doc, h.Addr)
+				snippet := search.SnippetFromWithout(unitText, h.Matched, forbidden, 0)
+				switch {
+				case snippet != "":
+					fmt.Fprintf(w, "     %s\n", strings.ReplaceAll(snippet, "\n", " "))
+				case unitText != "" && len(forbidden) > 0:
+					// Said out loud rather than as a missing snippet: the query forbade a word,
+					// and the passage that would prove this hit contains it.
+					fmt.Fprintf(w, "     (passage would show %v, which the query forbids: %s)\n",
+						forbidden, h.Doc.Path)
+				default:
 					fmt.Fprintf(w, "     (no snippet: %s)\n", h.Doc.Path)
 				}
 			}
