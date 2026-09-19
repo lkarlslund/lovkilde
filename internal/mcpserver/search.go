@@ -149,10 +149,12 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 			"no provision in the indexed corpus matches this query: the index covers %d documents built %s, and the mirror holds %d",
 			h.IndexDocs, h.indexStamp(), h.MirrorDocs))
 	}
-	// The dataset line belongs on every answer, so a reader can see which date this
-	// result speaks for. "Current" is not a property of the corpus, it is a date, and
-	// without it a partial result is indistinguishable from a complete one.
-	res.Warnings = append(res.Warnings, h.Line())
+	// The horizon line belongs on every answer, so a reader can see which date this result
+	// speaks for: "current" is not a property of the corpus, it is a date, and without it a
+	// partial result is indistinguishable from a complete one. It is carried once, in Mirror,
+	// which the answer prints as its Index field and the page prints above the results; it used
+	// to be appended to Warnings as well, so the same sentence appeared twice on the page and
+	// twice in the answer, once as a fact and once as a problem.
 	if h.IndexDocs != h.MirrorDocs {
 		// The two counts differ routinely -- documents arrive between index builds --
 		// so both are reported and nothing is inferred about why. What follows from the

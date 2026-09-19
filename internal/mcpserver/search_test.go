@@ -48,14 +48,20 @@ func TestSearchResultCarriesTheFreshnessCaveat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined := strings.Join(res.Warnings, " ")
-	// Every search answer has to say which dates it speaks for and what the index
-	// covers, so that a partial result cannot be read as a complete one.
-	if !strings.Contains(joined, "covering 1 documents") || !strings.Contains(joined, "1 of the mirror's 3 documents") {
-		t.Errorf("warnings do not state coverage: %q", joined)
+	// Every search answer has to say which dates it speaks for and what the index covers, so
+	// that a partial result cannot be read as a complete one.
+	if !strings.Contains(res.Mirror, "covering 1 documents") || !strings.Contains(res.Mirror, "where the mirror holds 3") {
+		t.Errorf("horizon line does not state both coverage counts: %q", res.Mirror)
 	}
+	joined := strings.Join(res.Warnings, " ")
 	if !strings.Contains(joined, "a hit here proves presence") {
 		t.Errorf("warnings do not state what the counts mean: %q", joined)
+	}
+	// Saying it once is the other half of saying it. The horizon line used to be assigned to
+	// Mirror *and* appended to Warnings, so the identical sentence reached the reader twice in
+	// the answer and twice on the page — once as a fact, once as a problem.
+	if got := strings.Count(res.String(), "asked on"); got != 1 {
+		t.Errorf("the answer states the horizon line %d times, want 1", got)
 	}
 	if !strings.Contains(res.String(), "**Note:**") {
 		t.Errorf("rendered result drops the caveat:\n%s", res.String())

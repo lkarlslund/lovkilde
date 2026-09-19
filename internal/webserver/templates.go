@@ -22,12 +22,29 @@ var templateFuncs = template.FuncMap{
 	// coverageText states how much of the question a provision answers, which is the fact
 	// that distinguishes an AND search's hits from its almost-hits.
 	"coverageText": coverageText,
+	// statusLabel says what the register's own status field means in the language the page
+	// is written in. "Valid" on a Danish page is a field value, not a sentence, and the
+	// difference matters: the reader is deciding whether this text still stands.
+	"statusLabel": statusLabel,
 	// The facet links are built here rather than in the templates so that a filter value is
 	// URL-escaped by the one function that builds every link.
 	"yearLink": func(kind, year string) string {
 		return browseQueryArgs(kind, yearOf(year), "", 0)
 	},
 	"kindLink": func(kind string) string { return browseQueryArgs(kind, 0, "", 0) },
+}
+
+func statusLabel(status string) string {
+	switch strings.TrimSpace(status) {
+	case "Valid":
+		return "gældende"
+	case "Historic":
+		return "historisk, ophævet eller afløst"
+	case "":
+		return "status ukendt i spejlet"
+	default:
+		return status
+	}
 }
 
 func provenanceLabel(source string) string {
@@ -70,42 +87,68 @@ const layoutTmpl = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}}</title>
+<title>{{.PageTitle}}</title>
 <style>
-:root { color-scheme: light dark; --ink: #1b1b1b; --muted: #6a6a6a; --line: #d8d5cf; --accent: #14532d; --wash: #f6f5f2; }
-@media (prefers-color-scheme: dark) { :root { --ink: #e6e4e0; --muted: #9d9a94; --line: #3a3833; --accent: #7cc796; --wash: #171614; } }
+:root { color-scheme: light dark; --ink: #1b1b1b; --muted: #6a6a6a; --line: #d8d5cf; --accent: #14532d; --wash: #f6f5f2; --panel: #fffefb; --band: #efece6; }
+@media (prefers-color-scheme: dark) { :root { --ink: #e7e5e1; --muted: #9d9a94; --line: #3a3833; --accent: #7cc796; --wash: #141311; --panel: #1b1a17; --band: #201f1b; } }
 * { box-sizing: border-box; }
-body { margin: 0; color: var(--ink); background: var(--wash); font: 16px/1.55 Georgia, "Times New Roman", serif; }
+body { margin: 0; color: var(--ink); background: var(--wash); font: 17px/1.6 Georgia, "Times New Roman", serif; }
 .wrap { max-width: 46rem; margin: 0 auto; padding: 1rem 1.1rem 3rem; }
-header.site { border-bottom: 1px solid var(--line); background: transparent; }
-header.site .wrap { display: flex; gap: 1rem; align-items: baseline; padding-bottom: .6rem; padding-top: .8rem; }
+/* A page with a contents rail needs the room for two columns; :has keeps that fact in the
+   one place that knows it, instead of a class on every caller of the layout. */
+.wrap:has(.doc-grid) { max-width: 78rem; }
+header.site { border-bottom: 1px solid var(--line); background: var(--wash); position: sticky; top: 0; z-index: 3; }
+header.site .wrap { display: flex; gap: 1rem; align-items: baseline; padding-bottom: .6rem; padding-top: .8rem; max-width: 78rem; }
 .brand { font-weight: 700; font-size: 1.15rem; text-decoration: none; color: var(--ink); }
 nav.site a { margin-left: .8rem; color: var(--muted); font-size: .9rem; }
 a { color: var(--accent); }
-h1 { font-size: 1.5rem; line-height: 1.25; margin: 1.2rem 0 .3rem; }
+h1 { font-size: 1.6rem; line-height: 1.25; margin: .4rem 0 .3rem; overflow-wrap: anywhere; }
 h2 { font-size: 1.15rem; margin: 1.4rem 0 .4rem; }
-form.search { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 .4rem; }
-input[type=search] { flex: 1 1 18rem; padding: .55rem .7rem; font: inherit; border: 1px solid var(--line); border-radius: 3px; background: transparent; color: inherit; }
-input[type=number], select { padding: .5rem; font: inherit; border: 1px solid var(--line); border-radius: 3px; background: transparent; color: inherit; }
-button { padding: .55rem .9rem; font: inherit; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 3px; cursor: pointer; }
-.hint, .mirror, .bad, .note { color: var(--muted); font-size: .88rem; }
+form.search, form.filters { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1rem 0 .5rem; align-items: center; }
+label.facet { display: inline-flex; align-items: center; gap: .3rem; font-size: .85rem; color: var(--muted); }
+input[type=search] { flex: 1 1 16rem; padding: .55rem .7rem; font: inherit; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: inherit; }
+input[type=number], select { padding: .45rem .5rem; font: inherit; font-size: .92rem; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: inherit; }
+button { padding: .5rem .9rem; font: inherit; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 4px; cursor: pointer; }
+.hint, .mirror, .note { color: var(--muted); font-size: .88rem; }
 .bad, .warn { color: #a12a2a; }
+.bad, .warn { font-size: .9rem; }
+.mirror { border-left: 3px solid var(--line); padding-left: .6rem; overflow-wrap: anywhere; }
 ul.kinds { list-style: none; display: flex; flex-wrap: wrap; gap: .3rem .9rem; padding: 0; margin: .8rem 0; font-size: .92rem; }
-.hit { border-top: 1px solid var(--line); padding: .8rem 0 .9rem; }
-.hit .cit { font-size: .84rem; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
-.hit a.addr { font-size: .95rem; font-weight: 600; text-decoration: none; }
-.hit p.snip { margin: .35rem 0 .3rem; }
-.prov { display: inline-block; font-size: .78rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 .5rem; }
+/* The result: one panel per provision, with the citation quiet and the address loud, since
+   the address is what the reader clicks and what they quote back. */
+.hit { border: 1px solid var(--line); border-radius: 6px; padding: .7rem .9rem; margin: .7rem 0; background: var(--panel); }
+.hit .cit { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.hit a.addr { display: inline-block; margin-top: .15rem; font-size: 1rem; font-weight: 700; color: var(--accent); text-decoration: none; }
+.hit a.addr:hover { text-decoration: underline; }
+.hit p.snip { margin: .4rem 0 .3rem; font-size: .97rem; }
+.hit .meta { font-size: .84rem; }
+.prov { display: inline-block; font-size: .76rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 .5rem; white-space: nowrap; }
 .prov.xml { border-color: var(--accent); color: var(--accent); }
+.prov.html, .prov.none { border-color: #a12a2a; color: #a12a2a; }
 .meta { font-size: .9rem; color: var(--muted); }
 .meta b { color: var(--ink); }
-nav.toc { border: 1px solid var(--line); border-radius: 3px; padding: .6rem .9rem; margin: 1rem 0; font-size: .9rem; max-height: 18rem; overflow: auto; background: transparent; }
-nav.toc ol { margin: 0; padding-left: 1.1rem; list-style: none; }
-nav.toc li { margin: .1rem 0; }
-nav.toc .lvl2 { margin-left: 1rem; }
-article.law { background: transparent; }
-article.law section { margin: .2rem 0; }
-article.law :target { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.kv { font-size: .88rem; color: var(--muted); margin: .2rem 0 1rem; }
+.kv span { white-space: nowrap; }
+/* Contents as a rail that scrolls on its own, so the law stays where the reader left it.
+   Without the media query the details element is a plain collapsible on a narrow screen. */
+.doc-grid { display: grid; grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr); gap: 0 2.2rem; align-items: start; }
+nav.toc { position: sticky; top: 4.2rem; max-height: calc(100vh - 5rem); overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: .6rem .8rem; font-size: .86rem; font-family: ui-sans-serif, system-ui, sans-serif; }
+nav.toc summary { font-weight: 700; cursor: pointer; color: var(--ink); }
+nav.toc ol { list-style: none; margin: .35rem 0 0; padding: 0; }
+nav.toc li { margin: 0; }
+nav.toc a { display: block; padding: .1rem 0; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+nav.toc a:hover { color: var(--accent); text-decoration: underline; }
+nav.toc .lvl2 { padding-left: .9rem; }
+nav.toc .lvl3 { padding-left: 1.8rem; }
+nav.toc .count { color: var(--muted); font-weight: 400; }
+@media (min-width: 60rem) { nav.toc details > ol { display: block; } }
+@media (max-width: 60rem) { .doc-grid { display: block; } nav.toc { position: static; max-height: none; margin-bottom: 1.2rem; } }
+article.law { min-width: 0; }
+article.law section { margin: .1rem 0; }
+article.law h2 { font-size: 1.06rem; margin: 1.3rem 0 .2rem; }
+article.law p { margin: .45rem 0; max-width: 78ch; }
+article.law blockquote { margin: .3rem 0 .6rem 1rem; padding-left: .8rem; border-left: 3px solid var(--line); color: var(--muted); }
+article.law :target { background: color-mix(in srgb, var(--accent) 18%, transparent); scroll-margin-top: 4.5rem; }
 aside.related { margin-top: 2.5rem; border-top: 2px solid var(--line); padding-top: .6rem; }
 aside.related ul { list-style: none; padding: 0; }
 aside.related li { margin: .3rem 0; font-size: .94rem; }
@@ -113,6 +156,7 @@ aside.related .unheld { color: var(--muted); }
 table.browse { width: 100%; border-collapse: collapse; font-size: .95rem; }
 table.browse td { border-top: 1px solid var(--line); padding: .35rem .4rem .35rem 0; vertical-align: top; }
 table.browse td.n { white-space: nowrap; color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: .85rem; }
+table.browse tr:nth-child(even) { background: var(--band); }
 .pages { display: flex; flex-wrap: wrap; gap: .5rem; font-size: .9rem; margin: .8rem 0; }
 .pages .now { font-weight: 700; }
 pre.plain { white-space: pre-wrap; word-break: break-word; font-size: .9rem; }
@@ -179,28 +223,20 @@ citerede gåser kræver at ordene står sammen.</p>{{end}}
 {{end}}`
 
 const documentBody = `{{define "content"}}
-<div class="cit"><b>{{.Citation}}</b></div>
 <h1 id="top">{{.Citation}}</h1>
-<p class="meta">
-{{if .Kind}}<b>{{.Kind}}</b>{{end}}
-{{if .Year}} · {{.Year}}{{end}}
-{{if .Status}} · {{.Status}}{{end}}
-{{if .Accession}} · accession {{.Accession}}{{end}}
-{{if .ELI}} · <a href="{{.ELI}}">Retsinformation</a>{{end}}
-</p>
-<p class="meta">Kilde: <span class="prov {{.Provenance}}">{{provenanceLabel .Provenance}}</span>
-{{if .ProvenanceNote}} — {{.ProvenanceNote}}{{end}}</p>
+<p class="kv">{{if .Kind}}<span><b>{{.Kind}}</b></span>{{end}}{{if .Year}} · <span>{{.Year}}</span>{{end}} · <span>{{statusLabel .Status}}</span>{{if .Accession}} · <span>{{.Accession}}</span>{{end}}{{if .ELI}} · <span><a href="{{.ELI}}">Retsinformation</a></span>{{end}}</p>
+<p class="kv">Kilde: <span class="prov {{.Provenance}}">{{provenanceLabel .Provenance}}</span>{{if .ProvenanceNote}} <span class="hint">({{.ProvenanceNote}})</span>{{end}}</p>
 <p class="mirror">{{.Mirror}}</p>
 {{range .Warnings}}<p class="warn">{{.}}</p>{{end}}
 {{if .Addr}}<p class="note">Adressen <b>{{.Addr}}</b> er vist alene.
 {{if .Anchor}}Det faste anker er <a href="{{.FullLink}}#{{.Anchor}}">#{{.Anchor}}</a>.{{end}}
 <a href="{{.FullLink}}">Se hele dokumentet</a>.</p>{{end}}
-{{if .Contents}}<nav class="toc" aria-label="Indhold">
-<b>Inhold</b>
-<ol>{{range .Contents}}<li class="lvl{{.Level}}"><a href="{{.Href}}">{{.Label}}</a></li>{{end}}</ol>
-</nav>{{end}}
+{{if .Contents}}<div class="doc-grid">
+<nav class="toc" aria-label="Indhold"><details><summary>Indhold <span class="count">({{len .Contents}})</span></summary>
+<ol>{{range .Contents}}<li class="lvl{{.Level}}"><a href="{{.Href}}">{{.Label}}</a></li>{{end}}</ol></details></nav>{{end}}
 {{if .Body}}<article class="law">{{.Body}}</article>{{end}}
 {{if .PlainText}}<pre class="plain">{{.PlainText}}</pre>{{end}}
+{{if .Contents}}</div>{{end}}
 {{if .Groups}}<aside class="related">
 {{range .Groups}}
 <h2>{{.Name}}</h2>

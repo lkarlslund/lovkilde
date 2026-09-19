@@ -67,7 +67,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.tmpl[name].Execute(w, data); err != nil {
+	// ExecuteTemplate on "layout", not Execute on the entry: parseTemplates keeps one
+	// template set per page, and its map value is the *content* template that set.New
+	// returned. Calling Execute on it renders the block alone — no doctype, no head, no
+	// stylesheet, no header or footer — which is how a fully written style sheet ended up
+	// never reaching a browser. TestEveryPageCarriesItsLayout keeps that from being invisible.
+	if err := h.tmpl[name].ExecuteTemplate(w, "layout", data); err != nil {
 		// The header is already out, so say it in the body too rather than fail silently.
 		fmt.Fprintf(w, "\n<p class=bad>Fejl under visning: %v", err)
 	}
@@ -78,12 +83,13 @@ func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 	// counts are what the listing can actually filter by, not a separate promise.
 	facets := h.srv.Browse(mcpserver.BrowseRequest{Limit: 1})
 	h.render(w, "index", map[string]any{
-		"Status":  h.srv.Status(),
-		"Search":  h.srv.HasSearch(),
-		"Kinds":   facets.Kinds,
-		"Years":   facets.Years,
-		"Total":   facets.Total,
-		"Queries": indexQueries,
+		"PageTitle": "Søg i dansk lovgivning",
+		"Status":    h.srv.Status(),
+		"Search":    h.srv.HasSearch(),
+		"Kinds":     facets.Kinds,
+		"Years":     facets.Years,
+		"Total":     facets.Total,
+		"Queries":   indexQueries,
 	})
 }
 
@@ -100,17 +106,21 @@ var indexQueries = []struct{ Query, Label string }{
 
 // searchPage is the search form with its results.
 type searchPage struct {
-	Query    string
-	Kind     string
-	Since    string
-	Until    string
-	Hits     []hitView
-	Total    int
-	Mirror   string
-	Kinds    []mcpserver.Facet
-	Warn     []string
-	HasQuery bool
-	NoIndex  bool
+	// PageTitle is the browser tab's text. It is not called Title because browsePage.Title
+	// is the reader's own title query, and a template that reads one word for two things
+	// eventually reads the wrong one.
+	PageTitle string
+	Query     string
+	Kind      string
+	Since     string
+	Until     string
+	Hits      []hitView
+	Total     int
+	Mirror    string
+	Kinds     []mcpserver.Facet
+	Warn      []string
+	HasQuery  bool
+	NoIndex   bool
 }
 
 type hitView struct {
@@ -137,12 +147,16 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		req.Limit = n
 	}
 	page := searchPage{
-		Query:    q,
-		Kind:     req.Kind,
-		Since:    r.URL.Query().Get("since"),
-		Until:    r.URL.Query().Get("until"),
-		HasQuery: q != "",
-		Kinds:    h.srv.Browse(mcpserver.BrowseRequest{Limit: 1}).Kinds,
+		Query:     q,
+		Kind:      req.Kind,
+		Since:     r.URL.Query().Get("since"),
+		Until:     r.URL.Query().Get("until"),
+		HasQuery:  q != "",
+		Kinds:     h.srv.Browse(mcpserver.BrowseRequest{Limit: 1}).Kinds,
+		PageTitle: "Søgning",
+	}
+	if q != "" {
+		page.PageTitle = "Søgning efter " + q
 	}
 	res, err := h.srv.Search(req)
 	if err != nil {
@@ -192,6 +206,9 @@ func gapText(gap int) string {
 
 // documentPage is one document as a page.
 type documentPage struct {
+	// PageTitle is the browser tab's text: the document's own citation, with the address
+	// in front when the reader arrived at one provision.
+	PageTitle      string
 	Citation       string
 	Accession      string
 	ELI            string
@@ -270,6 +287,11 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 		Addr:           addr,
 		FullLink:       documentLink(orString(res.Accession, res.ELIURL), ""),
 	}
+	page.PageTitle = res.Citation
+	if addr != "" {
+		// A tab that says only the law's title is useless with twenty provision tabs open.
+		page.PageTitle = addr + " — " + res.Citation
+	}
 	// The renderer escapes everything it takes from the document on the way in, so the body is
 	// marked safe as a whole; TestHTMLSaysWhatPlainTextSays and
 	// TestHTMLEscapesTextThatLooksLikeMarkup are what that rests on.
@@ -324,17 +346,19 @@ func (h *Handler) related(res *mcpserver.LookupResult) []mcpserver.RelatedGroup 
 
 // browsePage is the listing with its filters and page links.
 type browsePage struct {
-	Items  []browseRow
-	Total  int
-	Offset int
-	Kind   string
-	Year   string
-	Title  string
-	Kinds  []mcpserver.Facet
-	Years  []mcpserver.Facet
-	Pages  []pageLink
-	From   int
-	To     int
+	// PageTitle is the browser tab's text; Title below is the reader's own title query.
+	PageTitle string
+	Items     []browseRow
+	Total     int
+	Offset    int
+	Kind      string
+	Year      string
+	Title     string
+	Kinds     []mcpserver.Facet
+	Years     []mcpserver.Facet
+	Pages     []pageLink
+	From      int
+	To        int
 }
 
 type browseRow struct {
@@ -373,6 +397,13 @@ func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
 		Pages:  pages(res),
 		From:   min(res.Offset+1, max(res.Total, 1)),
 		To:     min(res.Offset+len(res.Items), res.Total),
+	}
+	page.PageTitle = "Alle dokumenter"
+	switch {
+	case res.Kind != "":
+		page.PageTitle = "Dokumenter af typen " + res.Kind
+	case res.Year != 0:
+		page.PageTitle = "Dokumenter fra " + yearText(res.Year)
 	}
 	for _, item := range res.Items {
 		page.Items = append(page.Items, browseRow{
