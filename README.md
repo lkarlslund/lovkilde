@@ -1840,6 +1840,18 @@ XML class above, seen from the outside.
 
 ### Bugs the tests caught
 
+- **A footnote that never closed its quote became the law's item 623.** `blankQuoted` deliberately
+  leaves an unmatched quotation mark alone, which is right for prose and wrong for
+  `B20230167305` change 1: "Fodnoten til bekendtgørelses titel affattes således: »1) Bekendtgørelsen
+  gennemfører dele af … Rådets forordning (EU) nr. 623/2012 …" runs past 1,300 characters with no
+  closing mark, and the address reader found "nr. 623" inside it and looked the change up as an
+  item of this law. Now an unclosed quote that a colon introduces runs to the end of the text — a
+  colon says a passage is being written out, and the passage is content, not an address — while an
+  unmatched mark anywhere else still leaves the text alone, because blanking on a stray mark would
+  erase the instruction's real address. BR18 outcome unchanged by the fix (tree 432 applied / 83
+  refused, model 399 / 116, 48 provisions shorter by 5,445 runes — identical to the previous
+  receipt), and its three NOADDR refusals now name the footnote instead of an item nobody cited.
+
 - **The server answered about today while the test asked about a pinned day.** Two horizon tests
   pin the clock through `Server.nowFunc`, and `horizon()` still called `time.Now()` — so the field
   existed, the comment said it existed "for the horizon", and the horizon ignored it. The tests

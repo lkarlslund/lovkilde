@@ -160,6 +160,20 @@ func blankQuoted(s string) string {
 			}
 		}
 		if end == i {
+			// An unmatched mark is usually half a quote in prose, which is why this is not
+			// unconditional. But when the mark follows a colon the rest of the text *is* the
+			// passage being written: "Fodnoten til bekendtgørelses titel affattes således: »1)
+			// Bekendtgørelsen gennemfører dele af ... forordning (EU) nr. 623/2012 ...", whose
+			// footnote runs to 1,300 characters and never closes. Left unblanked, its "nr. 623"
+			// read as this law's item 623 and the change was looked up against a provision that
+			// was not the one its own prose named. An unclosed quote after a colon is content,
+			// and content is not an address.
+			if prevIsColon(runes, i) {
+				for j := i + 1; j < len(runes); j++ {
+					out[j] = ' '
+				}
+				return string(out)
+			}
 			continue
 		}
 		for j := i + 1; j < end; j++ {
@@ -168,6 +182,19 @@ func blankQuoted(s string) string {
 		i = end
 	}
 	return string(out)
+}
+
+// prevIsColon reports whether the last non-space character before runes[i] is a colon, which is
+// the shape that says a quoted passage is being introduced rather than mentioned mid-sentence.
+func prevIsColon(runes []rune, i int) bool {
+	for j := i - 1; j >= 0; j-- {
+		switch runes[j] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		}
+		return runes[j] == ':'
+	}
+	return false
 }
 
 func ParseAddress(s string) Address {
