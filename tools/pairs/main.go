@@ -23,9 +23,12 @@
 //     compared against the gapless sequence their own count implies, and holes already in the
 //     promulgated text are reported separately as the publisher's rather than ours.
 //
-// Deliberate limit: stykker are numbered positionally in this model (<Stk> carries no
-// Explicatus), so only item numbering is auditable here. Stykke holes are named in the
-// refusal report instead.
+// Both numbers are auditable, and the claim in this file's history that they were not was
+// wrong: <Stk> does carry its number, in a child <Explicatus> element ("Stk. 2."). BR18's
+// base document has 897 <Stk> elements, 579 unlabelled — exactly one per provision, the
+// Danish convention of not numbering a first stykke — and 318 labelled, so every non-first
+// stykke states its own number. The tree model reads that element into Section.RawNumber and
+// then numbers stykker by position anyway; the model path has no field for it at all.
 package main
 
 import (
@@ -204,25 +207,43 @@ func auditPairs(chain []lexdania.Version, stateBefore func(time.Time) *lexdania.
 // auditNumbering reports printed item numbers that are not the gapless sequence their count
 // implies, separating holes the promulgated text already had from ones a state introduced.
 func auditNumbering(dates []time.Time, views []*lexdania.View) {
-	base := holes(views[0])
-	baseKeys := map[string]bool{}
-	for _, h := range base {
-		baseKeys[h.key] = true
-	}
-	fmt.Printf("\nNUMBERING INTEGRITY (printed item numbers must run 1..n)\n")
-	fmt.Printf("  as promulgated: %d provisions already irregular in the published text\n", len(base))
-	for i, d := range dates[1:] {
-		var fresh []string
-		for _, h := range holes(views[i]) {
-			if !baseKeys[h.key] {
-				fresh = append(fresh, h.key)
+	report := func(name string, f func(*lexdania.View) []hole) {
+		base := f(views[0])
+		baseKeys := map[string]bool{}
+		for _, h := range base {
+			baseKeys[h.key] = true
+		}
+		worst, worstDate := 0, ""
+		for i, d := range dates[1:] {
+			n := 0
+			for _, h := range f(views[i]) {
+				if !baseKeys[h.key] {
+					n++
+				}
+			}
+			if n > worst {
+				worst, worstDate = n, d.Format(time.DateOnly)
 			}
 		}
-		fmt.Printf("  %s  %2d new hole(s)\n", d.Format(time.DateOnly), len(fresh))
-		for _, k := range fresh {
-			fmt.Printf("      %s\n", k)
+		fmt.Printf("  %s: %d irregular as promulgated, worst state %d new (%s)\n", name, len(base), worst, worstDate)
+		for i, d := range dates[1:] {
+			var fresh []string
+			for _, h := range f(views[i]) {
+				if !baseKeys[h.key] {
+					fresh = append(fresh, h.key)
+				}
+			}
+			if i == len(dates)-1 || len(fresh) != 0 {
+				fmt.Printf("    %s  %2d\n", d.Format(time.DateOnly), len(fresh))
+				for _, k := range fresh {
+					fmt.Printf("        %s\n", k)
+				}
+			}
 		}
 	}
+	fmt.Printf("\nNUMBERING INTEGRITY (printed numbers must run 1..n)\n")
+	report("items  ", holes)
+	report("stykker", stykkehols)
 }
 
 type hole struct {
@@ -273,25 +294,86 @@ func holes(v *lexdania.View) []hole {
 	return out
 }
 
-// printedNumber reads the leading digits of a printed number like "2)" or "12 )".
+// printedNumber reads the number out of a printed label: "2)", "§ 267.", "Stk. 2.".
+//
+// The first digit run anywhere is the number in all three shapes. Danish practice leaves the
+// first stykke of a provision unlabelled and labels every later one, and the label is a
+// dedicated <Explicatus> child element, not prose: BR18's base document has 897 <Stk>
+// elements, 579 unlabelled (one per provision) and 318 labelled — every non-first stykke
+// states its own number.
 func printedNumber(raw string) (int, bool) {
-	raw = strings.TrimSpace(strings.ReplaceAll(raw, "\u00a0", " "))
-	i := 0
-	for i < len(raw) && raw[i] >= '0' && raw[i] <= '9' {
-		i++
+	raw = strings.ReplaceAll(raw, "\u00a0", " ")
+	start := -1
+	for i := 0; i < len(raw); i++ {
+		if raw[i] >= '0' && raw[i] <= '9' {
+			start = i
+			break
+		}
 	}
-	if i == 0 {
+	if start < 0 {
 		return 0, false
 	}
-	n, err := strconv.Atoi(raw[:i])
+	end := start
+	for end < len(raw) && raw[end] >= '0' && raw[end] <= '9' {
+		end++
+	}
+	n, err := strconv.Atoi(raw[start:end])
 	return n, err == nil
 }
 
-// addressOf walks up to the provision and renders its printed number.
+// stykkehols reports provisions whose stykke labels are not the sequence 1..n. A provision
+// may leave its first stykke unlabelled, which is the Danish convention and counts as 1.
+func stykkehols(v *lexdania.View) []hole {
+	if v == nil {
+		return nil
+	}
+	byPar := map[*lexdania.Section][]string{}
+	order := []*lexdania.Section{}
+	seen := map[*lexdania.Section]bool{}
+	for _, s := range v.Sections() {
+		if s.Kind != "stk" || s.Parent == nil || s.Parent.Kind != "paragraf" {
+			continue
+		}
+		if !seen[s.Parent] {
+			seen[s.Parent] = true
+			order = append(order, s.Parent)
+		}
+		byPar[s.Parent] = append(byPar[s.Parent], s.RawNumber)
+	}
+	var out []hole
+	for _, p := range order {
+		labels := byPar[p]
+		if len(labels) < 2 {
+			continue
+		}
+		var print []int
+		for i, l := range labels {
+			n, ok := printedNumber(l)
+			if !ok {
+				n = i + 1 // unlabelled: the convention is that it is the next in line
+			}
+			print = append(print, n)
+		}
+		for i, n := range print {
+			if n != i+1 {
+				out = append(out, hole{fmt.Sprintf("%s stykker print %v (expected 1..%d)", addressOf(p), print, len(print))})
+				break
+			}
+		}
+	}
+	return out
+}
+
+// addressOf walks up to the provision and renders its printed number. An empty number is
+// reported as such rather than as an empty string: a row that names nothing looks like a
+// formatting bug in this tool, when it is really a provision the archive prints no number on.
 func addressOf(s *lexdania.Section) string {
 	for s != nil {
 		if s.Kind == "paragraf" {
-			return strings.TrimSpace(s.RawNumber)
+			if n := strings.TrimSpace(s.RawNumber); n != "" {
+				return n
+			}
+			return "(provision with no printed number)"
 		}
 		s = s.Parent
 	}
