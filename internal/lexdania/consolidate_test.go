@@ -439,8 +439,62 @@ func TestMissingChainDocumentIsReported(t *testing.T) {
 	}
 }
 
-// TestUnresolvableAddressIsRefused proves the engine declines rather than guesses: an
-// address that does not exist in the target must never be applied somewhere else.
+// TestSilentChainVersionIsNotTrustworthy covers the shape most of the pre-2010 archive arrives
+// in. Those documents' XML carries metadata and chain anchors but no body, which lives in the
+// HTML payload instead, so a change document parsed this way yields no changes at all.
+//
+// The receipt the engine used to give for that was indistinguishable from a clean one: applied 0,
+// refused 0, nothing missing, trustworthy. B20000072305 shows what that is worth: eight amending
+// acts, all eight found, applied 0, refused 0, and 44 provisions standing exactly as promulgated.
+// A refusal says we would not guess. Silence says there was nothing to read, and only one of the
+// two is a fact a reader can act on.
+func TestSilentChainVersionIsNotTrustworthy(t *testing.T) {
+	a := writeArchive(t, map[string]string{
+		"lta/2005/1.xml": fixtureLaw,
+		"lta/2006/2.xml": fixtureBodylessAmender,
+	})
+	v, err := a.LawAsOf("A20050000129", time.Date(2009, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Applied) != 0 {
+		t.Fatalf("a bodyless amender should produce no edits, got %d", len(v.Applied))
+	}
+	for _, u := range v.Unresolved {
+		if strings.Contains(u.Reason, "B20060000205") {
+			t.Errorf("the unread amender was refused rather than counted silent: %+v", u)
+		}
+	}
+	if len(v.Silent) != 1 || v.Silent[0].Accession != "B20060000205" {
+		t.Errorf("silent = %+v, want the one amender we could not read", v.Silent)
+	}
+	if v.Trustworthy() {
+		t.Error("a chain whose amending acts yielded nothing must not be presented as complete")
+	}
+	if !strings.Contains(v.String(), "1 read with no result") {
+		t.Errorf("the receipt does not say the amender was read with no result: %s", v)
+	}
+}
+
+// TestForeignOnlyAmenderIsNotSilent keeps the two apart: an act that changes other laws is a
+// complete answer about this one, while an act we could not read is not.
+func TestForeignOnlyAmenderIsNotSilent(t *testing.T) {
+	a := writeArchive(t, map[string]string{
+		"lta/2005/1.xml": fixtureLaw,
+		"lta/2006/2.xml": fixtureForeignAmender,
+	})
+	v, err := a.LawAsOf("A20050000129", time.Date(2009, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Silent) != 0 {
+		t.Errorf("an amender whose changes aim at another law is answered, not unread: %+v", v.Silent)
+	}
+	if v.SkippedForeign == 0 {
+		t.Error("the foreign changes should still be counted")
+	}
+}
+
 func TestUnresolvableAddressIsRefused(t *testing.T) {
 	doc := mustParse(t, fixtureLaw)
 	v := &View{Doc: doc.Clone(), AsOf: time.Now()}

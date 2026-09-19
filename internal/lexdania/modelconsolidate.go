@@ -27,6 +27,11 @@ type chainStep struct {
 	// Missing says why no edits could be read from the version: usually that the amending act
 	// is not in the archive, which is a fact a reader is owed rather than a gap to hide.
 	Missing string
+
+	// Skipped names a reason the version contributes no edits that is not a gap in our reading:
+	// it is a bill, or every change in it aims at a different law. Empty Skipped with no Edits
+	// means the document was opened, read, and yielded nothing, which is a gap: see View.Silent.
+	Skipped string
 }
 
 // resolveChain opens every version of a law that takes effect by asOf and collects the changes
@@ -56,20 +61,32 @@ func resolveChain(base *Document, asOf time.Time, open Opener) (steps []chainSte
 		}
 		if amender.IsBill() {
 			bills++
-			steps = append(steps, chainStep{Version: ver})
+			steps = append(steps, chainStep{Version: ver, Skipped: "bill"})
 			continue
 		}
 		var edits []Edit
+		skipped := ""
 		for _, e := range amender.Amendments() {
 			if !targetsLaw(e.Target, base.Meta, info) {
 				foreign++
+				skipped = "every change aims at another law"
 				continue
 			}
 			edits = append(edits, e)
 		}
-		steps = append(steps, chainStep{Version: ver, Edits: edits})
+		if len(edits) > 0 {
+			skipped = ""
+		}
+		steps = append(steps, chainStep{Version: ver, Edits: edits, Skipped: skipped})
 	}
 	return steps, bills, foreign
+}
+
+// silent reports a version that was opened and read but contributed nothing, which is different
+// from being absent (Missing), a proposal rather than law, or aimed at another act (Skipped).
+func (st chainStep) silent() bool {
+	return st.Version.Found && st.Missing == "" && st.Skipped == "" && len(st.Edits) == 0 &&
+		!st.Version.Effective.IsZero()
 }
 
 // ModelView is a law reconstructed on the model: the content as it stood, and the receipts.
@@ -82,6 +99,10 @@ type ModelView struct {
 	Consolidation  *lexdoc.Consolidation
 	SkippedBills   int
 	SkippedForeign int
+
+	// Silent lists the chain documents that take effect by AsOf, are present in the mirror, are
+	// not bills, are aimed at this law, and yielded no change at all. See View.Silent.
+	Silent []Version
 }
 
 // String reports what was applied, refused, and missing, in the same terms as the tree view.
@@ -103,8 +124,12 @@ func LawAsOfModel(base *Document, asOf time.Time, open Opener) *ModelView {
 
 	amendments := make([]lexdoc.Amendment, 0, len(steps))
 	var chain []Version
+	var silent []Version
 	for _, st := range steps {
 		chain = append(chain, st.Version)
+		if st.silent() {
+			silent = append(silent, st.Version)
+		}
 		if len(st.Edits) == 0 {
 			continue
 		}
@@ -126,6 +151,7 @@ func LawAsOfModel(base *Document, asOf time.Time, open Opener) *ModelView {
 		Consolidation:  cons,
 		SkippedBills:   bills,
 		SkippedForeign: foreign,
+		Silent:         silent,
 	}
 }
 

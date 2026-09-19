@@ -99,7 +99,13 @@ func main() {
 	for _, c := range v.Chain {
 		n := bySrc[c.Accession]
 		cum += n
-		fmt.Printf("  %-14s %-11s %8d %8d\n", c.Accession, c.Effective.Format("2006-01-02"), appliedBySrc[c.Accession], n)
+		mark := ""
+		for _, s := range v.Silent {
+			if s.Accession == c.Accession {
+				mark = "   read, no change found"
+			}
+		}
+		fmt.Printf("  %-14s %-11s %8d %8d%s\n", c.Accession, c.Effective.Format("2006-01-02"), appliedBySrc[c.Accession], n, mark)
 	}
 	fmt.Printf("  cumulative refused edits at the end of the chain: %d\n", cum)
 

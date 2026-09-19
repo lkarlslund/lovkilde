@@ -109,6 +109,17 @@ type View struct {
 	// numbered items write the unedited copy back over the edit — reported as applied,
 	// with no effect, and no way to notice from the outside.
 	NoOpEdits int
+
+	// Silent lists chain documents that take effect by AsOf, are present in the mirror, are not
+	// bills, are aimed at this law, and yielded no change at all. A refusal says we would not
+	// guess; silence says we had nothing to work from, and the two look identical in a receipt
+	// that counts only applied and refused.
+	//
+	// B20000072305 is the shape this exists for: eight amending acts, all eight found, applied 0,
+	// refused 0, and 44 provisions standing unchanged from promulgation to 2010 — reported as a
+	// trustworthy consolidation the whole time. Each of those acts is metadata-only XML with its
+	// body in the HTML payload, which is how most of the pre-2010 archive arrives.
+	Silent []Version
 }
 
 // Applied reports how many chain documents were applied.
@@ -126,12 +137,12 @@ func (v *View) AppliedCount() int {
 // refused and no chain document was missing. Which of the two failed matters more than the
 // answer, so the causes are reported separately by MissingChain and Unresolved.
 func (v *View) Trustworthy() bool {
-	return len(v.MissingChain()) == 0 && len(v.Unresolved) == 0
+	return len(v.MissingChain()) == 0 && len(v.Unresolved) == 0 && len(v.Silent) == 0
 }
 
 func (v *View) String() string {
-	return fmt.Sprintf("view of %s as of %s: %d edits applied, %d unresolved, %d chain documents missing",
-		v.Accession, v.AsOf.Format(time.DateOnly), len(v.Applied), len(v.Unresolved), len(v.MissingChain()))
+	return fmt.Sprintf("view of %s as of %s: %d edits applied, %d unresolved, %d chain documents missing, %d read with no result",
+		v.Accession, v.AsOf.Format(time.DateOnly), len(v.Applied), len(v.Unresolved), len(v.MissingChain()), len(v.Silent))
 }
 
 // MissingChain are the amending acts that take effect on or before the asked date and are named
@@ -195,6 +206,9 @@ func LawAsOf(base *Document, asOf time.Time, open Opener) *View {
 		if st.Missing != "" {
 			v.Unresolved = append(v.Unresolved, UnresolvedEdit{Reason: st.Missing})
 			continue
+		}
+		if st.silent() && !st.Version.Effective.After(asOf) {
+			v.Silent = append(v.Silent, st.Version)
 		}
 		for _, e := range st.Edits {
 			v.applyOne(e)

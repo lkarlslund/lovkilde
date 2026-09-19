@@ -99,6 +99,65 @@ const fixtureLaw = `<?xml version="1.0" encoding="UTF-8"?>
 //
 // The quoted passage spans three <Char> runs with an italic run in the middle, which
 // is exactly the shape that breaks naive quote matching.
+// fixtureBodylessAmender is an amending act as the mirror holds most of them before 2010: the XML
+// carries metadata and chain anchors, and the body is only in the HTML payload beside it. Parsed
+// from the XML it has no changes to offer, which is not the same as having none to make.
+const fixtureBodylessAmender = `<?xml version="1.0" encoding="UTF-8"?>
+<Dokument>
+  <Meta>
+    <DocumentType>BEK Æ#LOKDOK05</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20060000205</AccessionNumber>
+    <DocumentId>CM000222</DocumentId>
+    <UniqueDocumentId>22222</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om ændring af lov om anpartsselskaber</DocumentTitle>
+    <Year>2006</Year>
+    <DiesSigni>2006-06-20</DiesSigni>
+    <Status>Historic</Status>
+    <Number>2</Number>
+    <Ministry>Justitsministeriet</Ministry>
+  </Meta>
+</Dokument>
+`
+
+// fixtureForeignAmender changes a different law and nothing about this one. The register lists it
+// in this law's chain because the act names the law somewhere, and an unread act and an act about
+// something else must not end up in the same box.
+const fixtureForeignAmender = `<?xml version="1.0" encoding="UTF-8"?>
+<Dokument>
+  <Meta>
+    <DocumentType>BEK Æ#LOKDOK05</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20060000205</AccessionNumber>
+    <DocumentId>CM000222</DocumentId>
+    <UniqueDocumentId>22222</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om ændring af bekendtgørelse om erhvervsdrivende fonde</DocumentTitle>
+    <Year>2006</Year>
+    <DiesSigni>2006-06-20</DiesSigni>
+    <Status>Historic</Status>
+    <Number>2</Number>
+    <Ministry>Justitsministeriet</Ministry>
+  </Meta>
+  <DokumentIndhold>
+    <AendringCentreretParagraf id="a2" localId="2">
+      <Explicatus>§ 2</Explicatus>
+      <Exitus>
+        <Linea><Char>I bekendtgørelse nr. 999 af 5. juni 2004 om erhvervsdrivende fonde foretages følgende ændringer:</Char></Linea>
+      </Exitus>
+      <AendringsNummer id="n2">
+        <Explicatus>1.</Explicatus>
+        <Aendring id="ae2">
+          <AendringDefinition id="ad2">
+            <Exitus><Linea><Char>§ 7 ophæves.</Char></Linea></Exitus>
+          </AendringDefinition>
+          <AendringAktion id="aa2"><AendringNyTekst /></AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+    </AendringCentreretParagraf>
+  </DokumentIndhold>
+</Dokument>
+`
+
 const fixtureAmender1 = `<?xml version="1.0" encoding="UTF-8"?>
 <Dokument>
   <Meta>

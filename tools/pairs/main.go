@@ -29,9 +29,15 @@
 // Danish convention of not numbering a first stykke — and 318 labelled, so every non-first
 // stykke states its own number. The tree model reads that element into Section.RawNumber and
 // then numbers stykker by position anyway; the model path has no field for it at all.
+//
+// A third audit runs over the corpus instead of one chain: `pairs -silent N` counts the chain
+// documents that were opened, read, and yielded no change at all. Neither audit above can see
+// those, because both start from the edits the engine found. Half the amending acts in sampled
+// chains are of this kind, and until now their receipt read exactly like a clean run.
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -48,7 +54,21 @@ import (
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("usage: pairs <accession> [as-of YYYY-MM-DD]")
+		fmt.Println("       pairs -silent [laws]   count chain documents read with no result")
 		os.Exit(2)
+	}
+	if os.Args[1] == "-silent" {
+		n := 400
+		if len(os.Args) > 2 {
+			v, err := strconv.Atoi(os.Args[2])
+			if err != nil || v <= 0 {
+				fmt.Println("bad count:", os.Args[2])
+				os.Exit(2)
+			}
+			n = v
+		}
+		corpusSilent(n)
+		return
 	}
 	acc := os.Args[1]
 	asOf := time.Now()
@@ -134,6 +154,135 @@ func main() {
 
 	auditPairs(chain, stateBefore, viewByDate)
 	auditNumbering(dates, views)
+}
+
+// corpusSilent answers the third audit, which no single chain can show: how often a chain document
+// is opened, read, and yields not one change.
+//
+// A refusal is a decision, and the receipt says so. Silence is the absence of material, and the
+// old receipt described it in the same words as a clean run — applied 0, refused 0, trustworthy.
+// This counts the difference across sampled chains, split by the decade of the law being amended,
+// because the shape is not evenly spread: documents whose XML carries metadata and chain anchors
+// but no body — the body living in the HTML payload beside them — are the norm before 2010.
+//
+// "no body read" is the diagnostic: it means the document parsed to nothing at all, so the change
+// text exists only in a payload the amendment reader never looks at.
+func corpusSilent(budget int) {
+	a, err := lexdania.Scan(context.Background(), "data/xml")
+	if err != nil {
+		fmt.Println("scan:", err)
+		os.Exit(1)
+	}
+	var laws []lexdania.Entry
+	for _, e := range a.Entries() {
+		switch e.Kind {
+		case "lta", "ltb", "ltc", "mt":
+			laws = append(laws, e)
+		}
+	}
+	stride := max(1, len(laws)/budget)
+	// Three ways an act can yield no change, and they want different remedies: the XML holds
+	// metadata only and the text is in the HTML payload beside it; the XML has a body but no
+	// amendatory markup at all; or the markup is there and the reader still found nothing, which
+	// is a parser bug rather than a coverage gap.
+	type tally struct {
+		acts, silent, metadataOnly, noMarkup, unparsedMarkup int
+		examples                                             [3]string
+	}
+	per := map[int]*tally{}
+	sampled, withChain := 0, 0
+	for i := 0; i < len(laws) && sampled < budget; i += stride {
+		sampled++
+		vs, err := a.Versions(laws[i].Accession)
+		if err != nil || len(vs) < 2 {
+			continue
+		}
+		withChain++
+		dec := laws[i].Year / 10 * 10
+		t := per[dec]
+		if t == nil {
+			t = &tally{}
+			per[dec] = t
+		}
+		for _, v := range vs {
+			if !v.Found {
+				continue
+			}
+			doc, _, ok := a.Open(v.Accession)
+			if !ok || doc.IsBill() {
+				continue
+			}
+			t.acts++
+			if len(doc.Amendments()) != 0 {
+				continue
+			}
+			t.silent++
+			kind := 2
+			switch {
+			case !bytes.Contains(readRaw(v.Path), []byte("<DokumentIndhold")):
+				kind = 0
+			case !bytes.Contains(readRaw(v.Path), []byte("AendringsNummer")):
+				kind = 1
+			}
+			switch kind {
+			case 0:
+				t.metadataOnly++
+			case 1:
+				t.noMarkup++
+			default:
+				t.unparsedMarkup++
+			}
+			if t.examples[kind] == "" {
+				t.examples[kind] = fmt.Sprintf("%s amends %s", v.Accession, laws[i].Accession)
+			}
+		}
+	}
+	var acts, silent int
+	byKind := [3]int{}
+	fmt.Printf("\namending documents read from the chains of %d sampled laws (%d have a chain):\n", sampled, withChain)
+	kinds := []string{"metadata-only XML", "body without amendatory markup", "markup present, nothing parsed"}
+	decades := make([]int, 0, len(per))
+	for dec := range per {
+		decades = append(decades, dec)
+	}
+	sort.Ints(decades)
+	for _, dec := range decades {
+		t := per[dec]
+		fmt.Printf("  %d: %5d acts, %5d yielded no change (%.0f%%): metadata-only %d, no markup %d, unparsed %d\n",
+			dec, t.acts, t.silent, 100*float64(t.silent)/float64(t.acts),
+			t.metadataOnly, t.noMarkup, t.unparsedMarkup)
+		acts += t.acts
+		silent += t.silent
+		byKind[0] += t.metadataOnly
+		byKind[1] += t.noMarkup
+		byKind[2] += t.unparsedMarkup
+		for k, ex := range t.examples {
+			if ex != "" {
+				fmt.Printf("      first %s: %s\n", kinds[k], ex)
+			}
+		}
+	}
+	if acts == 0 {
+		fmt.Println("  no chains found in this sample")
+		return
+	}
+	fmt.Printf("  total: %d acts, %d yielded no change (%.1f%%)\n", acts, silent, 100*float64(silent)/float64(acts))
+	for k, name := range kinds {
+		fmt.Printf("   %-34s %d\n", name, byKind[k])
+	}
+}
+
+// readRaw returns the file, or nil when it cannot be read. The audit is a diagnostic, and a file
+// that will not read is not worth failing a run over.
+func readRaw(path string) []byte {
+	if path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 // auditPairs checks each applied change against the wording it quotes.
