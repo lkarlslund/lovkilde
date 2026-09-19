@@ -422,6 +422,91 @@ const fixtureStructured = `<?xml version="1.0" encoding="utf-8"?>
   </DokumentIndhold>
 </Dokument>`
 
+// TestModelKeepsPrintedStykkeNumber pins that the number a document prints for a stykke
+// survives into the model, including where it contradicts the stykke's position.
+//
+// This is the shape a chain leaves behind when a provision loses a stykke and the publisher
+// does not renumber the rest: the second stykke still prints "Stk. 3.". The model numbered
+// such a stykke 2 and threw the label away, so nothing downstream could tell a provision that
+// had been renumbered from one whose numbers had simply fallen behind — the premise behind
+// consolidated BR18 printing item numbers that cannot exist in 14 provisions and stykke
+// numbers in 7 more. Nr stays positional here on purpose, because honouring the printed number
+// before deletions renumber costs five real edits on the parity corpus; the label is what had
+// to survive, since that is what an amendment renumbering subsections edits.
+func TestModelKeepsPrintedStykkeNumber(t *testing.T) {
+	doc := mustParse(t, fixtureRenumberedStykker)
+	c := doc.Model().Content
+	loc, ok := c.Find(ParseAddress("§ 5"))
+	if !ok {
+		t.Fatal("§ 5 does not resolve")
+	}
+	p := loc.Provision
+	if len(p.Stykker) != 3 {
+		t.Fatalf("expected three stykker, got %d", len(p.Stykker))
+	}
+	want := []string{"", "Stk. 3.", "Stk. 4."}
+	for i, st := range p.Stykker {
+		if st.Label != want[i] {
+			t.Errorf("stykke %d label = %q, want %q", i+1, st.Label, want[i])
+		}
+		if st.Nr != i+1 {
+			t.Errorf("stykke %d Nr = %d, want the positional %d while renumbering stays unexecuted", i+1, st.Nr, i+1)
+		}
+		if want[i] == "" {
+			continue
+		}
+		if !strings.Contains(p.SpanText(st.Span), want[i]) {
+			t.Errorf("stykke %d no longer prints its label %q: %q", i+1, want[i], p.SpanText(st.Span))
+		}
+	}
+
+	// Items keep their printed marker the same way, and it is the marker the reader sees:
+	// "3)" rather than a position-derived 3.
+	st := p.Stykke(3)
+	if st == nil || len(st.Items) == 0 {
+		t.Fatal("the stykke printed as Stk. 4. lost its items")
+	}
+	if got := st.Items[0].Label; got != "3)" {
+		t.Errorf("item marker = %q, want %q", got, "3)")
+	}
+}
+
+// fixtureRenumberedStykker is a provision whose printed stykke numbers have fallen behind the
+// count because a stykke was repealed without the rest being renumbered: the second stykke
+// prints "Stk. 3." and the third "Stk. 4.".
+const fixtureRenumberedStykker = `<?xml version="1.0" encoding="utf-8"?>
+<Dokument>
+  <Meta>
+    <DocumentType>Bekendtgørelse</DocumentType>
+    <Rank>A</Rank>
+    <AccessionNumber>A20050000130</AccessionNumber>
+    <DocumentTitle>Bekendtgørelse med omnumrerede stykker</DocumentTitle>
+    <Year>2005</Year>
+    <Number>130</Number>
+    <Status>Valid</Status>
+    <Ministry>Justitsministeriet</Ministry>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+  </Meta>
+  <DokumentIndhold>
+    <Paragraf>
+      <Explicatus>§ 5.</Explicatus>
+      <Exitus><Linea>Grundtekst.</Linea></Exitus>
+      <Stk>
+        <Exitus><Linea>Første stykke, som ingen nummer er trykt på.</Linea></Exitus>
+      </Stk>
+      <Stk>
+        <Explicatus>Stk. 3.</Explicatus>
+        <Exitus><Linea>Tredje stykke, anden Plads.</Linea></Exitus>
+      </Stk>
+      <Stk>
+        <Explicatus>Stk. 4.</Explicatus>
+        <Exitus><Linea>Fjerde stykke:</Linea></Exitus>
+        <Exitus><Indentatio formaInd="Nummer"><Explicatus>3)</Explicatus>Tredje nummer.</Indentatio></Exitus>
+      </Stk>
+    </Paragraf>
+  </DokumentIndhold>
+</Dokument>`
+
 // allRubrics returns every rubric the document prints, recognised by rubric element name rather
 // than by container name: the corpus nests divisions under more container names than any list
 // holds, while a rubric is recognisable by what it is called.

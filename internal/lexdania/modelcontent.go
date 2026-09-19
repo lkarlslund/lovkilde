@@ -306,12 +306,10 @@ func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
 			b.watch[c] = true
 			segs = b.render(segs, c, true)
 			st := lexdoc.Stykke{Span: lexdoc.Span{From: b.spanStart[c], To: b.spanEnd[c]}}
-			st.Nr = lexdoc.Atoi(lexdoc.FirstNumber(c.Attrs["localId"]))
-			if st.Nr == 0 {
-				// Position is the numbering: Stk elements carry an id but almost never a
-				// localId, so "stk. 2" can only mean "the second Stk element".
-				st.Nr = len(p.Stykker) + 1
-			}
+			// Label keeps what the document prints; Nr stays positional until deletions and
+			// insertions renumber, see printedStykke.
+			_, st.Label = printedStykke(c, len(p.Stykker)+1)
+			st.Nr = len(p.Stykker) + 1
 			nrIdx := 0
 			var lastParent *Node
 			for _, it := range items {
@@ -324,8 +322,9 @@ func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
 				if !ok {
 					continue
 				}
-				item := lexdoc.Item{Span: lexdoc.Span{From: b.spanStart[it.node], To: end}}
-				item.Nr, item.Litra = lexdoc.ItemMarker(it.node.Elem("Explicatus").TextOrNull())
+				marker := strings.TrimSpace(it.node.Elem("Explicatus").TextOrNull())
+				item := lexdoc.Item{Span: lexdoc.Span{From: b.spanStart[it.node], To: end}, Label: marker}
+				item.Nr, item.Litra = lexdoc.ItemMarker(marker)
 				if item.Nr == 0 && item.Litra == "" {
 					// The Explicatus of a numbered paragraph often carries the marker
 					// ("2)"), so an explicit one wins over position.

@@ -109,18 +109,31 @@ type Provision struct {
 	Stykker []Stykke
 }
 
-// Stykke is a subsection: "stk. 2" of a provision. Its number is usually its position,
-// because the publisher's elements carry an id but almost never a number.
+// Stykke is a subsection: "stk. 2" of a provision.
+//
+// Label keeps the number the document prints for this stykke, in the form it prints it
+// ("Stk. 2."). The publisher states it in a child <Explicatus> element on every stykke except
+// a provision's first — 318 labelled of 897 <Stk> elements in BR18's base document, and the
+// 579 unlabelled ones are exactly one per provision, the Danish convention — so the printed
+// label is the fact and Nr is a position. Nr is kept positional on purpose: honouring the
+// printed number before deletions and insertions renumber costs five real edits on the
+// parity corpus, because provisions donated from another act arrive as text with no labels.
+// The printed label is what an amendment renumbering subsections ("Nr. 8-10 bliver herefter
+// 7-9") has to edit, so keeping it is what makes the renumbering and the switch to it
+// possible. See lexdania.printedStykke.
 type Stykke struct {
 	Nr    int
+	Label string `json:"Label,omitempty"` // printed label as published, e.g. "Stk. 2."; "" where the document labels none
 	Span  Span
 	Items []Item
 }
 
-// Item is a numbered or lettered sub-item: "nr. 3" or "litra b" inside a stykke.
+// Item is a numbered or lettered sub-item: "nr. 3" or "litra b" inside a stykke. Label holds
+// its printed marker ("3)", "b)") for the same reason Stykke keeps its label.
 type Item struct {
 	Nr    int
 	Litra string
+	Label string `json:"Label,omitempty"`
 	Span  Span
 }
 

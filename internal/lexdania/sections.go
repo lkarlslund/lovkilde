@@ -137,13 +137,9 @@ func sectionsIn(root *Node) []*Section {
 					stkIdx++
 					stk := newSection(ch, "stk", sec)
 					stk.Container = n
-					// Position is the numbering: <Stk> elements carry an id= but
-					// almost never a localId=, so "stk. 2" can only mean "the second
-					// Stk element". An explicit number wins if one is ever present.
-					stk.Stk = atoi(lexdoc.FirstNumber(ch.Attrs["localId"]))
-					if stk.Stk == 0 {
-						stk.Stk = stkIdx
-					}
+					// The printed label is already in RawNumber; the number stays positional
+					// here until deletions and insertions renumber, see printedStykke.
+					stk.Stk = stkIdx
 					// sec.Runs already holds every run in this provision's subtree, in
 					// document order, because newSection collected them recursively. The
 					// stykke and item lists must not be appended on top of that: doing so
@@ -230,6 +226,32 @@ func sectionsIn(root *Node) []*Section {
 	}
 	walk(nil, root, false, false)
 	return out
+}
+
+// printedStykke returns the stykke number and the printed label the document states for one
+// <Stk> element, falling back to position only when the document states nothing.
+//
+// A stykke carries its number as a child <Explicatus> element. Measured on BR18's base
+// document: 897 <Stk> elements, of which 579 carry no label — exactly one per provision,
+// because Danish practice leaves a provision's first stykke unlabelled — and 318 carry one
+// ("Stk. 2." and onward). Every stykke that needs a number therefore states it.
+//
+// The label is kept; the number is not yet used as the number. Deriving Nr from the label
+// before deletions and insertions renumber costs five real edits on the 21-document parity
+// corpus (tree 100 applied / model 95), because a provision donated from another act arrives
+// as text with no labels, so its stykker fall back to position and stop agreeing with the
+// labelled ones around them. The stated number is what an amendment renumbering subsections
+// ("Nr. 8-10 bliver herefter 7-9") has to edit, so the label is what has to survive first:
+// keeping it is what makes both the renumbering and the switch to it possible at all.
+func printedStykke(n *Node, position int) (int, string) {
+	label := strings.TrimSpace(n.Elem("Explicatus").TextOrNull())
+	if num := atoi(lexdoc.FirstNumber(label)); num > 0 {
+		return num, label
+	}
+	if num := atoi(lexdoc.FirstNumber(n.Attrs["localId"])); num > 0 {
+		return num, label
+	}
+	return position, label
 }
 
 func newSection(n *Node, kind string, parent *Section) *Section {
