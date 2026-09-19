@@ -443,8 +443,10 @@ document**: the base act plus each amending act, each with its own ELI URI, all 
 listed by the sitemap. What has to be *computed* is the consolidated text at a given
 date, by applying amendments in date order. The link to follow is `<Concerns id="…">`,
 non-empty in 54.5 % of `lta`, 81.3 % of `retsinfo` and 76.3 % of `mt` documents (2,500
-sampled each; `ltc` is 0.1 %, being EU notices). The site does the same computation
-client-side — its SPA calls `/api/extremesearch/getcasehistorystatus`.
+sampled each; `ltc` is 0.1 %, being EU notices). The site does not merge either, and the
+endpoint once cited here as evidence that it does — `/api/extremesearch/getcasehistorystatus`
+— is only a parliamentary bill-state enum (417 bytes: `Afvist`, `Beretning afgivet`, …),
+measured 2026-09-19. What the site publishes and what it displays is in the next section.
 
 One trap worth naming: the two digits at the end of an accession number are **not**
 version counters. 1,086 accession bases in the archive hold more than one accession, but
@@ -512,6 +514,87 @@ it is `A19950049829`: our file is 2,177 bytes of metadata, and the service's cop
 same `UniqueDocumentId` 62968 is 68 paragraphs of text. For superseded consolidations of
 that era the archive is an index, not a text, so an oldest-revision comparison only means
 something where we hold the body.
+
+### The publisher publishes no merged text, at any layer
+
+This is the section that decides whether the amendment engine is a feature nobody
+asks for or the only way to have the feature at all. Measured against the live site
+on 2026-09-19, not inferred from the archive.
+
+**The documented machine surface is one endpoint.** `api.retsinformation.dk` answers
+`GET /v1/Documents` and its own swagger (`/swagger/v1/swagger.json`, titled
+*Retsinformation høsteservice API*). One path: a rolling **10-day** feed of
+individually promulgated documents, to be called *"én gang i døgnet"* between 03:00
+and 23:45 at one call per 10 seconds, with a changelog running back to 3/4-2022.
+No version parameter, no chain, no consolidation. The guide list the swagger points
+at (`/offentlig/vejledninger`) holds exactly **6** documents — four for the Eunomia /
+Lex Dania editor and client, one generic decisions webservice, one harvest-API guide —
+and none of them mentions consolidation. `/v1/lovgivning/…` on that host is 404, so
+the version endpoints cached under `data/jsonapi/` are the third party's, not the
+ministry's.
+
+**Their own document API serves the promulgated text.** `POST /api/document/eli/lta/2019/1399`
+returns 722,149 bytes whose `documentHtml` is 679,330 bytes; stripped of tags that is
+292,875 characters against the 293,385 our canonical XML yields — the difference is
+their contents table versus our `<Meta>` block, not wording. § 21 is **identical between
+the two for the first 3,000 characters**, and it is the 2019 wording:
+
+| | § 21 opening |
+|---|---|
+| their `documentHtml`, our base XML | `§ 21. For de enkelte brandklasser gælder følgende: 1) For byggeri i brandklasse 2 …` |
+| our `as_of` 2026-09-19 | `§ 21. For byggearbejder i de enkelte brandklasser gælder følgende: 1) For byggearbejder …` |
+
+The amended wording exists in no single published document; it exists because it was
+merged. Their page is therefore older than the answer we give.
+
+**Nothing in their output marks a change.** Attribute census over the same 679,330
+bytes: `class` 4,577, `id` 3,061, `style` 696, `valign` 493, `href` 46 — and **no
+`data-*` attribute, and zero accession numbers anywhere in the body**. There is no
+machine-readable change location to consume. `/api/document/metadata/B20190139905`
+shows why there cannot be: 14 fields, all publication facts, no version and no
+effective date, and *"Dato for førstegangsindlæggelse"* equals *"Dato for seneste
+indlæggelse"* (both 17/12/2019) — the record is never rewritten in place. What the
+site does instead is `/api/document/211473/references/0`: groups headed *"Senere
+ændringer til forskriften"*, *"Lovgivning forskriften vedrører"*, *"Ændrer i/ophæver"*
+— a link list, the same chain we read from `<Concerns>`, rendered as an accordion
+whose rows say *"Se detaljer for paragraf"*. Annotate and link; do not merge.
+
+**HTTP 200 is still not success.** Six more guessed paths — `/api/document/211473/versions`,
+`/consolidated`, `/amendments`, `/current`, `/structure`, `/api/versions/211473` — all
+answered 200 with 3,567–3,584 bytes of SPA shell.
+
+**Consequence: a refusal is the cost of a feature the source does not offer.** A
+refusal (`UnresolvedEdit`, `internal/lexdania/consolidate.go:66`) is a change the
+engine could not place, so it left the text alone and reported the failure instead of
+guessing. BR18 as of 2026-09-19: 17 of 17 amending acts found and effective, **515
+edits attempted, 406 applied, 109 refused**, nothing missing from the mirror, nothing
+belonging to another law, no bills. Nineteen distinct reasons collapse into three
+classes in the printed warning — 62× the address is not in the current text, 40× the
+wording is not recognised by the pattern set, 3× the address is absent with no
+positional anchor. Refusing is what makes the count visible at all: `Trustworthy()`
+is false, and the answer says the text may still show the older wording. It also
+means the refusal count is a clock rather than a grade — the Danish answer to
+amendment drift is a fresh consolidating re-issue whose preamble absorbs the changes,
+and BR18 has run nearly seven years without one.
+
+**The third-party service is not an escape hatch** on arithmetic alone: 191,429
+documents at 35 requests/hour is about 5,469 hours, roughly **228 days** of
+non-stop polling, and about 5.2 years at the 100/day ceiling. The cached pilot under
+`data/jsonapi/` cost 23 calls, and no code in `internal/` references `/versions`.
+
+**The class of failure worth the effort is not the refusal, it is the phantom.** At
+2020-03-05 — the effective date of `B20200018205`, which says *"Efter § 298 indsættes
+i kapitel 11 … § 298 a"* and *"Efter § 327 indsættes før overskriften før § 328:
+§ 327 a"* — the tree engine reports **applied 5, refused 1** while the provision total
+stays **579, exactly as promulgated**, where two whole-provision inserts should make it
+581. Both inserts are listed as applied, both landed nowhere: `§ 298 a` and `§ 327 a`
+resolve at no date in the chain, § 327's text is the same 455 characters at 2020-03-05,
+2021-06-01, 2022-12-01 and 2026-09-19, and § 298 at 2020-03-05 and 2021-06-01 is the
+promulgated paragraph with no `bygningsautomatik` in it. The current text looks correct
+only because the 2022 acts rewrote § 298 wholesale and § 298 a was repealed on
+2022-12-06; between 2020-03-05 and 2022-12-06 we serve a law that is missing a provision
+which was in force. A refusal discloses itself; an edit reported applied with no effect
+does not, which is the same trap `NoOpEdits` was added for.
 
 ### Reading the archive: `internal/lexdania`
 
