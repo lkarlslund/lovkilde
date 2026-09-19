@@ -164,6 +164,7 @@ func (s *Server) lookup(req LookupRequest, wantHTML bool) (*LookupResult, error)
 		Number:    entry.Number,
 		DiesSigni: entry.DiesSigni,
 		Status:    string(entry.Status),
+		Language:  req.Language,
 	}
 
 	if req.AsOf != "" {
@@ -236,6 +237,13 @@ func (s *Server) lookupAsOf(req LookupRequest, entry lexdania.Entry, res *Lookup
 		res.MissingActs = append(res.MissingActs, m.Accession)
 	}
 	res.ChainComplete = view.Trustworthy()
+	if strings.EqualFold(req.Language, "da") {
+		// The reading page needs to say what this text *is* when it is a derived one. The MCP
+		// answer already prints the same facts as its own line; only the page had nothing.
+		res.AmendmentsNote = fmt.Sprintf(
+			"Teksten er konsolideret som den %s efter %d af %d ændringsbekendtgørelser.",
+			res.AsOf, res.AppliedActs, res.ChainActs)
+	}
 	res.provenance(view.Doc.Model())
 
 	if req.Address != "" {
