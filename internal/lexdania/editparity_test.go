@@ -21,6 +21,9 @@ import (
 // Agreement about refusal matters as much as agreement about success. A passage the model finds
 // when the tree reader did not would apply an amendment the register's own reader declines, and
 // that is a fabricated legal text rather than a formatting difference.
+//
+// Both sides are ours, so this guards the move and cannot see a defect they share; the note on
+// TestModelAddressParityOnCorpus names where external truth lives.
 func TestModelEditParityOnCorpus(t *testing.T) {
 	dir := corpusDir(t)
 	files := sampleFiles(t, dir, 120)

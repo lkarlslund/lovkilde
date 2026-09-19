@@ -15,6 +15,12 @@ import (
 // The comparison is deliberately not "both produce text". It is: the same change is applied or
 // refused by both, the refusal is about the same thing, and every provision's text afterwards is
 // the same string.
+//
+// Both sides are ours, so this is a migration guard for the move from tree to model rather than
+// a claim about the law: a defect both paths share is invisible here, and one was -- numbering
+// stykker by position, which printed impossible item numbers while this test stayed green. The
+// external checks are tools/pairs, data/paired-truth and tools/goldenpair; see the note on
+// TestModelAddressParityOnCorpus.
 
 func TestModelConsolidationParityOnCorpus(t *testing.T) {
 	a, err := Scan(t.Context(), corpusDir(t))

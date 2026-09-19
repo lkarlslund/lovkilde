@@ -15,6 +15,10 @@ import (
 // Everything else has to agree on real documents, key for key and character for character,
 // because this is the point where the reader's derived semantics move into the model and a
 // silent disagreement would be a consolidation bug nobody sees until a law is wrong.
+//
+// Both sides are ours, so this guards the move and cannot see a defect they
+// share; the note on TestModelAddressParityOnCorpus names where external truth
+// lives.
 
 // unitKeys names the kinds both representations address. A named provision group is not one
 // of them: the model keeps it, the flat list never had it, and the test asserts that the

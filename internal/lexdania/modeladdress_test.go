@@ -11,10 +11,21 @@ import (
 // TestModelAddressParityOnCorpus resolves every address the amendment inventory produces on
 // real documents, both ways, and classifies every disagreement.
 //
-// This is the assertion that matters most and the one most likely to be waved through: a
-// resolver that silently disagrees with the old one does not fail, it applies an amendment to
-// the wrong provision, or refuses one that used to land, and neither shows up until a citizen
-// is quoted text that was never in force.
+// What this is, named plainly: implementation against implementation. Both sides are ours, so
+// agreement is a migration guard -- the model resolver did not drift from the tree resolver --
+// and it is not ground truth. Two engines built on the same wrong assumption agree perfectly,
+// and one pair did: both numbered stykker by position, so both printed item numbers that cannot
+// exist, in 21 BR18 provisions, while this test stayed green.
+//
+// External truth is elsewhere, in checks that read the publisher's own assertions instead:
+// tools/pairs audits every change's quoted before-and-after wording against the states it names,
+// data/paired-truth compares our reading against the register's own second format, and
+// tools/goldenpair compares a whole consolidated law against the later document the ministry
+// actually promulgated.
+//
+// This one still earns its runtime: a resolver that silently disagrees with the old one does not
+// fail, it applies an amendment to the wrong provision or refuses one that used to land, and
+// neither shows up until a citizen is quoted text that was never in force.
 
 // locatedKey names a model resolution in the flat list's vocabulary.
 func locatedKey(l lexdoc.Located) string {
