@@ -56,7 +56,7 @@ type horizon struct {
 // tonight's collection instead of the one it started against.
 func (s *Server) horizon() horizon {
 	h := horizon{
-		Now:        time.Now(),
+		Now:        s.clock(),
 		MirrorDocs: s.archive.Len(),
 		HasIndex:   s.index != nil,
 	}
