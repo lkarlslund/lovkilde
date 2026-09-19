@@ -1205,7 +1205,8 @@ were compared against the public `sum.golang.org` lookup for `v1.8.0` and match.
 ### Reading the mirror in a browser: `retsin serve`
 
 ```bash
-retsin serve                        # http://127.0.0.1:8791 — pages and MCP on one port
+retsin serve                        # http://127.0.0.1:8787 — pages and MCP on one port
+retsin serve --addr 0.0.0.0:8787    # on the network: there is no auth, and reading is all there is
 retsin serve --addr 127.0.0.1:9000 --verbose-requests
 ```
 
@@ -1220,7 +1221,7 @@ means a document cannot run anything in the browser that reads it, only say thin
 | `/` | one search box, four queries to start from, and when the mirror was last checked |
 | `/search?q=` | hits and gaps, in the syntax `retsin search` takes: `AND`, `-word`, `"two words"`, `art:lov`, `year:1987-2000` |
 | `/browse` | everything the mirror holds, by kind, year and initial letter, 200 at a time |
-| `/dok?ref=` | the text, with a table of contents in front. `ref` is an ELI path or an accession; `&addr=§ 267, stk. 3` shows one provision inside the whole |
+| `/dok?ref=` | the text, with a table of contents in front. `ref` is an ELI path or an accession; `&addr=§ 5, stk. 2` shows one provision inside the whole |
 | `/status` | counts, index time, which fast paths are off and how to turn them on |
 | `/mcp` | the MCP endpoint — an agent and a person get the same text out of the same process |
 

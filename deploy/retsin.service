@@ -1,0 +1,39 @@
+# Retsin mirror as a user service: the HTML reading UI and the MCP endpoint on one
+# port, on every interface. Installing it (home is read-only to the agent sandbox, so
+# this file is kept here and copied):
+#
+#   make build
+#   install -D bin/retsin ~/.local/lib/retsin/retsin
+#   install -D deploy/retsin.service ~/.config/systemd/user/retsin.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now retsin.service
+#
+# No authentication: this process only ever reads the mirror, so anyone who can reach
+# the port can read every document in it and ask the search index anything. That is
+# fine on a trusted network and not fine anywhere else; there is no TLS either, so
+# put a reverse proxy in front before the port leaves the LAN.
+#
+# RestartSec is deliberately slow. The server refuses an artifact older than the last
+# recorded collection pass, so after a crawl without `retsin artifact build` the unit
+# fails at startup. A 30 second gap means the journal keeps one readable reason per
+# attempt instead of a hot loop; rebuild the artifact and `systemctl --user restart
+# retsin` and it comes back.
+
+[Unit]
+Description=Retsin mirror: HTML reading UI and MCP endpoint
+Documentation=https://github.com/lkarlslund/retsinformation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/github-repos/retsinformation
+ExecStart=%h/.local/lib/retsin/retsin serve --addr 0.0.0.0:8787 --data-dir %h/github-repos/retsinformation/data
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

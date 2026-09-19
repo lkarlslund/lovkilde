@@ -29,7 +29,7 @@ const DefaultMaxChars = 20000
 // LookupRequest names a document, and optionally one provision inside it.
 type LookupRequest struct {
 	// Document is an ELI path (eli/lta/2019/1399, or the full site URL), a medium
-	// path without the eli prefix (lta/2019/1399), or an accession (A20191399070).
+	// path without the eli prefix (lta/2019/1399), or an accession (B20190139905).
 	Document string
 	// Address is a provision in Danish citation form: "§ 267, stk. 3 nr. 2",
 	// "kapitel 5", "bilag 1", "indledningen".
@@ -430,7 +430,7 @@ func fenced(text string) string {
 func (s *Server) find(doc string) (lexdania.Entry, error) {
 	id := strings.TrimSpace(doc)
 	if id == "" {
-		return lexdania.Entry{}, fmt.Errorf("no document given: pass an ELI path (eli/lta/2019/1399) or an accession (A20191399070)")
+		return lexdania.Entry{}, fmt.Errorf("no document given: pass an ELI path (eli/lta/2019/1399) or an accession (B20190139905)")
 	}
 	if i := strings.Index(id, "retsinformation.dk"); i >= 0 {
 		id = id[i+len("retsinformation.dk"):]

@@ -48,7 +48,7 @@ endpoint at /mcp.
 
   retsin serve
   curl 'http://127.0.0.1:8787/search?q=for%C3%A6ldrepension'
-  curl 'http://127.0.0.1:8787/dok?ref=A20191399070&addr=%C2%A7+5,+stk.+2'
+  curl 'http://127.0.0.1:8787/dok?ref=B20190139905&addr=%C2%A7+5,+stk.+2'
 
 Both audiences get the same answers from the same loaded data. A page shows a provision, its
 address, and where its text came from, exactly as the lookup tool does; a link from a search

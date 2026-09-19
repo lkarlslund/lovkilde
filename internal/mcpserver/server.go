@@ -215,7 +215,7 @@ func (a artifactDocs) Document(meta search.DocMeta) (*lexdoc.Document, error) {
 // lookupInput is the tool's argument object. The jsonschema tags are what a client
 // sees, so they are written for someone who has never read this repository.
 type lookupInput struct {
-	Document string `json:"document" jsonschema:"required" jsonschema_description:"ELI path (eli/lta/2019/1399, or its full URL) or accession number (A20191399070)"`
+	Document string `json:"document" jsonschema:"required" jsonschema_description:"ELI path (eli/lta/2019/1399, or its full URL) or accession number (B20190139905)"`
 	Address  string `json:"address,omitempty" jsonschema_description:"one provision, in Danish citation form: '§ 267, stk. 3 nr. 2', 'kapitel 5', 'bilag 2', 'indledningen'. Omit for the whole document."`
 	AsOf     string `json:"as_of,omitempty" jsonschema_description:"YYYY-MM-DD: consolidate the amendment chain and return the text as amended on that date, instead of the single stored version"`
 	MaxChars int    `json:"max_chars,omitempty" jsonschema_description:"truncate the text at this many characters; default 20000"`
