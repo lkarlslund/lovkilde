@@ -138,23 +138,59 @@ func TestEntryIntoForceNeedsItsOwnName(t *testing.T) {
 	}
 }
 
-func TestFindRefusesAnItemWithoutItsStykke(t *testing.T) {
-	// "§ 5, nr. 2" names no stykke, and items live under a stykke. Searching every stykke for
-	// a "nr. 2" would splice text into whichever one happened to have it, which is a guess
-	// about which provision the drafter meant, so the address resolves to nothing.
+func TestFindItemAddressWithoutStykke(t *testing.T) {
+	// An act citing an item in a provision with one stykke writes "§ 92, nr. 2" and never says
+	// "stk. 1", so that address names a real target: refusing it cost 26 of BR18's 109
+	// refusals and left its items uncitable. The guess this test used to prevent is still
+	// prevented, by the ambiguity rule: when two stykker carry the same item number, nothing
+	// decides which one the drafter meant, and the address resolves to nothing.
 	c := &Content{}
 	p := &Provision{Number: "5", Segments: []Segment{{Text: "§ 5."}, {Text: "1) Nr een."}, {Text: "2) Nr to."}}}
 	p.Stykker = []Stykke{{Nr: 1, Span: Span{From: 1, To: 3}, Items: []Item{{Nr: 1, Span: Span{From: 1, To: 2}}, {Nr: 2, Span: Span{From: 2, To: 3}}}}}
-	c.Order = []Node{{Provision: p}}
+	// § 6 carries a "2)" in both of its stykker.
+	q := &Provision{Number: "6"}
+	q.Stykker = []Stykke{
+		{Nr: 1, Items: []Item{{Nr: 1}, {Nr: 2}}},
+		{Nr: 2, Items: []Item{{Nr: 1}, {Nr: 2}}},
+	}
+	// § 7 carries a "2)" in one of its two stykker, which is unambiguous.
+	r := &Provision{Number: "7"}
+	r.Stykker = []Stykke{
+		{Nr: 1, Items: []Item{{Nr: 1}}},
+		{Nr: 2, Items: []Item{{Nr: 2}}},
+	}
+	c.Order = []Node{{Provision: p}, {Provision: q}, {Provision: r}}
 
-	if _, ok := c.Find(ParseAddress("§ 5, stk. 1, nr. 2")); !ok {
+	if loc, ok := c.Find(ParseAddress("§ 5, stk. 1, nr. 2")); !ok || loc.Item == nil {
 		t.Error("a complete item address did not resolve")
 	}
-	if _, ok := c.Find(ParseAddress("§ 5, nr. 2")); ok {
-		t.Error("an item address with no stykke resolved, which is a guess about the target")
+	if loc, ok := c.Find(ParseAddress("§ 5, nr. 2")); !ok || loc.Item == nil || loc.Stykke != &p.Stykker[0] {
+		t.Errorf(`"§ 5, nr. 2" = %s, want stykke 1's item 2`, loc)
+	}
+	if _, ok := c.Find(ParseAddress("§ 5, nr. 9")); ok {
+		t.Error("an item number the provision does not carry resolved anyway")
 	}
 	if _, ok := c.Find(ParseAddress("§ 5, stk. 3")); ok {
 		t.Error("a stykke that does not exist resolved anyway")
+	}
+	if loc, ok := c.Find(ParseAddress("§ 6, nr. 2")); ok {
+		t.Errorf(`"§ 6, nr. 2" is ambiguous across two stykker and resolved to %s`, loc)
+	}
+	if loc, ok := c.Find(ParseAddress("§ 6, stk. 2, nr. 2")); !ok || loc.Stykke != &q.Stykker[1] {
+		t.Errorf(`"§ 6, stk. 2, nr. 2" = %s, want stykke 2's item 2`, loc)
+	}
+	if loc, ok := c.Find(ParseAddress("§ 7, nr. 2")); !ok || loc.Stykke != &r.Stykker[1] {
+		t.Errorf(`"§ 7, nr. 2" = %s, want stykke 2's item 2, which is the only one`, loc)
+	}
+	// A lettered paragraph written as "§ 8, litra a" is the paragraph, not one of its items.
+	lit := &Provision{Number: "8", Litra: "a"}
+	lit.Stykker = []Stykke{{Nr: 1, Items: []Item{{Litra: "a"}, {Litra: "b"}}}}
+	c.Order = append(c.Order, Node{Provision: lit})
+	if loc, ok := c.Find(ParseAddress("§ 8, litra a")); !ok || loc.Item != nil {
+		t.Errorf(`"§ 8, litra a" = %s, want the lettered paragraph itself`, loc)
+	}
+	if loc, ok := c.Find(ParseAddress("§ 8, litra b")); !ok || loc.Item == nil {
+		t.Errorf(`"§ 8, litra b" = %s, want the item lettered b`, loc)
 	}
 }
 

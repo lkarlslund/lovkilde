@@ -415,28 +415,52 @@ func Find(secs []*Section, a Address) *Section {
 	if a.Stk == 0 && a.Nr == 0 && a.Litra == "" {
 		return par
 	}
+	// A lettered paragraph is written two ways: "§ 8 a" glued, and "§ 8, litra a". The second
+	// arrives looking like an item litra, so the paragraph claims it when its own litra
+	// matches. Returning an item instead would answer with a different provision.
+	if a.Stk == 0 && a.Nr == 0 && a.Litra != "" && strings.EqualFold(par.Litra, a.Litra) {
+		return par
+	}
 
-	// A numbered or lettered item is a child of its stk, not of the paragraph, so the
-	// search has to descend one level. Looking for the item among the paragraph's
-	// direct children meant every "stk. 1, nr. 2" address resolved to nothing.
-	parent := par
+	// A numbered or lettered item is a child of its stykke, not of the paragraph, so the
+	// search has to descend one level. Looking for the item among the paragraph's direct
+	// children meant every "stk. 1, nr. 2" address resolved to nothing.
+	//
+	// Omitting the stykke is not a mistake, and until now it was fatal. An act citing an item
+	// in a provision with one stykke writes "§ 92, nr. 2" and never says "stk. 1", which is
+	// how 26 of BR18's 109 refusals arrived: the item was found, rendered and unaddressable.
+	// The search therefore covers the paragraph's own children and each of its stykker. An
+	// item number carried by two stykker is ambiguous and resolves to nothing, because
+	// choosing one silently edits the wrong provision and a refusal is visible while that is
+	// not.
+	var parents []*Section
 	if a.Stk != 0 {
-		parent = nil
+		var stk *Section
 		for _, s := range secs {
 			if s.Parent == par && s.Kind == "stk" && s.Stk == a.Stk {
-				parent = s
+				stk = s
 				break
 			}
 		}
-		if parent == nil {
+		if stk == nil {
 			return nil
 		}
 		if a.Nr == 0 && a.Litra == "" {
-			return parent
+			return stk
+		}
+		parents = []*Section{stk}
+	} else {
+		parents = []*Section{par}
+		for _, s := range secs {
+			if s.Parent == par && s.Kind == "stk" {
+				parents = append(parents, s)
+			}
 		}
 	}
+
+	var found *Section
 	for _, s := range secs {
-		if s.Parent != parent {
+		if !amongParents(parents, s.Parent) {
 			continue
 		}
 		if a.Nr != 0 && s.Nr != a.Nr {
@@ -445,9 +469,25 @@ func Find(secs []*Section, a Address) *Section {
 		if a.Litra != "" && !strings.EqualFold(s.Litra, a.Litra) {
 			continue
 		}
-		return s
+		if found == nil {
+			found = s
+			continue
+		}
+		if s.Parent != found.Parent {
+			return nil
+		}
 	}
-	return nil
+	return found
+}
+
+// amongParents reports whether parent is one of the sections an item search may look inside.
+func amongParents(parents []*Section, parent *Section) bool {
+	for _, p := range parents {
+		if p == parent {
+			return true
+		}
+	}
+	return false
 }
 
 func firstNonEmpty(vals ...string) string {

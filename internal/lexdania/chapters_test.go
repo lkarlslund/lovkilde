@@ -200,6 +200,99 @@ func TestLitraAndNumberedItems(t *testing.T) {
 	}
 }
 
+// TestItemAddressWithoutStykke covers the citation an act actually writes. A provision with
+// one stykke is cited as "§ 92, nr. 2"; nobody says "stk. 1". The item was already modelled
+// and rendered, but Find searched the paragraph's own children for it, so 26 of BR18's 109
+// refusals were items we could see and could not name — and BR18's 814 numbered items were not
+// citable at all.
+func TestItemAddressWithoutStykke(t *testing.T) {
+	doc := mustParse(t, fixtureLitraLaw)
+
+	if s := sec(doc, "§ 2a, nr. 2"); s == nil {
+		t.Fatal(`"§ 2a, nr. 2" does not resolve, although the law prints "2)" under one stykke`)
+	} else if !strings.Contains(s.Display(), "adresse") {
+		t.Errorf(`"§ 2a, nr. 2" = %q`, s.Display())
+	}
+	if s := sec(doc, "§ 2a, litra b"); s == nil || !strings.Contains(s.Display(), "køretøj") {
+		t.Errorf(`"§ 2a, litra b" = %+v`, s)
+	}
+	// The stykke still wins when the citation names it.
+	if s := sec(doc, "§ 2a, stk. 1, nr. 1"); s == nil || !strings.Contains(s.Display(), "navn") {
+		t.Errorf(`"§ 2a, stk. 1, nr. 1" = %+v`, s)
+	}
+	// A lettered paragraph written the comma way is the paragraph, not one of its items.
+	if s := sec(doc, "§ 2, litra a"); s == nil {
+		t.Fatal(`"§ 2, litra a" should reach the lettered paragraph`)
+	} else if s.Kind != "paragraf" {
+		t.Errorf(`"§ 2, litra a" resolved to a %s, want the paragraph`, s.Kind)
+	}
+	// A number no stykke carries is still nothing.
+	if s := sec(doc, "§ 2a, nr. 7"); s != nil {
+		t.Errorf("nr. 7 does not exist, got %q", s.Display())
+	}
+
+	// Two stykker carrying the same item number is ambiguous, and guessing which one an
+	// amendment meant would edit the wrong provision.
+	two := mustParse(t, fixtureTwoStykkerSameNr)
+	if s := sec(two, "§ 5, nr. 2"); s != nil {
+		t.Errorf(`"§ 5, nr. 2" is ambiguous across two stykker, got %q`, s.Display())
+	}
+	if s := sec(two, "§ 5, stk. 2, nr. 2"); s == nil || !strings.Contains(s.Display(), "fjerde") {
+		t.Errorf(`"§ 5, stk. 2, nr. 2" = %+v`, s)
+	}
+	if s := sec(two, "§ 6, nr. 1"); s == nil || !strings.Contains(s.Display(), "entydig") {
+		t.Errorf(`"§ 6, nr. 1" should resolve from the only stykke carrying it, got %+v`, s)
+	}
+}
+
+const fixtureTwoStykkerSameNr = `<?xml version="1.0" encoding="UTF-8"?>
+<Dokument>
+  <Meta>
+    <DocumentType>BEK H#LOKDOK04</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B202600024215</AccessionNumber>
+    <DocumentId>CM000445</DocumentId>
+    <UniqueDocumentId>44445</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om tvetydighed</DocumentTitle>
+    <Year>2026</Year>
+    <DiesSigni>2026-04-10</DiesSigni>
+    <Status>Current</Status>
+    <Number>242</Number>
+    <Ministry>Transportministeriet</Ministry>
+  </Meta>
+  <DokumentIndhold>
+    <Paragraf>
+      <Explicatus>§ 5.</Explicatus>
+      <Stk>
+        <Exitus><Linea><Char>Liste over det første:</Char></Linea></Exitus>
+        <Exitus><Index>
+          <Indentatio formaInd="Nummer"><Explicatus>1)</Explicatus><Exitus><Linea><Char>første</Char></Linea></Exitus></Indentatio>
+          <Indentatio formaInd="Nummer"><Explicatus>2)</Explicatus><Exitus><Linea><Char>andet</Char></Linea></Exitus></Indentatio>
+        </Index></Exitus>
+      </Stk>
+      <Stk>
+        <Exitus><Linea><Char>Liste over det andet:</Char></Linea></Exitus>
+        <Exitus><Index>
+          <Indentatio formaInd="Nummer"><Explicatus>1)</Explicatus><Exitus><Linea><Char>tredje</Char></Linea></Exitus></Indentatio>
+          <Indentatio formaInd="Nummer"><Explicatus>2)</Explicatus><Exitus><Linea><Char>fjerde</Char></Linea></Exitus></Indentatio>
+        </Index></Exitus>
+      </Stk>
+    </Paragraf>
+    <Paragraf>
+      <Explicatus>§ 6.</Explicatus>
+      <Stk>
+        <Exitus><Linea><Char>Kun den første stykke har liste:</Char></Linea></Exitus>
+        <Exitus><Index>
+          <Indentatio formaInd="Nummer"><Explicatus>1)</Explicatus><Exitus><Linea><Char>entydig</Char></Linea></Exitus></Indentatio>
+        </Index></Exitus>
+      </Stk>
+      <Stk>
+        <Exitus><Linea><Char>Det andet stykke har ingen punkter.</Char></Linea></Exitus>
+      </Stk>
+    </Paragraf>
+  </DokumentIndhold>
+</Dokument>`
+
 const fixtureLitraLaw = `<?xml version="1.0" encoding="UTF-8"?>
 <Dokument>
   <Meta>

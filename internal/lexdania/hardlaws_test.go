@@ -525,3 +525,45 @@ func duplicateNumbers(secs []*Section) int {
 	}
 	return n
 }
+
+// TestBR18ItemCitationWithoutStykkeLands is the real-archive proof for the address form
+// Danish acts actually write. B20200079405 change 23 reads "I § 92, nr. 2, ændres
+// »bygningen« til: »byggeriet«." — an act naming an item and never saying "stk. 1", because
+// the provision has one stykke. The item was parsed, numbered and printed; only the address
+// reached it, so the edit was refused and BR18 served the 2019 word for six years. 26 of the
+// act's 109 refusals were this one shape.
+func TestBR18ItemCitationWithoutStykkeLands(t *testing.T) {
+	a, err := Scan(t.Context(), corpusDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, _, ok := a.Open("B20190139905")
+	if !ok {
+		t.Fatal("BR18 is not in the archive")
+	}
+
+	before := LawAsOf(base, time.Date(2020, 3, 5, 12, 0, 0, 0, time.UTC), a.Open)
+	s := before.Section("§ 92, nr. 2")
+	if s == nil {
+		t.Fatal(`"§ 92, nr. 2" does not resolve in BR18 as promulgated`)
+	}
+	if !strings.Contains(s.Display(), "bygn") {
+		t.Fatalf(`"§ 92, nr. 2" = %q, want the promulgated wording`, s.Display())
+	}
+
+	after := LawAsOf(base, time.Date(2020, 6, 2, 12, 0, 0, 0, time.UTC), a.Open)
+	if s := after.Section("§ 92, nr. 2"); s == nil {
+		t.Fatal(`"§ 92, nr. 2" does not resolve after the amendment`)
+	} else if got := s.Display(); !strings.Contains(got, "byggeriet") {
+		t.Errorf(`"§ 92, nr. 2" = %q, want the word the amendment put there`, got)
+	}
+	// The stykke-naming citation has to keep working exactly as it did.
+	if s := after.Section("§ 92, stk. 1, nr. 2"); s == nil || !strings.Contains(s.Display(), "byggeriet") {
+		t.Errorf(`"§ 92, stk. 1, nr. 2" = %+v, want the same item`, s)
+	}
+	for _, u := range after.Unresolved {
+		if u.Edit.Address.String() == "§ 92, nr. 2" {
+			t.Errorf("the item citation is still refused: %s", u.Reason)
+		}
+	}
+}

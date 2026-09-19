@@ -1862,6 +1862,18 @@ found (below).
   layout is still excluded rather than invented as a provision.
 - **Numbered items were searched at the wrong depth.** `Find` looked for `nr` among a
   paragraph's direct children, but they are children of the `stk`.
+- **An item cited without its stykke resolved to nothing, and the model engine refused it
+  on purpose.** Danish acts write "I § 92, nr. 2, ændres »bygningen« til: »byggeriet«." and
+  never repeat "stk. 1" when the provision has one stykke — which is nearly all of them.
+  Both engines stopped at the stykke, so BR18's 814 numbered and 59 lettered items were
+  readable and uncitable, and the amendment above was refused: the reader has been served the 2019 word
+  since June 2020. Measured over BR18's whole chain, this one shape was **26 of its 109
+  refusals**, in 6 of its amending acts (10, 6, 4, 3, 2 and 1), with no refusal added anywhere. The
+  model's stated reason for refusing — that searching every stykke would splice text into
+  whichever one happened to carry a "nr. 2" — is still honoured: an item number that two
+  stykker both carry resolves to nothing rather than to a guess.
+  `TestItemAddressWithoutStykke`, `TestFindItemAddressWithoutStykke` and
+  `TestBR18ItemCitationWithoutStykkeLands` pin the three parts.
 - **`udgår` was not in the pattern set.** "I § 6, stk. 1, udgår »§ 3, stk. 2-3,«." is
   the ordinary Danish deletion wording and showed up as an unrecognised change in real
   2026 amendments.
