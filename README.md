@@ -1624,6 +1624,48 @@ runs, so an `<DokumentIndhold>` whose prose lives inside `<Paragraf>` and `<Stk>
 one — reads as empty, and the loader would then have overwritten the register's text with ours.
 The test that pins this is `TestCanonicalBodyIsNeverReplacedByASidecar`.
 
+### Half the archive's amendment chains consolidate as no-ops, and the receipt said nothing
+
+`go run ./tools/pairs -silent 400` walks 400 sampled laws, resolves each chain, opens every
+amending act in it and asks what that act contributed. On this mirror: **187 amending acts in the
+50 sampled chains, 93 of them (49.7%) yielded not one change.** Split by why:
+
+| why it yielded nothing | acts |
+|---|--:|
+| XML holds metadata only; the body is in the `.json` payload beside it | 89 |
+| body present, no amendatory markup (one bill the filter missed) | 1 |
+| amendatory markup present and still nothing parsed | 3 |
+
+By decade of the law being amended, the same run gives 1980s 23 of 23, 1990s 34 of 34, 2000s 33 of
+60, 2010s 1 of 46, 2020s 0 of 20. The break is at 2010 because that is where the register's own XML
+bodies start; 80% of sampled 1980s files, 98% of 1990s and 69% of 2000s carry metadata only.
+
+The mechanism is not that the text is missing — `Archive.Open` attaches the payload text, and
+these documents have provisions. It is that the text arrives as prose. `Document.Amendments` looks
+for `<AendringCentreretParagraf>` blocks, which is structure only the register's own XML has, so a
+change document read from a payload contributes no edits while its words sit in the same tree.
+
+The cost is consolidation that does nothing and reports success. `B20000072305` as of 2010-01-01:
+eight amending acts, all eight found, applied 0, refused 0, 44 provisions standing exactly as
+promulgated, and `View.Trustworthy()` returning true — because trustworthy only meant nothing
+missing and nothing refused. A refusal is a decision we can name; silence was being reported in the
+same words as a clean run.
+
+Three things changed. `chainStep` now distinguishes *why* a version contributed nothing (a bill, or
+every change aimed at another law, versus nothing readable), and `View.Silent` and
+`ModelView.Silent` list the versions that were opened and yielded nothing. `Trustworthy` requires
+that list empty, and the receipt line ends with `%d read with no result`. `pairs -silent` measures
+the population. The remedy is deliberately not a prose-scraping special case in the amendment
+reader: amendments have to arrive as model content (`lexdoc`) when the payload is read, which is
+the same move M012 already owes the HTML front end, so the fix lands once and both paths get it.
+
+Two smaller defects fell out of the same count. `A20100064830` (amending `A20050060230`) and
+`A20140063030` (amending `A20100057830`) do have `<AendringsNummer>` markup, nested inside an
+ordinary `<Paragraf><Stk>` — ids like `Par14_Stk1_Anu1` — and `Amendments` only walks paragraphs of
+type `<AendringCentreretParagraf>`, so 1.6% of sampled acts are a plain parser gap rather than a
+coverage gap. And `L20170001964` appears as an amender of `L20050000164` while carrying no
+amendatory markup at all: it is a bill, and `IsBill` did not catch it.
+
 ### What the whole-corpus census measured (2026-09-17)
 
 `RETSIN_BODIES_CENSUS=1 go test -timeout 4h -run TestBodyCensus ./internal/lexdania/ -v`
@@ -1770,18 +1812,40 @@ The checks that read the register rather than ourselves:
 
 | check | the external fact it reads | what it measured |
 |---|---|---|
-| `tools/pairs` | each amendment's own quoted `»old« → »new«`, tested against the states that act names | BR18: 410 assertions, 0 violations; but 0 auditable edits on `B19950050705`, so structural edits are a blind spot |
+| `tools/pairs` | each amendment's own quoted `»old« → »new«`, tested against the states that act names | BR18: 410 assertions, 0 violations; `B19950050705` has 0 auditable edits, which turned out to be a whole class and has its own section above |
 | `data/paired-truth` | the register's own second format for the same document, JSON API beside XML, thousands of documents | gated behind `RETSIN_PAIRED_TRUTH` |
 | `tools/goldenpair` | a later document the ministry actually promulgated after amending the earlier one | 16,398 candidate supersession pairs, 71 re-enacting at least half the base; over the top 10, 371 successor provisions: 263 copied unchanged, 0 copies of the amended state we failed to produce, 3 identical except in their digits, 34 real changes |
+| `TestGoldenPairAgainstPromulgatedSuccessors` | the same, pinned to eight named pairs so it runs in 1.5 s on every commit | 271 successor provisions: 238 copies, 0 missed copies of the amended state, 3 digits-only (0 of them ours), 30 real changes |
 
-The `goldenpair` digits-only bucket is the interesting one, because it is the numbering
-defect's own signature and it showed up in data we do not control: in
-`B19950050705 → B19950082405` the ministry's § 6 cites `§ 2, stk. 5, 7 og 8` where our
-consolidation of the base still cites `stk. 5, 6 og 7`. A stykke was inserted into § 2 and the
-cross-reference moved with it; we inserted nothing wrong and renumbered nothing, so the stale
-citation is exactly what an unexecuted renumber clause looks like from the outside (M024).
+The digits-only bucket was first read as our numbering defect's signature, and that reading was
+wrong. In `B19950050705 → B19950082405` the ministry's § 6 cites `§ 2, stk. 5, 7 og 8` where our
+consolidation cites `stk. 5, 6 og 7`, which looks exactly like a cross-reference our chain left
+behind. It is not one: the successor's own § 2 prints **eight** stykker where the base prints seven,
+because the successor inserted a new stk. 6 about multipakninger and rewrote § 6 to match its own
+insertion. The third case cites `§ 3 ... 2. led i lov om taxikørsel m.v.`, a numbering belonging to
+a different document entirely.
+
+So `explainDigits` now answers *who moved* rather than assuming: it finds the citation nearest the
+differing digits, looks the cited provision up in both texts, and reports `successor` when that
+provision differs too, `external` when an act name qualifies the citation, `number` when no
+citation is near the digit at all, and only `stale` when the cited provision is identical in both —
+the one shape where the reference had no reason to move and ours is the one pointing at the old
+numbering. Recorded across the eight pinned pairs: **0 stale.** The bound that keeps the debt
+visible is on `StaleNumbering`, so the test fails on the first case that really is ours.
+
+What the pair *does* prove is worth more than the false alarm: the two amenders of
+`B19950050705` quote `»77,6 pct.« → »75,8 pct.«` and `»15,52 pct.« → »15,16 pct.«`, our
+consolidation still prints the old numbers, and both acts contribute zero edits — the metadata-only
+XML class above, seen from the outside.
 
 ### Bugs the tests caught
+
+- **The server answered about today while the test asked about a pinned day.** Two horizon tests
+  pin the clock through `Server.nowFunc`, and `horizon()` still called `time.Now()` — so the field
+  existed, the comment said it existed "for the horizon", and the horizon ignored it. The tests
+  were right and passed the day they were written; they failed from the next midnight onward, and
+  a date-shaped failure looks like a broken calendar rather than a broken seam. `horizon()` now
+  reads `s.clock()`, which is `nowFunc` when one was set.
 
 - **The answers could not see their own horizon, twice over.** Giving every answer a
   dataset line (date asked, when the mirror last pulled, when the index was built)
