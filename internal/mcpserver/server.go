@@ -212,13 +212,17 @@ func (a artifactDocs) Document(meta search.DocMeta) (*lexdoc.Document, error) {
 	return a.cache.Document(meta.Accession)
 }
 
-// lookupInput is the tool's argument object. The jsonschema tags are what a client
-// sees, so they are written for someone who has never read this repository.
+// lookupInput is the tool's argument object. The jsonschema tag value *is* the
+// description a client sees: github.com/google/jsonschema-go reads that one tag and no
+// other, and derives "required" from the absence of omitempty. Writing a description
+// anywhere else drops it in silence, which TestToolSchemasDescribeEveryArgument is here
+// to make impossible. These strings are written for someone who has never read this
+// repository, and every example in them is an address this mirror answers.
 type lookupInput struct {
-	Document string `json:"document" jsonschema:"required" jsonschema_description:"ELI path (eli/lta/2019/1399, or its full URL) or accession number (B20190139905)"`
-	Address  string `json:"address,omitempty" jsonschema_description:"one provision, in Danish citation form: '§ 267, stk. 3 nr. 2', 'kapitel 5', 'bilag 2', 'indledningen'. Omit for the whole document."`
-	AsOf     string `json:"as_of,omitempty" jsonschema_description:"YYYY-MM-DD: consolidate the amendment chain and return the text as amended on that date, instead of the single stored version"`
-	MaxChars int    `json:"max_chars,omitempty" jsonschema_description:"truncate the text at this many characters; default 20000"`
+	Document string `json:"document" jsonschema:"ELI path (eli/lta/2019/1399, or its full URL) or accession number (B20190139905)"`
+	Address  string `json:"address,omitempty" jsonschema:"one provision, in Danish citation form: '§ 5', '§ 5, stk. 2', a numbered item ('nr. 3'), 'kapitel 5', 'bilag 2', 'indledningen'. Omit for the whole document."`
+	AsOf     string `json:"as_of,omitempty" jsonschema:"YYYY-MM-DD: consolidate the amendment chain and return the text as amended on that date, instead of the single stored version"`
+	MaxChars int    `json:"max_chars,omitempty" jsonschema:"truncate the text at this many characters; default 20000"`
 }
 
 // Serve connects the server to stdin/stdout and stays there until the client closes
@@ -294,20 +298,21 @@ func (s *Server) MCPHandler() http.Handler {
 	return s.mcpHandler
 }
 
-// searchInput is the search tool's argument object.
+// searchInput is the search tool's argument object. Same rule as lookupInput: the
+// jsonschema tag value is the description a client gets.
 type searchInput struct {
-	Query string `json:"query" jsonschema:"required" jsonschema_description:"Danish words to search for, e.g. 'miljøbeskyttelse pligt'. Inflected forms and compounds are matched; æ/ø/å are distinct letters and are not folded. Operators: 'a AND b' requires both, '+a' requires one, '-a' and 'NOT a' exclude, 'a OR b' unions, and 'a b' in double quotes requires both words in the same provision"`
-	Kind  string `json:"kind,omitempty" jsonschema_description:"limit to one medium: lta, ltb, ltc, mt, retsinfo, ft, fob, accn"`
-	Since int    `json:"since,omitempty" jsonschema_description:"only documents published from this year"`
-	Until int    `json:"until,omitempty" jsonschema_description:"only documents published up to this year"`
+	Query string `json:"query" jsonschema:"Danish words to search for, e.g. 'miljøbeskyttelse pligt'. Inflected forms and compounds are matched; æ/ø/å are distinct letters and are not folded. Operators: 'a AND b' requires both, '+a' requires one, '-a' and 'NOT a' exclude, 'a OR b' unions, and two words in single quotes require both in the same provision"`
+	Kind  string `json:"kind,omitempty" jsonschema:"limit to one medium: lta, ltb, ltc, mt, retsinfo, ft, fob, accn"`
+	Since int    `json:"since,omitempty" jsonschema:"only documents published from this year"`
+	Until int    `json:"until,omitempty" jsonschema:"only documents published up to this year"`
 
 	// Source and NoNear are the two ways to ask for less work rather than more: an
 	// xml-only search reads fewer documents, and an ungraded one skips the text reads that
 	// proximity needs.
-	Source string `json:"source,omitempty" jsonschema_description:"'xml' for the register's own structured text only, 'html' for reader-recovered text"`
-	Limit  int    `json:"limit,omitempty" jsonschema_description:"maximum hits, default 10, cap 50"`
+	Source string `json:"source,omitempty" jsonschema:"'xml' for the register's own structured text only, 'html' for reader-recovered text"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"maximum hits, default 10, cap 50"`
 
-	NoNear bool `json:"no_near,omitempty" jsonschema_description:"rank from the index alone and skip the text reads that measure word distance"`
+	NoNear bool `json:"no_near,omitempty" jsonschema:"rank from the index alone and skip the text reads that measure word distance"`
 }
 
 func (s *Server) searchTool(_ context.Context, _ *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, any, error) {
