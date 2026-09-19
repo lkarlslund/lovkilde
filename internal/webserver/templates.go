@@ -252,6 +252,7 @@ const searchBody = `{{define "content"}}
 <select name="kind"><option value="">alle typer</option>{{range .Kinds}}<option value="{{.Name}}" {{if eq .Name $.Kind}}selected{{end}}>{{.Name}} ({{.Count}})</option>{{end}}</select>
 <input type="number" name="since" value="{{.Since}}" placeholder="fra år" min="1800" max="2100">
 <input type="number" name="until" value="{{.Until}}" placeholder="til år" min="1800" max="2100">
+<select name="status"><option value="">alle status</option>{{range .Statuses}}<option value="{{.Name}}" {{if eq .Name $.Status}}selected{{end}}>{{statusShort .Name}} ({{.Count}})</option>{{end}}</select>
 <input type="number" name="limit" placeholder="antal" min="1" max="200">
 <button type="submit">Søg</button>
 </form>
@@ -306,6 +307,8 @@ const browseBody = `{{define "content"}}
 <input type="search" name="title" value="{{.Title}}" placeholder="Titel, f.eks. 'forældrepension'" autocomplete="off">
 <select name="kind"><option value="">alle typer</option>{{range .Kinds}}<option value="{{.Name}}" {{if eq .Name $.Kind}}selected{{end}}>{{.Name}} ({{.Count}})</option>{{end}}</select>
 <input type="number" name="year" value="{{.Year}}" placeholder="år" min="1800" max="2100">
+<select name="status"><option value="">alle status</option>{{range .Statuses}}<option value="{{.Name}}" {{if eq .Name $.Status}}selected{{end}}>{{statusShort .Name}} ({{.Count}})</option>{{end}}</select>
+<input type="search" name="type" value="{{.TypeCode}}" placeholder="typekode, f.eks. LOKDOK" autocomplete="off">
 <button type="submit">Vis</button>
 </form>
 <p class="mirror">{{.Total}} dokumenter matcher. Viser {{.From}}–{{.To}}, nyeste først.</p>
@@ -313,7 +316,7 @@ const browseBody = `{{define "content"}}
 <table class="browse">
 {{range .Items}}<tr>
 <td class="n">{{.Year}} {{.Number}}</td>
-<td><a href="{{.Link}}">{{.Title}}</a> <span class="hint">{{.Kind}}{{if .Type}} · {{.Type}}{{end}}</span></td>
+<td><a href="{{.Link}}">{{.Title}}</a> <span class="hint">{{.Kind}}{{if .Type}} · {{.Type}}{{end}}</span> <span class="pill {{statusClass .Status}}">{{statusShort .Status}}</span></td>
 </tr>{{end}}
 </table>
 {{if not .Items}}<p>Ingen dokumenter matcher. Prøv uden årstal.</p>{{end}}
