@@ -355,6 +355,33 @@ func (p *Provision) InsertStykkerAfter(nr int, add [][]Segment) bool {
 	return true
 }
 
+// AppendStykke adds a subsection at the end of a provision, as the amending act delivered it.
+//
+// The register writes "§ 5 affattes således:" and then lays the paragraph, its items and its
+// subsections out as siblings, so a provision assembled from the paragraph alone arrives missing
+// the law that followed it. nr 0 leaves the number to position, which is how the reader numbers
+// subsections; an explicit nr is what the publisher's own localId said.
+func (p *Provision) AppendStykke(segs []Segment, nr int) bool {
+	if len(segs) == 0 {
+		return false
+	}
+	from := len(p.Segments)
+	p.Segments = append(p.Segments, segs...)
+	if nr == 0 {
+		nr = len(p.Stykker) + 1
+		for _, st := range p.Stykker {
+			// Position is the ordinary rule, but not when the provision already carries
+			// subsections the amending act numbered: taking the number of one that exists
+			// would make two subsections answer the same citation.
+			if st.Nr >= nr {
+				nr = st.Nr + 1
+			}
+		}
+	}
+	p.Stykker = append(p.Stykker, Stykke{Nr: nr, Span: Span{From: from, To: len(p.Segments)}})
+	return true
+}
+
 // shiftInserted moves the ends of a range that sit after an insertion point.
 func shiftInserted(sp *Span, at, delta int) {
 	if sp.From >= at {

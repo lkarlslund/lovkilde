@@ -459,3 +459,28 @@ func TestReplacedSubsectionDoesNotKeepTheOldItems(t *testing.T) {
 		t.Errorf("the last subsection no longer holds its own text: %q", got)
 	}
 }
+
+// TestWholeProvisionReplacementFromStykkerOnly survives instead of crashing. BR18 delivered one
+// of its replacements as subsections and loose lines rather than as a paragraph, and the code
+// that follows the addressed provision with the rest of the run sliced NewProvisions[1:] on that
+// empty run. A consolidation that dies at a change produces no answer and no report, which is
+// worse than the refusal this guard now allows.
+func TestWholeProvisionReplacementFromStykkerOnlySurvives(t *testing.T) {
+	edits := []Edit{{Kind: EditReplaceProvision, Address: ParseAddress("§ 3"),
+		NewStykker: [][]Segment{{{Text: " Stk. 1. Hele bestemmelsen er ny.", Break: true}}},
+		NewProse:   []string{"Og den løse linje, der hører til."}}}
+	view, out := sampleLaw().AsOf([]Amendment{{Source: "A", Effective: date(2000, 1, 1), Edits: edits}}, time.Time{})
+	if len(out.Unresolved) != 0 {
+		t.Fatalf("replacement from subsections alone was refused: %+v", out.Unresolved)
+	}
+	got := textOf(t, view, "§ 3")
+	if !strings.Contains(got, "Hele bestemmelsen er ny") {
+		t.Errorf("§ 3 = %q, want the subsection the change brought", got)
+	}
+	if !strings.Contains(got, "den løse linje") {
+		t.Errorf("§ 3 = %q, want the loose line the change brought as well", got)
+	}
+	if p := mustFindProvision(t, view, "§ 3"); p.Stykke(1) == nil {
+		t.Error("the new subsection is not addressable as § 3, stk. 1")
+	}
+}

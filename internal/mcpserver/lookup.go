@@ -39,6 +39,13 @@ type LookupRequest struct {
 	AsOf string
 	// MaxChars truncates the text; zero means DefaultMaxChars.
 	MaxChars int
+
+	// Language picks the language of the prose the server composes itself — the amendment
+	// note and the warnings about an incomplete chain. The reading page asks for Danish;
+	// empty means English, which is the MCP contract. Data the register supplied (titles,
+	// accessions, dates) is never translated, and neither is the internal wording of a
+	// refusal reason.
+	Language string
 }
 
 // LookupResult is an answer: what the document is, where the text came from, and the
@@ -62,14 +69,37 @@ type LookupResult struct {
 	// Mirror is the dataset line: the date asked, the mirror's collection horizon and
 	// the index build. It is what "current" means in this answer, stated as dates
 	// rather than as a claim.
-	Mirror        string
-	AsOf          string
-	AppliedEdits  int
+	Mirror string
+	AsOf   string
+
+	// Language is the request's, carried so the prose this type composes for itself comes back
+	// in the language the reader asked for.
+	Language string
+
+	// ChainActs counts the amending acts that take effect by AsOf, AppliedActs counts those
+	// whose text the mirror held and applied, and RefusedEdits counts the individual changes
+	// inside them that could not be placed. The three answer different questions: a chain can
+	// arrive whole and still be partly unplaced, which is exactly what BR18 does.
+	ChainActs    int
+	AppliedActs  int
+	RefusedEdits int
+
+	// MissingActs are the accessions of amending acts that take effect by AsOf and are not in
+	// the mirror. The list is empty almost always, so a reader shown only "incomplete" without
+	// it is being pointed at a gap in the engine and told it is a gap in the archive.
+	MissingActs []string
+
+	// ChainComplete is whether nothing was refused and nothing was missing. It is the summary;
+	// the fields above are the reasons.
 	ChainComplete bool
 
 	// Amendments names the later documents this one's metadata points at: the
 	// register's own statement, not the mirror's guess.
 	Amendments string
+
+	// AmendmentsNote is that statement as a sentence in the request's language, so the Danish
+	// reading page does not have to recognise an English warning and throw it away.
+	AmendmentsNote string
 
 	Text      string
 	Truncated bool
@@ -198,7 +228,13 @@ func (s *Server) lookupAsOf(req LookupRequest, entry lexdania.Entry, res *Lookup
 	}
 	res.Path = view.Path
 	res.AsOf = asOf.Format("2006-01-02")
-	res.AppliedEdits = view.AppliedCount()
+	res.Language = req.Language
+	res.ChainActs = len(view.Chain)
+	res.AppliedActs = view.AppliedCount()
+	res.RefusedEdits = len(view.Unresolved)
+	for _, m := range view.MissingChain() {
+		res.MissingActs = append(res.MissingActs, m.Accession)
+	}
 	res.ChainComplete = view.Trustworthy()
 	res.provenance(view.Doc.Model())
 
@@ -211,16 +247,93 @@ func (s *Server) lookupAsOf(req LookupRequest, entry lexdania.Entry, res *Lookup
 	} else {
 		res.Text = view.Text()
 	}
-	if !res.ChainComplete {
-		res.Warnings = append(res.Warnings,
-			"the amendment chain is incomplete: at least one amending document named by the chain is not in the mirror, so this text does not include its edits. The chain, including what is missing, is listed in the consolidation report")
-	}
-	if len(view.Unresolved) > 0 {
-		res.Warnings = append(res.Warnings, fmt.Sprintf(
-			"%d edits in the chain could not be placed in the text; they are listed in the consolidation report, not applied", len(view.Unresolved)))
-	}
+	res.warnChain(view)
 	res.truncate(req.MaxChars)
 	return res, nil
+}
+
+// warnChain states that a consolidated text is not the whole answer, and which of the two
+// reasons applies. Naming the wrong one is not cosmetic: "not in the mirror" sends the reader to
+// collect more documents, while a refused edit is our own limitation that collecting more
+// documents cannot repair. BR18 has the second and used to be reported as the first.
+func (r *LookupResult) warnChain(view *lexdania.View) {
+	danish := strings.EqualFold(r.Language, "da")
+	if len(r.MissingActs) > 0 {
+		if danish {
+			r.Warnings = append(r.Warnings, fmt.Sprintf(
+				"%d af de %d ændringsbekendtgørelser, der træder i kraft inden %s, findes ikke i spejlet (%s). Deres ændringer indgår ikke i teksten, og ingen bestemmelse er markeret som berørt.",
+				len(r.MissingActs), r.ChainActs, r.AsOf, strings.Join(r.MissingActs, ", ")))
+		} else {
+			r.Warnings = append(r.Warnings, fmt.Sprintf(
+				"%d of the %d amending acts that take effect by %s are not in the mirror (%s), so their changes are absent from this text, and no provision is marked as affected",
+				len(r.MissingActs), r.ChainActs, r.AsOf, strings.Join(r.MissingActs, ", ")))
+		}
+	}
+	if r.RefusedEdits == 0 {
+		return
+	}
+	if danish {
+		r.Warnings = append(r.Warnings, fmt.Sprintf(
+			"%d af ændringerne i kæden kunne ikke placeres i teksten. Hvor en af dem angår denne bestemmelse, kan teksten stadig vise den tidligere ordlyd; spørg med address= for at se én bestemmelse ad gangen.",
+			r.RefusedEdits))
+		return
+	}
+	r.Warnings = append(r.Warnings, fmt.Sprintf(
+		"%d of the changes made by this law's amending acts could not be placed in the text, so where one of them applied, this text may still show the older wording. Refused because: %s",
+		r.RefusedEdits, refusalReasons(view.Unresolved)))
+}
+
+// refusalReasons says in one line why changes were refused, most frequent class first. A count
+// alone only says the text may be stale; the classes say whom to distrust — an address that no
+// longer resolves is a provision the chain moved, while wording no pattern recognised is a kind
+// of change the engine has never placed.
+//
+// Reasons are grouped with any quoted address removed, because "§ 21, stk. 2" not found" and
+// "§ 523, stk. 2" not found" are one class of failure wearing two addresses.
+func refusalReasons(refused []lexdania.UnresolvedEdit) string {
+	counts := map[string]int{}
+	for _, u := range refused {
+		r := u.Reason
+		for {
+			from := strings.IndexByte(r, '"')
+			if from < 0 {
+				break
+			}
+			to := strings.IndexByte(r[from+1:], '"')
+			if to < 0 {
+				break
+			}
+			r = r[:from] + r[from+to+2:]
+		}
+		r = strings.Join(strings.Fields(strings.Trim(r, " ;.,")), " ")
+		if r == "" {
+			r = "no reason recorded"
+		}
+		counts[r]++
+	}
+	type reason struct {
+		text string
+		n    int
+	}
+	pairs := make([]reason, 0, len(counts))
+	for r, n := range counts {
+		pairs = append(pairs, reason{r, n})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].n != pairs[j].n {
+			return pairs[i].n > pairs[j].n
+		}
+		return pairs[i].text < pairs[j].text
+	})
+	parts := make([]string, 0, 3)
+	for i, p := range pairs {
+		if i >= 3 {
+			parts = append(parts, fmt.Sprintf("%d further reasons", len(pairs)-3))
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%d× %s", p.n, p.text))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // noteAmendments records what this document's own metadata says about later
@@ -265,7 +378,14 @@ func (r *LookupResult) noteAmendments(m *lexdoc.Document, now time.Time) {
 			parts = append(parts, field)
 		}
 		r.Amendments = strings.Join(parts, ", ")
-		if r.AsOf == "" {
+		switch {
+		case r.AsOf != "":
+			// This answer is already the text as amended, which is what the sentence recommends.
+		case strings.EqualFold(r.Language, "da"):
+			r.AmendmentsNote = fmt.Sprintf(
+				"Ifølge dokumentets egne metadata ændres det af %s. Teksten her er denne accession, som den er publiceret; spørg med as_of=%s for den tekst, der gjaldt på det tidspunkt.",
+				r.Amendments, now.Format("2006-01-02"))
+		default:
 			r.Warnings = append(r.Warnings, fmt.Sprintf(
 				"%d document(s) named in this document's own metadata amend it on or before %s. The text above is this accession as published; ask again with as_of=%s for the text as amended on that date.",
 				len(past), now.Format("2006-01-02"), now.Format("2006-01-02")))
@@ -376,7 +496,8 @@ func (r *LookupResult) String() string {
 		if !r.ChainComplete {
 			chain = "**INCOMPLETE**"
 		}
-		fmt.Fprintf(&b, "- **As of %s:** %d amending documents applied, chain %s\n", r.AsOf, r.AppliedEdits, chain)
+		fmt.Fprintf(&b, "- **As of %s:** %d of %d amending acts applied, %d changes refused, chain %s\n",
+			r.AsOf, r.AppliedActs, r.ChainActs, r.RefusedEdits, chain)
 	}
 	fmt.Fprintf(&b, "- **Text source:** `%s` — %s\n", r.Provenance, r.ProvenanceNote)
 	fmt.Fprintf(&b, "- **Dataset:** %s\n", r.Mirror)

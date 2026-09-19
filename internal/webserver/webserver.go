@@ -276,7 +276,7 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 	// No character cap: a page shows the document whole, which is the difference between this path
 	// and the tool's (see mcpserver.Server.lookup).
 	res, err := h.srv.LookupPage(mcpserver.LookupRequest{
-		Document: ref, Address: addr, AsOf: q.Get("as_of"),
+		Document: ref, Address: addr, AsOf: q.Get("as_of"), Language: "da",
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -297,8 +297,7 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 		Addr:           addr,
 		FullLink:       documentLink(orString(res.Accession, res.ELIURL), ""),
 	}
-	page.AmendmentsNote = amendmentsNoteInDanish(res)
-	page.Warnings = withoutAmendmentSentence(page.Warnings)
+	page.AmendmentsNote = res.AmendmentsNote
 	page.PageTitle = res.Citation
 	if addr != "" {
 		// A tab that says only the law's title is useless with twenty provision tabs open.
@@ -534,32 +533,4 @@ func orString(primary, fallback string) string {
 		return primary
 	}
 	return fallback
-}
-
-// amendmentsNoteInDanish says what the document's own metadata claims about later documents, in
-// the language of the page. The English sentence stays in the MCP answer, where it belongs to the
-// documented contract; a Danish reading page that mixes languages gives the reader two places to
-// be careful, and the fact is not an error — it is the register's own metadata, which is why it
-// prints as a note and not a warning.
-func amendmentsNoteInDanish(res *mcpserver.LookupResult) string {
-	if res.Amendments == "" {
-		return ""
-	}
-	return "Ifølge dokumentets egne metadata ændres det af " + res.Amendments +
-		". Teksten her er denne accession, som den er publiceret; spørg med as_of for den tekst, der gjaldt på et givent tidspunkt."
-}
-
-// withoutAmendmentSentence drops the English sentence this page now states in Danish. It matches a
-// phrase rather than a kind because the server's warnings are plain strings: when the answer grows
-// typed notes, this function and amendmentsNoteInDanish should be deleted in the same commit, and
-// the page should render the structured field directly.
-func withoutAmendmentSentence(in []string) []string {
-	out := make([]string, 0, len(in))
-	for _, w := range in {
-		if strings.Contains(w, "amend it on or before") {
-			continue
-		}
-		out = append(out, w)
-	}
-	return out
 }

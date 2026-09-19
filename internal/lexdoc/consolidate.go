@@ -351,12 +351,14 @@ func (c *Content) applyOne(e Edit, out *Consolidation) {
 			// A replacement that delivers a run of paragraphs replaces the addressed one with
 			// the first and follows it with the rest. The tree reader stopped at the first.
 			prev := t.Provision
-			for _, extra := range e.NewProvisions[1:] {
-				d := cloneProvision(*extra)
-				if !c.InsertProvisionAfter(prev, &d) {
-					break
+			if len(e.NewProvisions) > 1 {
+				for _, extra := range e.NewProvisions[1:] {
+					d := cloneProvision(*extra)
+					if !c.InsertProvisionAfter(prev, &d) {
+						break
+					}
+					prev = &d
 				}
-				prev = &d
 			}
 			apply(t.String(), note)
 		}

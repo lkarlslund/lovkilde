@@ -123,29 +123,32 @@ func (v *View) AppliedCount() int {
 }
 
 // Trustworthy reports whether this view can be presented as complete: no change was
-// refused and no chain document was missing.
+// refused and no chain document was missing. Which of the two failed matters more than the
+// answer, so the causes are reported separately by MissingChain and Unresolved.
 func (v *View) Trustworthy() bool {
-	for _, c := range v.Chain {
-		if !c.Effective.After(v.AsOf) && !c.Found {
-			return false
-		}
-	}
-	return len(v.Unresolved) == 0
+	return len(v.MissingChain()) == 0 && len(v.Unresolved) == 0
 }
 
 func (v *View) String() string {
 	return fmt.Sprintf("view of %s as of %s: %d edits applied, %d unresolved, %d chain documents missing",
-		v.Accession, v.AsOf.Format(time.DateOnly), len(v.Applied), len(v.Unresolved), v.missingChain())
+		v.Accession, v.AsOf.Format(time.DateOnly), len(v.Applied), len(v.Unresolved), len(v.MissingChain()))
 }
 
-func (v *View) missingChain() int {
-	n := 0
+// MissingChain are the amending acts that take effect on or before the asked date and are named
+// by this law's own metadata, but whose text the mirror does not hold.
+//
+// The list is usually empty: a chain normally arrives whole. When a view is still not complete
+// that is the distinction a reader needs, because a document missing from the mirror and an edit
+// the engine refused to guess at are different problems with different remedies, and only one of
+// them is a gap in what we hold.
+func (v *View) MissingChain() []Version {
+	var out []Version
 	for _, c := range v.Chain {
 		if !c.Found && !c.Effective.After(v.AsOf) {
-			n++
+			out = append(out, c)
 		}
 	}
-	return n
+	return out
 }
 
 // Text renders the derived law as readable text.
@@ -337,9 +340,24 @@ func (v *View) applyOne(e Edit) {
 		}
 		for _, t := range targets {
 			note := ""
-			if !t.replaceProvision(e.NewNodes[0]) {
+			later, ok := t.replaceProvision(e.NewNodes[0], e.NewNodes[1:])
+			if !ok {
 				v.reject(e, fmt.Sprintf("could not replace %s", describe(t)))
 				return
+			}
+			// Further paragraphs the same change delivered are new provisions and follow this
+			// one. Placing them from the last keeps them in reading order without relocating
+			// each one: "§§ 21-23 affattes således" is a single change in the register's own
+			// counting, and until now only § 21 of it arrived.
+			placedAll := true
+			for i := len(later) - 1; i >= 0; i-- {
+				if !insertAfter(t, later[i]) {
+					placedAll = false
+					break
+				}
+			}
+			if !placedAll {
+				note = "the further paragraphs this change brought could not all be placed"
 			}
 			if after := lexdoc.FirstNumber(t.Node.Elem("Explicatus").TextOrNull()); after != "" && after != t.Number {
 				note = fmt.Sprintf("numbering moved: was %s, new text is numbered %s", t.Number, after)
@@ -796,19 +814,48 @@ func (s *Section) appendText(text string) bool {
 }
 
 // replaceProvision swaps a provision's content for the amendment's new markup.
-func (s *Section) replaceProvision(src *Node) bool {
+// replaceProvision swaps a provision's content for what an amending act delivered.
+//
+// The act delivers the new wording as a run of siblings: the paragraph, then its subsections,
+// sometimes then further paragraphs. Only the paragraph's children belong inside this provision,
+// so the rest comes back for the caller to place after it. Taking the first node and dropping
+// the run is how a rewritten § 21 arrived as one sentence, its numbered items and its stk. 2
+// left behind — and every later act citing § 21, stk. 2 was then refused for citing something
+// that no longer existed.
+func (s *Section) replaceProvision(src *Node, rest []*Node) ([]*Node, bool) {
 	if src == nil || s.Node == nil {
-		return false
+		return nil, false
 	}
-	kids := make([]*Node, 0, len(src.Elems)+1)
+	kids := make([]*Node, 0, len(src.Elems)+len(rest))
 	if src.Name != "Explicatus" {
 		for _, c := range src.Elems {
 			kids = append(kids, donorClone(c))
 		}
 	}
+	var later []*Node
+	for _, n := range rest {
+		switch {
+		case n == nil:
+		case isProvisionElement(n):
+			later = append(later, n)
+		default:
+			kids = append(kids, donorClone(n))
+		}
+	}
 	s.Node.Elems = kids
 	s.Node.Runs = make([]string, len(kids)+1)
-	return true
+	return later, true
+}
+
+// isProvisionElement reports a top-level element that starts a new paragraph of the law rather
+// than continuing the one before it. The register uses four spellings for the same thing,
+// depending on where in an amending act the paragraph sits.
+func isProvisionElement(n *Node) bool {
+	switch n.Name {
+	case "Paragraf", "TilParagraf", "AendringCentreretParagraf", "IkraftCentreretParagraf":
+		return true
+	}
+	return false
 }
 
 // deleteProvision removes a provision from its container.

@@ -180,21 +180,39 @@ func donation(nodes []*Node) (provisions []*lexdoc.Provision, stykker [][]lexdoc
 		spanStart: map[*Node]int{},
 		spanEnd:   map[*Node]int{},
 	}
+	// last is the provision this change has assembled so far. Subsections and loose lines that
+	// follow it in the act's own order belong to it, not to a side bucket.
+	var last *lexdoc.Provision
 	for _, n := range nodes {
-		switch n.Name {
-		case "Stk":
-			stykker = append(stykker, b.render(nil, donorClone(n), true))
-		case "Paragraf", "TilParagraf", "AendringCentreretParagraf", "IkraftCentreretParagraf":
+		switch {
+		case n.Name == "Stk":
+			segs := b.render(nil, donorClone(n), true)
+			if last == nil {
+				stykker = append(stykker, segs)
+				continue
+			}
+			// The subsection follows a paragraph this change already brought, so it belongs to
+			// that paragraph's provision. Keeping it in a side bucket is what let a rewritten
+			// § 21 arrive as one sentence: the replacement path reads the provision and leaves
+			// the bucket where the subsection was born.
+			nr := lexdoc.Atoi(lexdoc.FirstNumber(n.Attrs["localId"]))
+			last.AppendStykke(segs, nr)
+		case isProvisionElement(n):
 			p := b.provision(donorClone(n))
 			provisions = append(provisions, &p)
-		case "Kapitel", "Afsnit":
+			last = &p
+		case n.Name == "Kapitel", n.Name == "Afsnit":
 			skip = "the change brings a chapter, which this model cannot place yet"
-		case "ParagrafGruppe", "Rubrica", "KapitelOverskrift", "ParagrafOverskrift":
+		case n.Name == "ParagrafGruppe", n.Name == "Rubrica", n.Name == "KapitelOverskrift", n.Name == "ParagrafOverskrift":
 			skip = "the change brings a heading of its own, which this model cannot place yet"
-		case "Indledning":
+		case n.Name == "Indledning":
 			skip = "the change brings the document's own indledning, which this model cannot place yet"
 		default:
 			if text := Squeeze(DisplayText(n)); text != "" {
+				if last != nil {
+					last.Append(text)
+					continue
+				}
 				prose = append(prose, text)
 			}
 		}
