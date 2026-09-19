@@ -62,9 +62,21 @@ func main() {
 		checkN   = flag.Int("check", 10, "pairs to reconstruct and classify end to end")
 		workers  = flag.Int("workers", 12, "documents to parse in parallel")
 		minProvs = flag.Int("min-provisions", 5, "smallest base worth pairing")
+		pairsIn  = flag.String("pairs", "", "check these base=successor pairs and stop, skipping the census")
 		root     = flag.String("root", "data/xml", "archive root")
 	)
 	flag.Parse()
+
+	// A named pair is worth checking whatever its overlap: the census is for finding pairs, and
+	// once one is known, the interesting provisions are exactly the ones that did not copy.
+	var given []pair
+	for _, spec := range strings.Split(*pairsIn, ",") {
+		base, next, ok := strings.Cut(strings.TrimSpace(spec), "=")
+		if !ok {
+			continue
+		}
+		given = append(given, pair{base: base, next: next})
+	}
 
 	start := time.Now()
 	a, err := lexdania.Scan(context.Background(), *root)
@@ -72,6 +84,11 @@ func main() {
 		fmt.Println("scan:", err)
 		os.Exit(1)
 	}
+	if len(given) > 0 {
+		checkPairs(a, given, 0, start)
+		return
+	}
+
 	var laws []lexdania.Entry
 	for _, e := range a.Entries() {
 		switch e.Kind {
@@ -204,17 +221,22 @@ func main() {
 		fmt.Printf("   %5.1f%%  %4d prov  %2d earlier  %s -> %s  %s\n",
 			p.overlap*100, p.baseProvs, p.earlier, p.base, p.next, cut(p.baseTitle, 52))
 	}
-	if *checkN == 0 {
+	checkPairs(a, pairs, *checkN, start)
+}
+
+// checkPairs reconstructs each pair and prints the verdict the library reached. limit 0 means
+// every pair given.
+func checkPairs(a *lexdania.Archive, pairs []pair, limit int, start time.Time) {
+	if len(pairs) == 0 {
 		return
 	}
-
 	// Phase 2: reconstruct and classify, through the same code the regression test uses.
 	fmt.Printf("\nphase 2: the base as it stood the day before the successor takes effect, then every\n" +
 		"provision of the successor classified. promulgated and changed are outside our control;\n" +
 		"consolidated is what we must have produced; digits-only is the numbering signature.\n\n")
 	totals := map[string]int{}
 	for i, p := range pairs {
-		if i >= *checkN {
+		if limit > 0 && i >= limit {
 			break
 		}
 		v, ok := lexdania.GoldenPair(a, p.base, p.next)
@@ -228,12 +250,16 @@ func main() {
 		totals["digits-only"] += v.DigitsOnly
 		totals["changed"] += v.Changed
 		for _, s := range v.Suspicious {
-			fmt.Printf("     theirs [%s]\n       %s\n     ours   [%s]\n       %s\n",
+			fmt.Printf("     %s via %s\n     theirs [%s]\n       %s\n     ours   [%s]\n       %s\n",
+				s.Kind, s.Target,
 				strings.Join(s.TheirRuns, " "), cut(s.Successor, 140),
 				strings.Join(s.OurRuns, " "), cut(s.Ours, 140))
 		}
 	}
-	n := min(*checkN, len(pairs))
+	n := len(pairs)
+	if limit > 0 {
+		n = min(limit, n)
+	}
 	fmt.Printf("\ntotals over %d pairs: promulgated %d, consolidated %d, digits-only %d, changed %d\n",
 		n, totals["promulgated"], totals["consolidated"], totals["digits-only"], totals["changed"])
 	if t := totals["consolidated"] + totals["digits-only"] + totals["changed"]; t > 0 {
