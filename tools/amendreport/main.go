@@ -79,6 +79,30 @@ func main() {
 	}
 	sort.Slice(keys, func(i, j int) bool { return len(by[keys[i]]) > len(by[keys[j]]) })
 
+	// Which version is wrong? A refused edit is missing from every text dated on or after the
+	// effective date of the act it came from, so the refusals are placed on the timeline here
+	// rather than only grouped by reason: the base text is right by construction, and damage
+	// accumulates forwards. `go run ./tools/amendreport B20190139905 2026-09-19`.
+	bySrc := map[string]int{}
+	for _, us := range by {
+		for _, u := range us {
+			bySrc[u.Edit.Source]++
+		}
+	}
+	fmt.Println("\nREFUSED BY AMENDING ACT (which texts the loss is missing from)")
+	fmt.Printf("  %-14s %-11s %8s %8s\n", "act", "effective", "applied", "refused")
+	appliedBySrc := map[string]int{}
+	for _, ap := range v.Applied {
+		appliedBySrc[ap.Edit.Source]++
+	}
+	cum := 0
+	for _, c := range v.Chain {
+		n := bySrc[c.Accession]
+		cum += n
+		fmt.Printf("  %-14s %-11s %8d %8d\n", c.Accession, c.Effective.Format("2006-01-02"), appliedBySrc[c.Accession], n)
+	}
+	fmt.Printf("  cumulative refused edits at the end of the chain: %d\n", cum)
+
 	fmt.Println("\nREFUSED, grouped by reason")
 	for _, k := range keys {
 		fmt.Printf("\n  [%d] %s\n", len(by[k]), cut(k, 100))
