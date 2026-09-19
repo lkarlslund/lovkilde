@@ -1201,6 +1201,77 @@ still moving and getting it subtly wrong produces a server that "works with my c
 The sandbox cannot reach the module checksum database, so the recorded `go.sum` hashes
 were compared against the public `sum.golang.org` lookup for `v1.8.0` and match.
 
+### Reading the mirror in a browser: `retsin serve`
+
+```bash
+retsin serve                        # http://127.0.0.1:8791 — pages and MCP on one port
+retsin serve --addr 127.0.0.1:9000 --verbose-requests
+```
+
+`retsin mcp` serves one agent that spawned it. This command is for the people who read the
+same documents: the same serving core, the same rules (the file archive is all it opens, so
+a nightly crawl is never locked out of the state store), one port, pages at `/` and the MCP
+endpoint at `/mcp`. No JavaScript, no cookies, nothing that remembers a visitor — which also
+means a document cannot run anything in the browser that reads it, only say things.
+
+| Path | |
+|---|---|
+| `/` | one search box, four queries to start from, and when the mirror was last checked |
+| `/search?q=` | hits and gaps, in the syntax `retsin search` takes: `AND`, `-word`, `"two words"`, `art:lov`, `year:1987-2000` |
+| `/browse` | everything the mirror holds, by kind, year and initial letter, 200 at a time |
+| `/dok?ref=` | the text, with a table of contents in front. `ref` is an ELI path or an accession; `&addr=§ 267, stk. 3` shows one provision inside the whole |
+| `/status` | counts, index time, which fast paths are off and how to turn them on |
+| `/mcp` | the MCP endpoint — an agent and a person get the same text out of the same process |
+
+**Everything naming a document is a link, and the link carries its address.** Three kinds:
+
+- **The frame around it** — what this document changes, what changed it, when each piece took
+  effect. Only documents the mirror holds become links; the ones it does not are named with
+  the reason ("changed by … — text not held"). A line carrying its reason beats either a dead
+  link or a quietly missing one.
+- **The provision** — every heading gets an `id` and the table of contents points at those
+  ids, so `…#kapitel-3`, `…#bilag-2`, `…#ikraft` are URLs you can send to someone.
+- **The sources** — the publisher's own ELI URI, and for a law the earliest version the
+  archive holds.
+
+The ids took thought, because the publisher's numbering is not a tree of unique keys. A
+document gives its pieces printed numbers, but a change-only bekendtgørelse often numbers
+only its paragraphs and has no top-level number at all, and bilag repeat. So one
+reading-order walk over the document assigns every id, from the printed number when the
+document has one and from its position when it has none — the fallback form is
+`kind--u<path>`, whose double dash is unreachable by the slug that turns printed numbers into
+ids, so a fallback can never collide with a real number. `internal/lexdoc/html_test.go`
+asserts that on a document built to have nothing numbered: two parts and three provisions,
+none with a number, and every `id=` appearing exactly once.
+
+Measured with a link-following crawl of the running server over the real mirror (191,429
+documents, 4,493,745 index terms, no artifact, so text came from parsing XML):
+
+| | |
+|---|---|
+| requests, of which 400 document pages | 2,341, **0** non-200 |
+| document HTML | median 18 KiB, largest 1,248 KiB, 17 MiB in the sample |
+| ids marked | 8,295, on **0** pages where one was repeated |
+| contents links on 60 whole documents | 2,075 resolving on the page they were on, **0** missing |
+| contents links on 22 narrowed views | 907 resolving on the page they name, **0** missing, **0** ending in a bare `#` |
+| pages with a live `<script>` | **0** |
+| a document page | 2–29 ms for the small documents in that sample, 53 ms for a 765 KB one; a search 78–1,417 ms; warm file cache |
+
+The first version of that crawl found two bugs the fixture tests had missed, and both are
+gone: 522 contents links pointed at an anchor the page did not hold (a narrowed view shows
+one provision but lists the whole document, so its table of contents has to point *forward*
+to the page that holds each part), and 2 contents links had an empty anchor because nothing
+had assigned those pieces an id at all.
+
+Text on screen is the text the tools answer with. The page is produced by the same single
+walk over the document model, in a third mode, and `TestMarkdownShape` still passes
+byte-identically — markdown and plain text did not change shape to make room for HTML. MCP
+clients get `Text` and never the HTML. That the endpoint on this port is real MCP and not
+HTML-shaped homage is proven by a test that drives it with the official SDK client.
+
+The port has no authentication, which is why the default is `127.0.0.1`: whoever can reach
+the port can read the corpus.
+
 ### Full-text search: `retsin index build`, and what the measurement decided
 
 ```bash
@@ -1353,6 +1424,18 @@ the model keeps one segment slice per provision and its subsections and conditio
 over it. The artifact is argued for on lookup speed, but it does not cost size either — and
 the difference between those two claims is a measurement rather than a hope.
 
+One limit is not met yet: a whole-mirror build does not finish. `retsin artifact build` over
+all 191,429 documents stopped after 2 m 7 s on `202223L00057`, whose model is 16,356,009 bytes
+of JSON — over the 8,388,608-byte frame boundary the writer refuses. That boundary is a chosen
+invariant ("documents are far smaller"), not a limit of the format: the seek table records each
+frame's sizes as `uint32`, so it represents frames up to 4 GiB. It is not one document either —
+the mirror holds XML up to 88,120,531 bytes (`ft/2024/202412L00023.xml`) — and `Close` checks
+the document table against the same boundary, so 191,429 rows at roughly a hundred bytes of
+JSON each is another crossing, that one arithmetic rather than measured. The ~1.07 GB figure
+above is therefore a projection from a 1,000-document sample, not a build that has been seen to
+finish. Until it is settled, `retsin mcp` and `retsin serve` run without the artifact, read text
+by parsing XML, and say so in their status line.
+
 ### Serving from the artifact
 
 `retsin mcp` reads `data/artifact.bin` when it is there, and says in every answer's dataset
@@ -1392,6 +1475,14 @@ answers and 1,000 snippets served through both paths, none differed. The payload
 of that is −1 µs of the 105 µs an artifact read costs — for documents of a few kilobytes it saves
 the seek and one frame decompression, so the win is over the XML parse and not over the cache,
 which is worth saying out loud because the cache is the part that looks like the optimisation.
+
+The browser's rendering nearly cost the agents who never see it. Building the page HTML inside
+every answer added 17 µs of p50 to a whole-document lookup and 18 µs to an addressed one
+(90 → 73 µs and 68 → 50 µs, two runs of this bench on the same 1,000 documents one morning);
+moving that render behind `LookupPage`, which the web server calls and the MCP tool does not,
+brought the path back to within 2 µs of the figures recorded the day before it (75 and 52 µs,
+a different morning and so a comparison to read as noise, not as a measurement). The later run
+is kept as `testdata/serve-baseline-20260919.txt`.
 
 ### Text provenance: which documents have real text, and where it came from
 

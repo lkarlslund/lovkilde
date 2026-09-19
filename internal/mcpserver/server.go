@@ -3,8 +3,10 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -44,6 +46,25 @@ type Server struct {
 	// means the server says its horizon is unknown rather than inventing one from
 	// file mtimes, which a bulk crawl makes meaningless.
 	SweepStampPath string
+
+	// nowFunc answers "what time is it" for the horizon. It is a field rather than a call to
+	// time.Now so a test can pin the clock: several of this package's claims are about a date
+	// measured from today, and a test that hard-codes today is correct for exactly one day —
+	// which is how two horizon tests came to disagree with each other the moment the date moved.
+	nowFunc func() time.Time
+
+	// mcpHandler is the built HTTP transport, made once on first use. See MCPHandler for why it
+	// has to be the same one every time, and why the building is guarded rather than checked.
+	mcpOnce    sync.Once
+	mcpHandler http.Handler
+}
+
+// clock is the server's idea of now: time.Now, unless a test pinned it.
+func (s *Server) clock() time.Time {
+	if s.nowFunc != nil {
+		return s.nowFunc()
+	}
+	return time.Now()
 }
 
 // New indexes the archive for serving. Scanning 191,393 documents takes about a second
@@ -204,6 +225,15 @@ type lookupInput struct {
 // the pipe. Everything this process writes to stdout is protocol; logs must go to
 // stderr, which is why the command that calls this keeps its logger on stderr.
 func (s *Server) Serve(ctx context.Context) error {
+	return s.mcpServer().Run(ctx, &mcp.StdioTransport{})
+}
+
+// mcpServer builds the protocol server and its tool list. Both transports — the stdio
+// pipe and the HTTP endpoint — ask for the same one, so a client that connects over the
+// network cannot be offered a different archive than a client that was spawned onto a
+// pipe. Which tools exist is still decided by what this instance actually has: search is
+// added only when an index is loaded.
+func (s *Server) mcpServer() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "retsin",
 		Version: s.version,
@@ -232,7 +262,36 @@ func (s *Server) Serve(ctx context.Context) error {
 				"provision, and hits then report how many words apart they sat.",
 		}, s.searchTool)
 	}
-	return srv.Run(ctx, &mcp.StdioTransport{})
+	return srv
+}
+
+// MCPHandler serves the same tools over the streamable HTTP transport, so a client that
+// connects to a URL is served the same archive as one spawned onto a pipe. One protocol
+// server is shared by every request, which is what the SDK expects: it keeps no per-request
+// state, and running stateless would break clients that hold a session open.
+//
+// The endpoint is read-only for the same reason the stdio one is: every tool here answers a
+// question about someone else's register.
+//
+// The handler is built once and shared, because a stateful streamable handler keeps its session
+// map in itself: hand out a new one per request and the server answers "initialize" happily, then
+// answers "session not found" to the very next request from that same client. That failure is
+// worth the memo, since it arrives at the client's first tool call rather than at connect time.
+// The build is guarded by a Once rather than tested for nil, because a serving process answers
+// requests in parallel and two handlers built in the same instant would split the sessions
+// between them.
+//
+// It is built on first use rather than in New because the tool list depends on what the instance
+// has been given by then: search exists only if an index was loaded.
+func (s *Server) MCPHandler() http.Handler {
+	s.mcpOnce.Do(func() {
+		// One protocol server behind one handler: the tool list is decided once, by what this
+		// instance actually has, so a client on the network cannot be offered a different archive or
+		// a different tool set than a client on a pipe.
+		proto := s.mcpServer()
+		s.mcpHandler = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return proto }, nil)
+	})
+	return s.mcpHandler
 }
 
 // searchInput is the search tool's argument object.

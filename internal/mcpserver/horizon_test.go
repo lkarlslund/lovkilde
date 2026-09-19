@@ -164,8 +164,18 @@ func serverWithAnchoredDoc(t *testing.T, eff string) *Server {
 	}
 	s := New(a, "https://www.retsinformation.dk", "test")
 	s.SweepStampPath = stampAt(t, root, time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC))
+	// The clock is pinned rather than read. These fixtures name absolute dates, and the answer
+	// sorts amendments against today, so a test that reads the real clock is only correct on the
+	// day it was written — which is how the tests below agreed with the code on 2026-09-18 and
+	// fell over the day after.
+	s.nowFunc = func() time.Time { return anchoredNow }
 	return s
 }
+
+// anchoredNow is the moment these fixtures pretend the question was asked: one day after the
+// collection pass they describe. Deliberately not the same date as the pull, so an answer that
+// confuses "today" with "how current the data is" fails a test instead of passing by coincidence.
+var anchoredNow = time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
 
 func TestLookupNamesAmendmentsAlreadyEffective(t *testing.T) {
 	s := serverWithAnchoredDoc(t, "2026-01-01")
@@ -177,7 +187,7 @@ func TestLookupNamesAmendmentsAlreadyEffective(t *testing.T) {
 		t.Errorf("the amendment named by the document's own metadata is missing: %q", res.Amendments)
 	}
 	joined := strings.ToLower(strings.Join(res.Warnings, " "))
-	if !strings.Contains(joined, "as_of=2026-09-18") {
+	if !strings.Contains(joined, "as_of="+anchoredNow.Format("2006-01-02")) {
 		t.Errorf("the answer does not offer the consolidated reading for the date it names:\n%s",
 			strings.Join(res.Warnings, "\n"))
 	}
@@ -189,7 +199,7 @@ func TestLookupSeparatesAmendmentsNotYetEffective(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.Amendments, "all effective after 2026-09-18") ||
+	if !strings.Contains(res.Amendments, "all effective after "+anchoredNow.Format("2006-01-02")) ||
 		!strings.Contains(res.Amendments, "earliest 2027-06-05") {
 		t.Errorf("a future amendment is not placed on the timeline: %q", res.Amendments)
 	}
@@ -204,7 +214,7 @@ func TestLookupSeparatesAmendmentsNotYetEffective(t *testing.T) {
 // compares with Before() rather than !After() would present the pre-amendment text as
 // current for the whole of the day the new text takes effect.
 func TestLookupCountsAnAmendmentEffectiveTodayAsEffective(t *testing.T) {
-	today := time.Now().Format("2006-01-02")
+	today := anchoredNow.Format("2006-01-02")
 	s := serverWithAnchoredDoc(t, today)
 	res, err := s.Lookup(LookupRequest{Document: accCanon})
 	if err != nil {

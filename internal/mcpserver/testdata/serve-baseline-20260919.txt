@@ -1,0 +1,33 @@
+# serving path cost: parsing the publisher's XML vs the compiled artifact
+# generated: 2026-09-19 09:50:21
+# reproduce: RETSIN_SERVE_BENCH=1 RETSIN_SERVE_BENCH_DOCS=1000 go test ./internal/mcpserver -run TestServingBaselineCost -v
+# mirror: 191429 entries scanned in 1.517s; 1000 documents queried, 1000 answered text
+
+## by parse (the path serving had)
+  open+parse+model (the share the artifact removes): p50 437µs, p95 7.936ms, p99 24.345ms, mean 1.919ms (n=1000)
+  whole-document lookup:                            p50 477µs, p95 7.894ms, p99 24.421ms, mean 1.985ms (n=1000)
+  addressed lookup:                                 p50 451µs, p95 7.755ms, p99 24.2ms, mean 1.975ms (n=1000)
+  one hit's unit text (snippet, proximity):         p50 447µs, p95 7.666ms, p99 23.751ms, mean 1.919ms (n=1000)
+
+## by artifact (the path serving has when one is built)
+  whole-document lookup:                            p50 73µs, p95 764µs, p99 2.078ms, mean 201µs (n=1000)
+  addressed lookup:                                 p50 50µs, p95 627µs, p99 1.793ms, mean 157µs (n=1000)
+  one hit's unit text, cold:                        p50 33µs, p95 398µs, p99 1.257ms, mean 106µs (n=1000)
+  one hit's unit text, already read this query:     p50 32µs, p95 402µs, p99 1.271ms, mean 106µs (n=1000)
+  artifact: 1000 documents, 7.6 MB, built in 2.405s; cache held 1000 payloads in 34.1 MB of 1048.6 MB, 4000 hits, 1000 misses, 0 drops
+
+## the difference, same run and same sample
+  whole-document lookup: p50 478µs -> 74µs (6.5x), mean 1.985ms -> 201µs (9.9x)
+  addressed lookup:      p50 451µs -> 50µs (9.0x), mean 1.975ms -> 157µs (12.6x)
+  unit text per hit:     p50 449µs -> 33µs cold (13.6x), 32µs when the same document was already read this query
+  payload cache saves the seek and one frame decompression: 0.00µs of the 106µs an artifact read costs.
+    On documents this size the win is over the XML parse, not over the cache.
+  answers differing between the two paths: 0 of 2000, snippets: 0 of 1000
+  not moved: an as_of answer still consolidates and parses, pending M012T011
+
+## addresses the shipped unitiser cites
+  1000 of 1000 queried documents yielded a cited address; 0 of those (0%) do not open through lookup, on either path
+
+  startup index build is 1.517s over 191429 documents, which is why it is rebuilt
+  at boot rather than cached; the cost a query feels is the read, and that
+  is what the artifact moved.

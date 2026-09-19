@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,6 +20,87 @@ import (
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
+
+// serveOptions are the settings a serving process takes. One struct because every serving
+// command loads the same three things the same way: the file archive, the search index, and the
+// compiled artifact. A flag that meant something different in two commands would be the bug.
+type serveOptions struct {
+	MaxChars        int
+	Index           string
+	Artifact        string
+	ArtifactCacheMB int
+}
+
+// openServingServer loads what a serving process reads and nothing it can write.
+//
+// It deliberately does not use the shared runtime. The runtime opens the Badger state store,
+// which locks it: a serving process would then keep the nightly crawl out, or fail to start
+// while the crawl holds the lock. Serving needs the file archive and nothing else, so that is
+// all this opens — and a process that cannot write is a much easier thing to trust in front of
+// a legal corpus.
+//
+// Two of the three loads can downgrade and one cannot. A missing index or artifact is a
+// degradation the operator did not ask for by name, so the server says what it lost and keeps
+// going. A file that is there but unreadable is an error: it was named, and serving answers
+// compiled from something else is not a degradation anyone should miss.
+func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) (*mcpserver.Server, error) {
+	cfg, err := resolve()
+	if err != nil {
+		return nil, err
+	}
+	a, err := lexdania.Scan(ctx, cfg.XMLDir())
+	if err != nil {
+		return nil, err
+	}
+	if a.Skipped > 0 {
+		slog.Warn("archive scan skipped unreadable files", "skipped", a.Skipped)
+	}
+	srv := mcpserver.New(a, cfg.SiteBase, version)
+	// The horizon comes from the file the collection pass publishes, not from this process's
+	// start time or the archive's mtimes: the server must state how current the data is, not
+	// how long it has been running.
+	srv.SweepStampPath = cfg.SweepStampPath()
+	if o.MaxChars > 0 {
+		srv.MaxChars = o.MaxChars
+	}
+	// Search is offered only if its index is actually there. Starting a server that advertises
+	// a tool it cannot honour would leave the client to discover that mid-conversation, so an
+	// unreadable index is an error here (the operator asked for it by name) while a missing one
+	// is a logged downgrade to lookup.
+	index := o.Index
+	if index == "" {
+		index = cfg.DataDir + "/" + indexDefaultName
+	}
+	idx, err := search.Load(index)
+	switch {
+	case err == nil:
+		srv.UseIndex(idx)
+		slog.Info("search index loaded", "path", index, "terms", len(idx.Terms), "documents", len(idx.Docs))
+	case os.IsNotExist(err):
+		slog.Warn("no search index, serving lookup only", "looked_for", index, "remedy", "run `retsin index build`")
+	default:
+		return nil, fmt.Errorf("search index %s: %w — rebuild it with `retsin index build`, or omit --index to serve lookups only", index, err)
+	}
+	// Document text comes from the artifact when one is there. A missing one downgrades to
+	// parsing the XML — correct, slower, and named in the status line a client reads — while an
+	// artifact from another build is an error: the operator asked for that file by name, and
+	// serving a model compiled from other code is not a degradation anyone should miss.
+	artifact := o.Artifact
+	if artifact == "" {
+		artifact = cfg.DataDir + "/" + artifactDefaultName
+	}
+	err = srv.UseArtifact(artifact, int64(o.ArtifactCacheMB)<<20)
+	switch {
+	case err == nil:
+		slog.Info("serving document text from the compiled artifact", "path", artifact)
+	case os.IsNotExist(err):
+		slog.Warn("no compiled artifact, serving lookups by parsing XML",
+			"looked_for", artifact, "remedy", "run `retsin artifact build`")
+	default:
+		return nil, err
+	}
+	return srv, nil
+}
 
 // configFunc resolves the validated flags without opening any storage.
 type configFunc func() (config.Config, error)
@@ -64,65 +146,16 @@ another revision's meaning.
 Stdout is reserved for the protocol; logs go to stderr either way.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := resolve()
+			srv, err := openServingServer(cmd.Context(), resolve, serveOptions{
+				MaxChars: maxChars, Index: index, Artifact: artifact, ArtifactCacheMB: artifactCacheMB,
+			})
 			if err != nil {
 				return err
 			}
-			ctx := cmd.Context()
-			a, err := lexdania.Scan(ctx, cfg.XMLDir())
-			if err != nil {
-				return err
-			}
-			if a.Skipped > 0 {
-				slog.Warn("archive scan skipped unreadable files", "skipped", a.Skipped)
-			}
-			srv := mcpserver.New(a, cfg.SiteBase, version)
-			// The horizon comes from the file the collection pass publishes, not from
-			// this process's start time or the archive's mtimes: the server must state
-			// how current the data is, not how long it has been running.
-			srv.SweepStampPath = cfg.SweepStampPath()
-			if maxChars > 0 {
-				srv.MaxChars = maxChars
-			}
-			// Search is offered only if its index is actually there. Starting a server
-			// that advertises a tool it cannot honour would leave the client to discover
-			// that mid-conversation, so an unreadable index is an error here (the operator
-			// asked for it by name) while a missing one is a logged downgrade to lookup.
-			if index == "" {
-				index = cfg.DataDir + "/" + indexDefaultName
-			}
-			idx, err := search.Load(index)
-			switch {
-			case err == nil:
-				srv.UseIndex(idx)
-				slog.Info("search index loaded", "path", index, "terms", len(idx.Terms), "documents", len(idx.Docs))
-			case os.IsNotExist(err):
-				slog.Warn("no search index, serving lookup only", "looked_for", index, "remedy", "run `retsin index build`")
-			default:
-				return fmt.Errorf("search index %s: %w — rebuild it with `retsin index build`, or omit --index to serve lookups only", index, err)
-			}
-			// Document text comes from the artifact when one is there. A missing one downgrades to
-			// parsing the XML — correct, slower, and named in the status line a client reads — while
-			// an artifact from another build is an error: the operator asked for that file by name,
-			// and serving a model compiled from other code is not a degradation anyone should miss.
-			if artifact == "" {
-				artifact = cfg.DataDir + "/" + artifactDefaultName
-			}
-			err = srv.UseArtifact(artifact, int64(artifactCacheMB)<<20)
-			switch {
-			case err == nil:
-				slog.Info("serving document text from the compiled artifact", "path", artifact)
-			case os.IsNotExist(err):
-				slog.Warn("no compiled artifact, serving lookups by parsing XML",
-					"looked_for", artifact, "remedy", "run `retsin artifact build`")
-			default:
-				return err
-			}
-
 			// One line of orientation on stderr: what a client is about to be served,
 			// and from where. A server that answers silently cannot be debugged.
 			fmt.Fprintf(gate.LogWriter(), "serving %s over stdio\n", srv.Status())
-			return srv.Serve(ctx)
+			return srv.Serve(cmd.Context())
 		},
 	}
 	cmd.Flags().IntVar(&maxChars, "max-chars", 0,

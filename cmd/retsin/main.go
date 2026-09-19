@@ -96,6 +96,7 @@ func newRootCmd() *cobra.Command {
 		fetchCmd(open),
 		sampleCmd(open),
 		mcpCmd(resolve),
+		serveCmd(resolve),
 		indexCmd(resolve),
 		artifactCmd(resolve),
 		searchCmd(resolve),

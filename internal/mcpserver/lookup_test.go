@@ -166,6 +166,35 @@ func TestLookupAddressSelectsOneProvision(t *testing.T) {
 	}
 }
 
+// The HTML a browser reads is a second render of the same document, and an MCP answer never
+// sends it, so the answer path must not build it: Lookup leaves the page fields alone and
+// LookupPage fills them from the same single read. What both paths must agree on is the text.
+func TestLookupLeavesThePageRenderingToThePage(t *testing.T) {
+	s := newTestServer(t)
+	req := LookupRequest{Document: "lta/1998/2", Address: "§ 1, stk. 1"}
+	plain, err := s.Lookup(req)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if plain.HTML != "" || len(plain.Contents) != 0 || plain.Anchor != "" {
+		t.Errorf("Lookup built page fields an agent never receives: %d bytes of HTML, %d contents lines, anchor %q",
+			len(plain.HTML), len(plain.Contents), plain.Anchor)
+	}
+	page, err := s.LookupPage(req)
+	if err != nil {
+		t.Fatalf("LookupPage: %v", err)
+	}
+	if page.Text != plain.Text {
+		t.Errorf("the page and the answer are not the same text:\n page: %q\n mcp:  %q", page.Text, plain.Text)
+	}
+	if !strings.Contains(page.HTML, "KANONISK TEKST") {
+		t.Errorf("page HTML lost the text it renders: %q", page.HTML)
+	}
+	if len(page.Contents) == 0 || page.Anchor == "" {
+		t.Errorf("page fields not built: %d contents lines, anchor %q", len(page.Contents), page.Anchor)
+	}
+}
+
 // Addressing has to work on recovered text as well as on the register's own, because
 // most of the mirror has nothing else. A body that can be read but not cited is the
 // failure the census counted 255,828 times, so this is the assertion that keeps the

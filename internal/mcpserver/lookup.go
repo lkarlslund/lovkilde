@@ -74,10 +74,44 @@ type LookupResult struct {
 	Text      string
 	Truncated bool
 	Warnings  []string
+
+	// HTML is the same content as Text, marked up for a browser: the same walk in lexdoc, with
+	// an id per citable thing so an address can be linked to. It is escaped where it is built,
+	// not here, and it is not what the MCP tools serve — those answer in Text. Empty when the
+	// answer was built by the as-of path, which still renders through the tree engine.
+	HTML string
+
+	// Contents is the document's own table of contents, with the ids HTML gave them.
+	Contents []ContentsEntry
+
+	// Anchor is where HTML put the provision this request addressed, empty when the address
+	// named nothing or no address was given.
+	Anchor string
 }
 
-// Lookup answers one request against the archive.
+// ContentsEntry is one line of a document's table of contents.
+type ContentsEntry struct {
+	ID    string
+	Label string
+	Level int
+}
+
+// Lookup answers one request against the archive, as an MCP client gets it: text, and no
+// markup. The browser's rendering is deliberately not built here — it is a second render of
+// the same document, and an agent that never receives it should not pay for it. Use
+// LookupPage where the HTML and table of contents are wanted.
 func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
+	return s.lookup(req, false)
+}
+
+// LookupPage answers the same request and also builds what a page needs: the HTML rendering,
+// the document's own table of contents, and the anchor the addressed provision was given. One
+// read of the file, one walk of the model, both outputs.
+func (s *Server) LookupPage(req LookupRequest) (*LookupResult, error) {
+	return s.lookup(req, true)
+}
+
+func (s *Server) lookup(req LookupRequest, wantHTML bool) (*LookupResult, error) {
 	entry, err := s.find(req.Document)
 	if err != nil {
 		return nil, err
@@ -114,15 +148,28 @@ func (s *Server) Lookup(req LookupRequest) (*LookupResult, error) {
 	// apart — it carries whatever the publisher's elements happened to be — and its
 	// subsection addressing is off by one in places, which is a citation error waiting to be
 	// quoted.
+	addr := lexdoc.ParseAddress(req.Address)
 	if req.Address != "" {
-		body, ok := m.Content.MarkdownProvisions(lexdoc.ParseAddress(req.Address))
+		body, ok := m.Content.MarkdownProvisions(addr)
 		if !ok {
 			return nil, fmt.Errorf("%s: nothing matches %q among %d provisions. Addresses are read in Danish citation form (§ 5, stk. 2); entry-into-force and transitional material is deliberately not addressable because its numbering restarts",
 				entry.Accession, req.Address, len(m.Content.Provisions()))
 		}
 		res.Text = body
+		if wantHTML {
+			res.HTML, _ = m.Content.HTMLProvisions(addr)
+			res.Anchor = m.Content.AnchorFor(addr)
+		}
 	} else {
 		res.Text = m.Content.Markdown()
+		if wantHTML {
+			res.HTML = m.Content.HTML()
+		}
+	}
+	if wantHTML {
+		for _, line := range m.Content.Contents() {
+			res.Contents = append(res.Contents, ContentsEntry{ID: line.ID, Label: line.Label, Level: line.Level})
+		}
 	}
 	res.Warnings = append(res.Warnings, m.Diagnostics.Warnings...)
 	res.truncate(req.MaxChars)
