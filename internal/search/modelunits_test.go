@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -240,7 +241,7 @@ func TestModelUnitsOverMirrorResolve(t *testing.T) {
 	if root == "" {
 		t.Skip("no mirror found: set RETSIN_MIRROR to the archive directory")
 	}
-	docs, units, err := Sample(root, 25)
+	docs, units, err := Sample(context.Background(), root, 25)
 	if err != nil {
 		t.Fatal(err)
 	}

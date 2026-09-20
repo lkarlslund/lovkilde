@@ -1,10 +1,67 @@
 package search
 
 import (
+	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 )
+
+// TestSearchOrderIsStableAcrossIdenticalQueries guards the tie-break in sortHits.
+//
+// Equal scores are the ordinary case rather than a corner: two provisions of one act
+// that repeat a word equally often in units of equal length score the same to the last
+// bit. Search collects its hits by iterating a map, so unless the comparison is a total
+// order, which page a reader gets depends on Go's randomised map order — the same query
+// answered differently a minute later, and with a limit below the tie count, different
+// *hits* rather than a different order. The tie-break on accession alone did not close
+// this, because provisions of one act share an accession.
+func TestSearchOrderIsStableAcrossIdenticalQueries(t *testing.T) {
+	var docs []DocMeta
+	var units []Unit
+	for i := range 4 {
+		docs = append(docs, DocMeta{
+			Accession: fmt.Sprintf("A20000000%02d5", i),
+			ELI:       fmt.Sprintf("eli/lta/2000/%d", i),
+			Kind:      "lta", Year: 2000, Number: i, Title: "Bekendtgørelse om hvidvask", Source: "xml",
+		})
+		// Three provisions per act, identical text in all of them. The provisions of one
+		// act share an accession, which is what the tie-break on accession cannot order;
+		// this is the shape that made the answer vary from process to process.
+		for _, addr := range []string{"§ 1", "§ 2", "§ 3"} {
+			units = append(units, Unit{Doc: i, Addr: addr, Text: "hvidvask af penge i selskaber"})
+		}
+	}
+	idx, err := Build(context.Background(), docs, units, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const limit = 10 // below the 12 tied hits, so an unstable order changes membership too
+	want := idx.Search(Query{Text: "hvidvask", Limit: limit})
+	if len(want) != limit {
+		t.Fatalf("got %d hits, want %d: the fixture has no ties to lose", len(want), limit)
+	}
+	for _, h := range want[1:] {
+		if h.Score != want[0].Score {
+			t.Fatalf("the fixture has no equal scores (%v vs %v), so it tests nothing", h.Score, want[0].Score)
+		}
+	}
+
+	for i := range 200 {
+		got := idx.Search(Query{Text: "hvidvask", Limit: limit})
+		if len(got) != len(want) {
+			t.Fatalf("run %d returned %d hits, want %d", i, len(got), len(want))
+		}
+		for j := range got {
+			if got[j].Unit != want[j].Unit || got[j].Addr != want[j].Addr {
+				t.Fatalf("run %d hit %d is unit %d %q, want unit %d %q: equal scores must still answer in one order",
+					i, j, got[j].Unit, got[j].Addr, want[j].Unit, want[j].Addr)
+			}
+		}
+	}
+}
 
 func TestParseQueryBindsOperatorsToWhatTheyJoin(t *testing.T) {
 	cases := []struct {
@@ -179,7 +236,7 @@ func TestQuotedSpanOverturnsAUnitThatMerelyContainsTheWords(t *testing.T) {
 		{Doc: 0, Addr: "§ 1", Text: "Affaldsplaner for offentlige veje."},
 		{Doc: 0, Addr: "§ 2", Text: "Kommunen skal udarbejde affaldsplaner, der omfatter alle kommunens veje, stier og parker, herunder også de veje, der udgør forbindelse mellem bydele, havneområder, industrigrunde og boligkvarterer, idet planen tillige skal beskrive vedligeholdelse, efterse, inddragelse af arealer, belysning, belægning, afvanding, skiltning og den øvrige trafikale afvikling i det åbne land samt i de offentlige områder."},
 	}
-	idx, err := Build(docs, units, Options{})
+	idx, err := Build(context.Background(), docs, units, Options{})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -237,7 +294,7 @@ func TestProximityGradePrefersAdjacentWords(t *testing.T) {
 		{Doc: 0, Addr: "§ 1", Text: "Affaldsplaner for offentlige veje."},
 		{Doc: 0, Addr: "§ 2", Text: "Affaldsplaner for veje skal vedtages af kommunalbestyrelsen inden udgangen af cadastralåret for at sikre den offentlige planlægning."},
 	}
-	idx, err := Build(docs, units, Options{})
+	idx, err := Build(context.Background(), docs, units, Options{})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -265,7 +322,7 @@ func TestProximityGradeRefusesToGuessWhatItCouldNotRead(t *testing.T) {
 		{Doc: 0, Addr: "§ 1", Text: "Der ydes erstatning for ekspropriering af jord."},
 		{Doc: 0, Addr: "§ 2", Text: "Ekspropriering af jord giver krav på erstatning efter reglerne."},
 	}
-	idx, err := Build(docs, units, Options{})
+	idx, err := Build(context.Background(), docs, units, Options{})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

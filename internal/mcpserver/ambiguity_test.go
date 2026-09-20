@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,7 +79,7 @@ func TestSearchPointsAtTheUniqueReference(t *testing.T) {
 		{Doc: 0, Addr: "§ 1", Text: "FØRSTE TRIN prøvesager"},
 		{Doc: 1, Addr: "§ 1", Text: "ANDET TRIN prøvesager"},
 	}
-	idx, err := search.Build(docs, units, search.Options{})
+	idx, err := search.Build(context.Background(), docs, units, search.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func TestSearchKeepsTheELIWhenItIsUnique(t *testing.T) {
 	docs := []search.DocMeta{
 		{Accession: accCanon, ELI: "eli/lta/1998/2", Kind: "lta", Year: 1998, Number: 2, Title: "Testlov", Source: "xml"},
 	}
-	idx, err := search.Build(docs, []search.Unit{{Doc: 0, Addr: "§ 1", Text: "KANONISK TEKST"}}, search.Options{})
+	idx, err := search.Build(context.Background(), docs, []search.Unit{{Doc: 0, Addr: "§ 1", Text: "KANONISK TEKST"}}, search.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

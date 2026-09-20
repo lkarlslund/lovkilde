@@ -1,6 +1,9 @@
 package search
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // TestStatusFilterSelectsWhatTheRegisterSays pins the three buckets a reader can choose, the
 // Danish spellings that mean them, and above all that the documents the register says nothing
@@ -8,7 +11,7 @@ import "testing"
 // would quietly turn "only current law" into "only law the register bothered to label", and the
 // two would come back with the same-looking result.
 func TestStatusFilterSelectsWhatTheRegisterSays(t *testing.T) {
-	idx, err := Build(
+	idx, err := Build(context.Background(),
 		[]DocMeta{
 			{Accession: "A20200001X", ELI: "eli/lta/2020/1", Kind: "lta", Year: 2020, Number: 1, Title: "Gældende lov", Source: "xml", Status: "Valid", TypeCode: "LOKDOK01"},
 			{Accession: "A19990002X", ELI: "eli/lta/1999/2", Kind: "lta", Year: 1999, Number: 2, Title: "Ophævet lov", Source: "xml", Status: "Historic", TypeCode: "LOKDOK01"},
@@ -54,7 +57,7 @@ func TestStatusFilterSelectsWhatTheRegisterSays(t *testing.T) {
 // TestTypeCodeFilterIsAPrefixBecauseTheMirrorHasNoNameTable: the codes are the publisher's, so
 // the filter matches a prefix and nothing pretends to know what a code means.
 func TestTypeCodeFilterIsAPrefix(t *testing.T) {
-	idx, err := Build(
+	idx, err := Build(context.Background(),
 		[]DocMeta{
 			{Accession: "A1", Kind: "lta", Year: 2020, Source: "xml", TypeCode: "LOKDOK01"},
 			{Accession: "A2", Kind: "lta", Year: 2020, Source: "xml", TypeCode: "KEN#LOKDOK23"},

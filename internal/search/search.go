@@ -295,7 +295,16 @@ func sortHits(hits []Hit) {
 		if hits[i].Score != hits[j].Score {
 			return hits[i].Score > hits[j].Score
 		}
-		return hits[i].Doc.Accession < hits[j].Doc.Accession
+		if a, b := hits[i].Doc.Accession, hits[j].Doc.Accession; a != b {
+			return a < b
+		}
+		// The unit index is the only key that is unique per hit, and it has to be there:
+		// provisions of one act share an accession, and two provisions that repeat a word
+		// equally often in units of equal length score the same to the last bit. Search
+		// collects hits by iterating a map, so without this the page a reader gets — and,
+		// when the tie count exceeds the limit, which provisions are on it at all — varies
+		// between two runs of the same query against the same index file.
+		return hits[i].Unit < hits[j].Unit
 	})
 }
 

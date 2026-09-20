@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -191,7 +192,7 @@ func TestMeasureIndex(t *testing.T) {
 	}
 
 	start := time.Now()
-	docs, units, err := Sample(root, perStratum)
+	docs, units, err := Sample(context.Background(), root, perStratum)
 	if err != nil {
 		t.Fatalf("sample: %v", err)
 	}
@@ -341,7 +342,7 @@ func TestMeasureIndex(t *testing.T) {
 
 	for _, v := range variants {
 		buildStart := time.Now()
-		idx, err := Build(docs, units, v.opts)
+		idx, err := Build(context.Background(), docs, units, v.opts)
 		if err != nil {
 			t.Fatalf("build %s: %v", v.name, err)
 		}
@@ -877,11 +878,11 @@ func wordCoverage(t *testing.T, docs []DocMeta, units []Unit, limit int) float64
 // query, on the same documents.
 func paritySection(t *testing.T, out *strings.Builder, docs []DocMeta, newUnits []Unit, checkpoint func()) {
 	oldUnits := sectionsUnits(t, docs)
-	oldIdx, err := Build(docs, oldUnits, Options{})
+	oldIdx, err := Build(context.Background(), docs, oldUnits, Options{})
 	if err != nil {
 		t.Fatalf("build the sections index for the parity run: %v", err)
 	}
-	newIdx, err := Build(docs, newUnits, Options{})
+	newIdx, err := Build(context.Background(), docs, newUnits, Options{})
 	if err != nil {
 		t.Fatalf("build the model index for the parity run: %v", err)
 	}

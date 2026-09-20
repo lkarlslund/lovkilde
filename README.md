@@ -1380,9 +1380,24 @@ keep the crawl and the server from running at the same time, and SQLite was alre
 considered and rejected for the state store (see *Storage* above) for reasons that apply
 at least as strongly here.
 
-Measured on the whole mirror, same day as the unit change: **191,429 documents →
-5,343,351 units, 4,493,745 terms, 863 MB, 9 m 39 s to build, 26.4 GB peak RSS** (21.3 GB
-peak heap). The index got *smaller* than the section-unit index it replaced — 938 MB,
+Measured on the whole mirror: **191,429 documents → 5,343,351 units, 4,493,745 terms,
+867,402,982 bytes, 1 m 19.7 s to build, 26.24 GB peak RSS**. The build is parallel, and
+each half was measured against its own serial run on the same machine on the same day:
+reading, modelling and cutting units went 6 m 37.4 s → 37.1 s, dictionary insertion and
+posting serialisation 3 m 51.3 s → 42.6 s, whole build 10 m 28.7 s → 1 m 19.7 s, a 7.9×
+speedup, at 26.14 GB → 26.24 GB peak RSS. The parallel build is not a different format:
+the two files differ in the header's build-time field and in no other byte, which
+`tools/idxcmp` checks by loading both and hashing the decoded tables rather than the
+compressed stream. Each stage's serial baseline is the same code run with `GOMAXPROCS=1`,
+so there is no second implementation to keep honest.
+
+The corpus run is the headline and the expensive one; the cheap instrument for the next
+change is a sample. `retsin index build --sample 300` — 12,797 documents chosen across
+every kind — runs the same code path in 30.4 s serial against 5.5 s parallel, and
+`GOMAXPROCS=1` versus default in one process is enough to catch a layout or ordering
+mistake without a twelve-minute round trip.
+
+The index got *smaller* than the section-unit index it replaced — 938 MB,
 5,505,907 units, 4,345,622 terms — because the section list posted a paragraph once as
 itself, once inside its section and once inside its chapter, and those copies were most of
 what the postings carried. Query latency over the 26 measured queries: p50 0.8 ms, p95
@@ -1531,9 +1546,21 @@ have more than 8 MiB of model JSON (the one that stopped the first build, `20222
 at roughly a hundred bytes each exceeds nearly three times over. So the artifact had never been
 buildable for the mirror it describes.
 
-The build that this fixes produced, measured: 191,429 documents in **6 m 49 s**, 6.9 GiB of model
+The build that this fixes produced, measured: 191,429 documents in 6 m 49 s, 6.9 GiB of model
 JSON into **1.58 GB** on disk, peak RSS 3.4 GB, and nothing left out — 0 entries without an
-accession, 0 duplicate, 0 unreadable. The ~1.07 GB projection above came from a 1,000-document
+accession, 0 duplicate, 0 unreadable. That build is now **1 m 4.1 s** on the same machine with the
+same corpus in the page cache, a 6.4× speedup. Opening, modelling, marshalling and compressing run
+on workers in chunks of 512 documents; the writing stays single-threaded and in mirror order
+because the file's byte offsets *are* its seek table, and a channel of depth one means the writer
+is emptying one chunk while the next is still compressing. The command logs the halves apart for
+exactly that reason — `compile=1m3.5s`, `write=588ms`, `tables=103ms` on the run that produced the
+figure above — and the output is the same file: `tools/artifactcmp` hashes every stored frame of
+both builds in document order and gets one digest (`59ea275fdfde245e`), with 0 documents of a
+different frame length and 0 of a different relative offset. The files are not byte-equal only
+because the header records which build wrote them, and the table after the frames stores offsets
+that move with it. One caveat the measurement made visible rather than by argument: this is a CPU
+speedup. The same binary with a cold page cache took 6 m 54.7 s, because then the build waits on
+14 GB of XML and sidecars rather than on itself, and no number of workers changes that. The ~1.07 GB projection above came from a 1,000-document
 sample, and the miss is the distribution rather than the average: 86,780 documents are under 8 KiB of
 JSON, 83,151 under 64 KiB, 21,061 under 1 MiB, 417 under 8 MiB, 20 above it.
 
@@ -2130,6 +2157,17 @@ XML class above, seen from the outside.
   is only meaningful if perturbing the *measurement* trips it, which is now the mutation.
 - **Multi-class attributes.** `class="Bold Italic Subscript"` is three names in one attribute; the
   whole-value lookup never tried the components, so three elements in one payload went unreported.
+- **Search was not deterministic across processes, only within one.** `sortHits` broke ties on
+  the document's accession alone, so the provisions of one act that scored equally — every
+  provision matching a heading-only query, say — kept whatever order they arrived in. One process
+  looked self-consistent, which is why no earlier test saw it: `Search` collects hits by iterating
+  a map, so the arrival order differs between runs. Two processes searching the *same index file*
+  with the *same query* returned different sets of hits. Found while parallelising the build,
+  because a comparison of search results across two builds is only a test if the search itself is
+  a function. `sortHits` now falls back to the unit id, and
+  `TestSearchOrderIsStableAcrossIdenticalQueries` repeats a query in fresh processes over acts
+  whose provisions are deliberately identical, with a limit below the number of tied hits so an
+  unstable order changes which hits are returned and not merely their order.
 
 ## Notes and limitations
 

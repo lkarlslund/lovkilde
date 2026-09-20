@@ -107,8 +107,12 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 				return err
 			}
 
+			// Which entries make it into the file is decided here, in entry order: the
+			// mirror can hold one accession twice, and which copy wins has to be the same
+			// answer every build, so the filter cannot run on workers.
+			var want []string
 			seen := map[string]bool{}
-			var noAccession, duplicates, unreadable int
+			var noAccession, duplicates int
 			for _, e := range a.Entries() {
 				if e.Accession == "" {
 					noAccession++
@@ -118,23 +122,99 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 					duplicates++
 					continue
 				}
-				doc, _, ok := a.Open(e.Accession)
-				if !ok {
-					unreadable++
-					continue
+				want = append(want, e.Accession)
+				seen[e.Accession] = true
+			}
+
+			// Open, model, marshal and compress on workers; write here, in order.
+			//
+			// A build spends its time in exactly those four steps — 191,429 documents
+			// parsed, their models marshalled, one zstd frame per document — and none of
+			// them touch the writer. The file itself is a byte stream whose offsets are the
+			// seek table, so the writing stays single-threaded and in mirror order. Chunks
+			// hand over on a channel, which means the file is being written while the next
+			// chunk compiles.
+			ctx := cmd.Context()
+			const chunk = 512
+			// The phases are timed separately because they answer different questions:
+			// compile is how long the corpus takes to parse, model, marshal and compress;
+			// write is how long the file takes to leave the process; loop is the wall time
+			// of the two running against each other. Compile and write overlap, so the
+			// first two do not add up to the third, and the gap between them is what the
+			// parallelism bought.
+			var compileNanos, writeNanos int64
+			tLoop := time.Now()
+			type ready struct {
+				frames   []compiled.CompiledFrame
+				missing  int
+				failed   string
+				firstErr error
+			}
+			batches := make(chan ready, 1)
+			go func() {
+				defer close(batches)
+				for lo := 0; lo < len(want); lo += chunk {
+					hi := min(lo+chunk, len(want))
+					batch := ready{frames: make([]compiled.CompiledFrame, hi-lo)}
+					errs := make([]error, hi-lo)
+					opened := make([]bool, hi-lo)
+					tCompile := time.Now()
+					lexdania.Parallel(ctx, hi-lo, func(i int) {
+						acc := want[lo+i]
+						doc, _, ok := a.Open(acc)
+						if !ok {
+							return
+						}
+						opened[i] = true
+						// The accession comes from the entry rather than the document: the entry is where
+						// the mirror found it, and a file whose own metadata disagrees about its key is
+						// filed under the address the archive gave it.
+						batch.frames[i], errs[i] = wr.Compile(acc, doc.Model())
+					})
+					compileNanos += int64(time.Since(tCompile))
+					for i := range opened {
+						if !opened[i] {
+							batch.missing++
+						}
+					}
+					// The first failing document by file order, not by whichever worker
+					// noticed first: the error names one document and the reader should get
+					// the same name from the same broken mirror.
+					for i := range errs {
+						if errs[i] != nil {
+							batch.firstErr, batch.failed = errs[i], want[lo+i]
+							break
+						}
+					}
+					batches <- batch
+					if batch.firstErr != nil {
+						return
+					}
 				}
-				// The accession comes from the entry rather than the document: the entry is where
-				// the mirror found it, and a file whose own metadata disagrees about its key is
-				// filed under the address the archive gave it.
-				if err := wr.Add(e.Accession, doc.Model()); err != nil {
+			}()
+
+			var unreadable int
+			for batch := range batches {
+				if batch.firstErr != nil {
 					f.Close()
 					// The half-written file is 400 MB of nothing on a build that died this way once
 					// already; leaving it is a second problem the same failure has to cause.
 					os.Remove(tmp)
-					return fmt.Errorf("%s: %w", e.Accession, err)
+					return fmt.Errorf("%s: %w", batch.failed, batch.firstErr)
 				}
-				seen[e.Accession] = true
+				unreadable += batch.missing
+				tWrite := time.Now()
+				for _, fr := range batch.frames {
+					if err := wr.WriteFrame(fr); err != nil {
+						f.Close()
+						os.Remove(tmp)
+						return fmt.Errorf("%s: %w", fr.Accession, err)
+					}
+				}
+				writeNanos += int64(time.Since(tWrite))
 			}
+			loop := time.Since(tLoop)
+			tTables := time.Now()
 			if err := wr.Close(); err != nil {
 				f.Close()
 				os.Remove(tmp)
@@ -146,6 +226,7 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 			if err := os.Rename(tmp, out); err != nil {
 				return err
 			}
+			tables := time.Since(tTables)
 			st, err := os.Stat(out)
 			if err != nil {
 				return err
@@ -174,6 +255,10 @@ internal/compiled/testdata/artifact-20260918.txt).`,
 				"duplicate accessions", duplicates,
 				"unreadable", unreadable,
 				"elapsed", time.Since(start).Round(time.Millisecond),
+				"loop", loop.Round(time.Millisecond),
+				"compile", time.Duration(compileNanos).Round(time.Millisecond),
+				"write", time.Duration(writeNanos).Round(time.Millisecond),
+				"tables", tables.Round(time.Millisecond),
 				"heap_in_use_mb", float64(ms.HeapInuse)/1e6,
 				"rss", peakRSS(),
 			)

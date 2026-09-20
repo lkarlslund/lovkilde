@@ -161,36 +161,87 @@ func newWriter(w io.Writer, source string, version int) (*Writer, error) {
 	return wr, nil
 }
 
+// CompiledFrame is one document prepared for the file: the model's JSON and the zstd
+// frame that JSON compresses to.
+//
+// The split exists because a build's time goes almost entirely into these two
+// operations — marshal the model, compress one frame — while the file itself is a
+// sequential byte stream. Compiling touches no writer state, so it runs on workers;
+// writing keeps the order the seek table describes.
+type CompiledFrame struct {
+	Accession  string
+	JSON       []byte
+	Compressed []byte
+}
+
+// Compile marshals and compresses one document without writing it anywhere.
+//
+// Safe for several goroutines against one Writer: zstd's EncodeAll is documented as
+// callable concurrently, and nothing here reads or advances the writer's position, its
+// tables, or its scratch buffer. The two size guards run here so an oversized document
+// is refused before its bytes are handed to the writer.
+func (wr *Writer) Compile(accession string, doc *lexdoc.Document) (CompiledFrame, error) {
+	if accession == "" {
+		return CompiledFrame{}, errors.New("document has no accession: the artifact's table would have a hole in it")
+	}
+	if doc == nil {
+		return CompiledFrame{}, fmt.Errorf("%s has no document: refusing to record it as present with nothing behind it", accession)
+	}
+	payload, err := json.Marshal(doc)
+	if err != nil {
+		return CompiledFrame{}, fmt.Errorf("%s: %w", accession, err)
+	}
+	if len(payload) >= maxDocumentJSON {
+		return CompiledFrame{}, fmt.Errorf("%s: %d bytes of JSON, over this build's %d byte document bound. The document is served by decoding it whole, so this is the memory one answer would cost; if the mirror really holds a document this large, the bound is the thing to raise, not the file to skip",
+			accession, len(payload), maxDocumentJSON)
+	}
+	if err := frameSizeFits("uncompressed", len(payload)); err != nil {
+		return CompiledFrame{}, err
+	}
+	compressed := wr.enc.EncodeAll(payload, nil)
+	if err := frameSizeFits("compressed", len(compressed)); err != nil {
+		return CompiledFrame{}, err
+	}
+	return CompiledFrame{Accession: accession, JSON: payload, Compressed: compressed}, nil
+}
+
+// WriteFrame appends one compiled frame at the writer's current position and records it
+// in the tables. Frames are taken in the order the file is to hold them.
+func (wr *Writer) WriteFrame(f CompiledFrame) error {
+	if wr.done {
+		return errors.New("artifact writer is already closed")
+	}
+	if len(f.JSON) == 0 {
+		return fmt.Errorf("%s: refusing to write a frame with no payload", f.Accession)
+	}
+	start := wr.w.n
+	if _, err := wr.w.Write(f.Compressed); err != nil {
+		return err
+	}
+	compressed := wr.w.n - start
+	wr.sizes = append(wr.sizes, [2]uint32{uint32(compressed), uint32(len(f.JSON))})
+	wr.recordSize(len(f.JSON))
+	wr.refs = append(wr.refs, DocRef{Accession: f.Accession, Offset: start, Length: compressed, Raw: uint64(len(f.JSON))})
+	return nil
+}
+
 // Add writes one document as its own frame.
 //
 // Every document is its own frame because that is what makes a lookup read one document: the
 // server seeks to a frame, decodes it, and never touches the rest. It also means a corrupt frame
 // costs one document rather than the file.
+//
+// A build that compiles several documents at once uses Compile and WriteFrame instead; this is
+// the same two steps in the order a single-threaded caller wants them.
 func (wr *Writer) Add(accession string, doc *lexdoc.Document) error {
 	if wr.done {
 		return errors.New("artifact writer is already closed")
 	}
-	if accession == "" {
-		return errors.New("document has no accession: the artifact's table would have a hole in it")
-	}
-	if doc == nil {
-		return fmt.Errorf("%s has no document: refusing to record it as present with nothing behind it", accession)
-	}
-	payload, err := json.Marshal(doc)
-	if err != nil {
-		return fmt.Errorf("%s: %w", accession, err)
-	}
-	if len(payload) >= maxDocumentJSON {
-		return fmt.Errorf("%s: %d bytes of JSON, over this build's %d byte document bound. The document is served by decoding it whole, so this is the memory one answer would cost; if the mirror really holds a document this large, the bound is the thing to raise, not the file to skip",
-			accession, len(payload), maxDocumentJSON)
-	}
-	start, compressed, err := wr.frame(payload)
+	f, err := wr.Compile(accession, doc)
 	if err != nil {
 		return err
 	}
-	wr.recordSize(len(payload))
-	wr.refs = append(wr.refs, DocRef{Accession: accession, Offset: start, Length: compressed, Raw: uint64(len(payload))})
-	return nil
+	return wr.WriteFrame(f)
 }
 
 // recordSize keeps what the build report needs about one document's compiled size.

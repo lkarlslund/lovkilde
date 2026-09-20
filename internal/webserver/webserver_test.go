@@ -1,6 +1,7 @@
 package webserver
 
 import (
+	"context"
 	"encoding/json"
 	"html"
 	"io"
@@ -106,7 +107,7 @@ func newTestServer(t *testing.T, withIndex bool) *mcpserver.Server {
 }
 
 func mustIndex(t *testing.T, xmlPath string) *search.Index {
-	idx, err := search.Build(
+	idx, err := search.Build(context.Background(),
 		[]search.DocMeta{{Accession: accCanonical, ELI: "eli/lta/1998/2", Path: xmlPath, Kind: "lta", Year: 1998, Number: 2, Title: "Testlov", Source: "xml"}},
 		[]search.Unit{{Doc: 0, Addr: "§ 1", Text: injectedText}},
 		search.Options{})

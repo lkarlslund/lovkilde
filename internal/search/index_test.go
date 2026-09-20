@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"os"
 	"slices"
 	"strings"
@@ -110,7 +111,7 @@ func fixtureIndex(t *testing.T, opts Options) *Index {
 		{Doc: 1, Addr: "", Text: "Henvendt til kommunerne med pligt til rapportering."},
 		{Doc: 2, Addr: "§ 3", Text: "Aa-sagen og Aalborg Kommunes pligt efter denne lov."},
 	}
-	idx, err := Build(docs, units, opts)
+	idx, err := Build(context.Background(), docs, units, opts)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -118,7 +119,7 @@ func fixtureIndex(t *testing.T, opts Options) *Index {
 }
 
 func TestBuildRefusesAnEmptyIndex(t *testing.T) {
-	if _, err := Build(nil, nil, Options{}); err == nil {
+	if _, err := Build(context.Background(), nil, nil, Options{}); err == nil {
 		t.Fatal("Build accepted zero units; an empty index must not be written as if it were a result")
 	}
 }
@@ -355,7 +356,7 @@ func TestFoldedEntriesStayInTheirOwnStream(t *testing.T) {
 	docs := []DocMeta{{Accession: "A1", ELI: "eli/lta/2000/1", Kind: "lta", Year: 2000, Number: 1, Title: "T", Source: "xml"}}
 	units := []Unit{{Doc: 0, Addr: "§ 1", Text: "Virksomheder skal rapportere."}}
 
-	plain, err := Build(docs, units, Options{})
+	plain, err := Build(context.Background(), docs, units, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +364,7 @@ func TestFoldedEntriesStayInTheirOwnStream(t *testing.T) {
 		t.Error("a stream-less index contains a folded entry")
 	}
 
-	folded, err := Build(docs, units, Options{Folded: true})
+	folded, err := Build(context.Background(), docs, units, Options{Folded: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +406,7 @@ func TestFoldedEntriesStayInTheirOwnStream(t *testing.T) {
 func TestTermFrequencySaturatesRatherThanWraps(t *testing.T) {
 	docs := []DocMeta{{Accession: "A1", ELI: "eli/lta/2000/1", Kind: "lta", Year: 2000, Number: 1, Title: "T", Source: "xml"}}
 	text := strings.Repeat("særlig ", 400)
-	idx, err := Build(docs, []Unit{{Doc: 0, Addr: "§ 1", Text: text}}, Options{})
+	idx, err := Build(context.Background(), docs, []Unit{{Doc: 0, Addr: "§ 1", Text: text}}, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

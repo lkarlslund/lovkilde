@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestSearchRefusedWithoutAnIndex(t *testing.T) {
 }
 
 func mustIndex(t *testing.T) *search.Index {
-	idx, err := search.Build(
+	idx, err := search.Build(context.Background(),
 		[]search.DocMeta{{Accession: "A19980002X", ELI: "eli/lta/1998/2", Kind: "lta", Year: 1998, Number: 2, Title: "Testlov", Source: "xml"}},
 		[]search.Unit{{Doc: 0, Addr: "§ 1", Text: "KANONISK TEKST"}},
 		search.Options{})

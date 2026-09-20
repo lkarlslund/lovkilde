@@ -7,8 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -87,6 +90,14 @@ func Scan(ctx context.Context, root string) (*Archive, error) {
 
 	a := &Archive{Root: root, byAccn: map[string]int{}, byNumber: map[int][]int{}, scanned: time.Now()}
 
+	// The walk collects paths; reading the heads happens afterwards in parallel.
+	// readHead is a 6 KB read plus a handful of regexp matches, the mirror holds
+	// 191,429 such files, and done one at a time the scan spends its time waiting on
+	// the kernel rather than working. Splitting the path list into contiguous chunks
+	// and writing each result back to its own slot keeps the order the walk produced,
+	// which matters: add() below runs in walk order, so byAccn, byNumber and Entries()
+	// come out identical to the serial scan's, byte for byte, at any worker count.
+	var paths []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if ctx.Err() != nil {
@@ -101,18 +112,88 @@ func Scan(ctx context.Context, root string) (*Archive, error) {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		e, ok := readHead(path)
-		if !ok {
-			a.Skipped++
-			return nil
-		}
-		a.add(e)
+		paths = append(paths, path)
 		return nil
 	})
 	if err != nil && ctx.Err() == nil {
 		return nil, err
 	}
+
+	entries := make([]Entry, len(paths))
+	got := make([]bool, len(paths))
+	Parallel(ctx, len(paths), func(i int) {
+		entries[i], got[i] = readHead(paths[i])
+	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range paths {
+		if !got[i] {
+			a.Skipped++
+			continue
+		}
+		a.add(entries[i])
+	}
 	return a, nil
+}
+
+// Parallel runs visit over the indices 0..n-1 from worker goroutines and blocks until
+// every one is done. Workers scale with GOMAXPROCS, so GOMAXPROCS=1 is the serial
+// path and a measurement at 1 is the same code rather than a different one.
+//
+// Work is split into disjoint contiguous chunks and each result is written back to
+// the slot its index owns, so no mutex is taken anywhere: a bug shows up as a wrong
+// count, not as a race. Callers that need the original order keep it by reading the
+// filled slice back in index order — the order visit runs in is not defined.
+//
+// Chunking rather than a shared queue is deliberate for this repository's workloads:
+// the mirror is a directory tree, so a chunk reads neighbours whose metadata the
+// kernel just cached, and there is no contention point to measure against.
+func Parallel(ctx context.Context, n int, visit func(i int)) {
+	if n <= 0 {
+		return
+	}
+	workers := runtime.GOMAXPROCS(0)
+	if workers > n {
+		workers = n
+	}
+	if workers < 1 {
+		workers = 1
+	}
+	// Pieces are contiguous and roughly a sixteenth of a worker's share, and workers
+	// take them from a counter rather than being handed one big range. Contiguity is
+	// worth keeping — the mirror is a sorted path list, so a piece reads neighbours the
+	// kernel just cached — but one big range per worker means one worker that drew the
+	// long documents finishes last and everyone else idles.
+	const piecesPerWorker = 16
+	pieces := workers * piecesPerWorker
+	if pieces > n {
+		pieces = n
+	}
+	piece := (n + pieces - 1) / pieces
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				lo := int(next.Add(int64(piece))) - int(piece)
+				if lo >= n {
+					return
+				}
+				hi := min(lo+piece, n)
+				if ctx.Err() != nil {
+					return
+				}
+				for i := lo; i < hi; i++ {
+					visit(i)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func (a *Archive) add(e Entry) {

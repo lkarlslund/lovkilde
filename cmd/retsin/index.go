@@ -74,14 +74,14 @@ half-built index.`,
 			}
 			start := time.Now()
 			slog.Info("scanning the mirror", "dir", cfg.XMLDir())
-			docs, units, err := search.Sample(cfg.XMLDir(), perStratum)
+			docs, units, err := search.Sample(cmd.Context(), cfg.XMLDir(), perStratum)
 			if err != nil {
 				return err
 			}
 			slog.Info("read documents", "documents", len(docs), "units", len(units), "elapsed", time.Since(start).Round(time.Millisecond))
 
 			opts := search.Options{Folded: folded}
-			idx, err := search.Build(docs, units, opts)
+			idx, err := search.Build(cmd.Context(), docs, units, opts)
 			if err != nil {
 				return err
 			}
