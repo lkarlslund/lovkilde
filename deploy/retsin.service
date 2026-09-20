@@ -1,25 +1,24 @@
 # Retsin mirror as a user service: the HTML reading UI and the MCP endpoint on one
-# port, on every interface. Installing it (home is read-only to the agent sandbox, so
-# this file is kept here and copied):
+# port, on every interface. It runs the repository's own build output, the way the
+# llama.cpp and ninfer units run theirs, so there is no second copy of the binary that
+# can be older than the one just compiled — which is how a deploy once installed a binary
+# two weeks stale and reported success. Link this file into place once:
 #
-#   make build                            # writes ./retsin, not bin/retsin
-#   install -D retsin ~/.local/lib/retsin/retsin
-#   install -D deploy/retsin.service ~/.config/systemd/user/retsin.service
-#   go version -m ~/.local/lib/retsin/retsin | grep vcs.revision
+#   ln -s ~/github-repos/retsinformation/deploy/retsin.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now retsin.service
 #
-# The revision check is not ceremony. bin/ collects build leftovers, so an install line
-# naming bin/retsin copies whatever was last left there and reports success: the service
-# then runs a binary from an older commit than the one it was deployed for, and nothing on
-# the port says so. Reading the stamp out of the installed file is the only check that
-# cannot lie, because the file itself carries it.
+# After that, deploying is `make deploy`: compile into bin/, refresh the artifact and the
+# index when the code that writes them is newer than they are, daemon-reload, restart.
+# The unit is a symlink, so an edit to this file needs no copy either.
 #
-# A new binary also needs a new artifact: the payload is the JSON form of this repository's
-# Go types, so the reader refuses a file written by another build and the unit fails at
-# startup. Run `retsin artifact build` after installing, and rebuild the search index too
-# when the unit-cutting code changed — its provision ids have to come from the same model
-# code the artifact's documents were cut with.
+# The compiled files carry the build that wrote them and the reader refuses one from
+# another build, because the payload is the JSON form of this repository's Go types. That
+# is why a deploy can end with a rebuild of the ~1.6 GB artifact — about a minute, and
+# `make deploy` skips it when nothing that writes the artifact has changed. If the
+# artifact is stale and the rebuild was skipped, the unit fails at startup naming both
+# commits rather than serving text it cannot trust. The search index has no such pin, so
+# keeping its provision ids aligned with the artifact's is `make deploy`'s job.
 #
 # No authentication: this process only ever reads the mirror, so anyone who can reach
 # the port can read every document in it and ask the search index anything. That is
@@ -41,7 +40,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/github-repos/retsinformation
-ExecStart=%h/.local/lib/retsin/retsin serve --addr 0.0.0.0:8787 --data-dir %h/github-repos/retsinformation/data
+ExecStart=%h/github-repos/retsinformation/bin/retsin serve --addr 0.0.0.0:8787 --data-dir %h/github-repos/retsinformation/data
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=15
