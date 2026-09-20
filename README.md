@@ -1628,16 +1628,18 @@ The test that pins this is `TestCanonicalBodyIsNeverReplacedByASidecar`.
 
 `go run ./tools/pairs -silent 400` walks 400 sampled laws, resolves each chain, opens every
 amending act in it and asks what that act contributed. On this mirror: **187 amending acts in the
-50 sampled chains, 93 of them (49.7%) yielded not one change.** Split by why:
+50 sampled chains, 90 of them (48.1%) yielded not one change.** Split by why:
 
 | why it yielded nothing | acts |
 |---|--:|
 | XML holds metadata only; the body is in the `.json` payload beside it | 89 |
-| body present, no amendatory markup (one bill the filter missed) | 1 |
-| amendatory markup present and still nothing parsed | 3 |
+| body present, prose amendment against a treaty protocol, no § structure at all | 1 |
+| amendatory markup present and still nothing parsed | 0 |
 
-By decade of the law being amended, the same run gives 1980s 23 of 23, 1990s 34 of 34, 2000s 33 of
-60, 2010s 1 of 46, 2020s 0 of 20. The break is at 2010 because that is where the register's own XML
+The first run said 93 (49.7%) and put 3 acts in the third row; those three are the parser gap
+described below, now closed. By decade of the law being amended, the same run gives 1980s 23 of 23,
+1990s 34 of 34, 2000s 31 of 60, 2010s 0 of 46, 2020s 0 of 20 — so nothing is left unsaid about the
+2010s: every structured body from 2010 on is read, and the whole burden is pre-2010 payloads. The break is at 2010 because that is where the register's own XML
 bodies start; 80% of sampled 1980s files, 98% of 1990s and 69% of 2000s carry metadata only.
 
 The mechanism is not that the text is missing — `Archive.Open` attaches the payload text, and
@@ -1659,12 +1661,26 @@ the population. The remedy is deliberately not a prose-scraping special case in 
 reader: amendments have to arrive as model content (`lexdoc`) when the payload is read, which is
 the same move M012 already owes the HTML front end, so the fix lands once and both paths get it.
 
-Two smaller defects fell out of the same count. `A20100064830` (amending `A20050060230`) and
-`A20140063030` (amending `A20100057830`) do have `<AendringsNummer>` markup, nested inside an
-ordinary `<Paragraf><Stk>` — ids like `Par14_Stk1_Anu1` — and `Amendments` only walks paragraphs of
-type `<AendringCentreretParagraf>`, so 1.6% of sampled acts are a plain parser gap rather than a
-coverage gap. And `L20170001964` appears as an amender of `L20050000164` while carrying no
-amendatory markup at all: it is a bill, and `IsBill` did not catch it.
+One smaller defect fell out of that count, and one claim in this section was wrong. The defect:
+`A20100064830` (amending `A20050060230`) and `A20140063030` (amending `A20100057830`) do have
+`<AendringsNummer>` markup, nested inside an ordinary `<Paragraf><Stk>` — ids like
+`Par14_Stk1_Anu1` — and `Amendments` only walked paragraphs of type `<AendringCentreretParagraf>`.
+The census over all 20,812 mirror documents holding an `<AendringsNummer>` put the size of that gap
+at **26,537 of 262,297 changes (10.1%)**; reading `<Stk>` blocks with direct change children as well
+claims 242,768, and what is still not read is named rather than assumed: 22,311 are *proposals* in a
+bill's committee report (`<AendringsForslagIndhold>…<AendringsForslag>`, not enacted law, and the
+consolidator declines bills anyway) and ~205 are change lists quoted inside another change's
+`<AendringNyTekst>`, which belong to the quoting change. Both exclusions have tests.
+
+The wrong claim: `L20170001964` does appear as an amender of `L20050000164`, and this section said it
+was a bill `IsBill` failed to catch. It is not. Both are promulgated instruments in Lovtidende C —
+the 2002 Denmark–Chile double-taxation convention and the 2017 promulgation of a note exchange that
+amends it — and `Status: Valid`, so refusing it as a proposal would have dropped a live amending act.
+Its amendment is prose that replaces a protocol paragraph ("Punkt 3 i protokolen … lyder således:
+»…«"), so it has no § to address and no number-and-date act to resolve: the target is named by title
+and signing date. That is the same prose-not-structure population as the 89 payload cases, with an
+address form `Address` has no field for. The population is bounded and countable: 4,778 `ltc`
+documents, 626 of them carrying a `Ref_Accn` anchor to another instrument.
 
 ### What the whole-corpus census measured (2026-09-17)
 
