@@ -95,10 +95,67 @@ func (t TargetHint) Empty() bool { return t.Number == 0 && t.Date.IsZero() }
 // matched one of the four prose patterns implemented below; the rest come back as
 // EditUnknown with their prose intact, and AmendmentStats makes that gap a number
 // rather than an assumption.
+// amendmentBlocks returns the elements that frame a numbered change list.
+//
+// The publisher has more than one way to write one, and the difference is not
+// cosmetic: measured over the 20,812 mirror documents that hold an
+// <AendringsNummer>, reading only <AendringCentreretParagraf> claims 238,579 of
+// 262,297 changes and silently drops 26,537 (10.1 %). Counted by ancestor chain,
+// the dropped ones are four different things:
+//
+//   - 21,885 sit in bills' committee reports under
+//     <AendringsForslagIndhold><TilParagrafGruppe><TilParagraf><AendringsForslag>.
+//     Those are proposals, not enacted amendments, and the consolidator refuses
+//     bills anyway (SkippedBills), so they stay unclaimed — deliberately, and
+//     guarded in amendments_test.go so the number cannot drift into a surprise.
+//   - 5,178 sit inside another change's <AendringNyTekst>. That is quoted text:
+//     the instruction belongs to the change that carries it, not to a list.
+//   - 2,973 sit in an ordinary <Paragraf><Stk> whose <Exitus> introduces the act
+//     being changed — the shape lta/2010/648 (Visitdenmark) uses.
+//   - 1,146 sit in <IkraftCentreretParagraf><Stk>, where an entry-into-force
+//     paragraph carries numbered changes of its own (mt/2009/124).
+//
+// So a block is either an <AendringCentreretParagraf> anywhere, or a <Stk> with
+// direct <AendringsNummer> children that is not inside a proposal or inside quoted
+// change text. The preamble text is carried down so a nested block inherits the
+// target act its enclosing paragraph names, which is what makes the change
+// applicable rather than merely seen.
+func amendmentBlocks(root *Node) []amendmentBlock {
+	var out []amendmentBlock
+	var walk func(n *Node, inQuoted bool, preamble string)
+	walk = func(n *Node, inQuoted bool, preamble string) {
+		switch {
+		case n.Name == "AendringCentreretParagraf":
+			out = append(out, amendmentBlock{n, amendmentPreamble(n)})
+			preamble = amendmentPreamble(n)
+		case n.Name == "AendringsForslag" || n.Name == "AendringNyTekst":
+			inQuoted = true
+		case n.Name == "Stk" && !inQuoted && len(n.ElemsNamed("AendringsNummer")) > 0:
+			own := amendmentPreamble(n)
+			if own == "" {
+				own = preamble
+			}
+			out = append(out, amendmentBlock{n, own})
+		}
+		for _, c := range n.Elems {
+			walk(c, inQuoted, preamble)
+		}
+	}
+	walk(root, false, "")
+	return out
+}
+
+// amendmentBlock is one change list and the text that names the act it changes.
+type amendmentBlock struct {
+	Node     *Node
+	Preamble string
+}
+
 func (d *Document) Amendments() []Edit {
 	var out []Edit
-	for _, par := range d.Root.FindNamed("AendringCentreretParagraf") {
-		target := parseTarget(amendmentPreamble(par))
+	for _, block := range amendmentBlocks(d.Root) {
+		par := block.Node
+		target := parseTarget(block.Preamble)
 		// The § a change list is talking about, carried from change to change: the
 		// list reads as one sentence, and later changes say only "det hidtidige stk.
 		// 1". Reset for every framing paragraph, which starts a new subject.
@@ -123,6 +180,16 @@ func (d *Document) Amendments() []Edit {
 				if def := act.Elem("AendringDefinition"); def != nil {
 					e.Definition = DisplayText(def)
 					e.Address = ParseAddress(e.Definition)
+					// An entry-into-force paragraph names no act at all — its Exitus
+					// says when the act applies — so the change's own definition is the
+					// only place its target can come from: "I bekendtgørelse nr. 1399 af
+					// 12. december 2019 … ændres »X« til: »Y«". Only used when the
+					// framing preamble named nothing, because a preamble is the
+					// publisher's own statement of what the list changes and a
+					// definition may instead quote an intermediate act.
+					if e.Target.Empty() {
+						e.Target = parseTarget(e.Definition)
+					}
 				}
 				var nyTekst []*Node
 				if aktion := act.Elem("AendringAktion"); aktion != nil {
