@@ -2,11 +2,24 @@
 # port, on every interface. Installing it (home is read-only to the agent sandbox, so
 # this file is kept here and copied):
 #
-#   make build
-#   install -D bin/retsin ~/.local/lib/retsin/retsin
+#   make build                            # writes ./retsin, not bin/retsin
+#   install -D retsin ~/.local/lib/retsin/retsin
 #   install -D deploy/retsin.service ~/.config/systemd/user/retsin.service
+#   go version -m ~/.local/lib/retsin/retsin | grep vcs.revision
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now retsin.service
+#
+# The revision check is not ceremony. bin/ collects build leftovers, so an install line
+# naming bin/retsin copies whatever was last left there and reports success: the service
+# then runs a binary from an older commit than the one it was deployed for, and nothing on
+# the port says so. Reading the stamp out of the installed file is the only check that
+# cannot lie, because the file itself carries it.
+#
+# A new binary also needs a new artifact: the payload is the JSON form of this repository's
+# Go types, so the reader refuses a file written by another build and the unit fails at
+# startup. Run `retsin artifact build` after installing, and rebuild the search index too
+# when the unit-cutting code changed — its provision ids have to come from the same model
+# code the artifact's documents were cut with.
 #
 # No authentication: this process only ever reads the mirror, so anyone who can reach
 # the port can read every document in it and ask the search index anything. That is
