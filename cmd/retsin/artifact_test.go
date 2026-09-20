@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/compiled"
 )
@@ -87,5 +88,66 @@ func TestArtifactBuildRefusesEmptyMirror(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, artifactDefaultName)); !os.IsNotExist(err) {
 		t.Error("the refused artifact was left in place anyway")
+	}
+}
+
+// "retsin artifact check" is what a deploy consults before restarting a service, so both of its
+// answers have to be real. A check that always exited 0 would skip every artifact rebuild and the
+// unit would then fail at startup — the failure the check exists to predict — and nothing would say
+// which of the two lied. So the matching case is pinned as well as the refusal, and the refusal has
+// to name the remedy, because the message is the only thing an operator reads.
+func TestArtifactCheckCommand(t *testing.T) {
+	dir := t.TempDir()
+	for into, from := range map[string]string{
+		"xml/lta/1942/542.xml": "testdata/lta-1942-542.xml",
+		"xml/fob/1989/104.xml": "testdata/fob-1989-104.xml",
+	} {
+		raw, err := os.ReadFile(from)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dst := filepath.Join(dir, into)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A test binary carries no source stamp, so the seam is the only way to ask what a stamped
+	// build would say about a file it wrote itself.
+	restore := compiled.CurrentBuild
+	t.Cleanup(func() { compiled.CurrentBuild = restore })
+	// The commit is dated after the artifact was written, which is the deploy case: the file on
+	// disk predates the binary about to serve it.
+	stamp := compiled.BuildStamp{Revision: "1111111111111111111111111111111111111111", Time: time.Now().Add(time.Hour)}
+	compiled.CurrentBuild = func() (compiled.BuildStamp, bool) { return stamp, true }
+
+	if err := runCLI(t, newRootCmd(), "--data-dir", dir, "artifact", "build"); err != nil {
+		t.Fatalf("artifact build: %v", err)
+	}
+
+	if err := runCLI(t, newRootCmd(), "--data-dir", dir, "artifact", "check"); err != nil {
+		t.Errorf("check refused an artifact this build wrote itself: %v", err)
+	}
+
+	// A newer commit: the artifact is yesterday's struct, which is the whole reason the pin exists.
+	stamp.Revision = "2222222222222222222222222222222222222222"
+	err := runCLI(t, newRootCmd(), "--data-dir", dir, "artifact", "check")
+	if err == nil {
+		t.Fatal("check accepted an artifact written by a different build")
+	}
+	if !strings.Contains(err.Error(), "retsin artifact build") {
+		t.Errorf("the refusal does not say what to do: %v", err)
+	}
+
+	// The same commit with an uncommitted tree, which is what a developer hits on the first
+	// rebuild after editing a model type: neither side is older, so the answer cannot be a guess.
+	stamp.Revision = "1111111111111111111111111111111111111111"
+	stamp.Modified = true
+	err = runCLI(t, newRootCmd(), "--data-dir", dir, "artifact", "check")
+	if err == nil {
+		t.Fatal("check accepted an artifact whose build disagrees about whether the tree was dirty")
 	}
 }

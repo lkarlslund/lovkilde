@@ -47,7 +47,48 @@ func artifactCmd(resolve configFunc) *cobra.Command {
 		Short: "Compile the mirror's document model into one seekable file",
 	}
 	cmd.AddCommand(artifactBuildCmd(resolve))
+	cmd.AddCommand(artifactCheckCmd(resolve))
 	return cmd
+}
+
+// artifactCheckCmd answers the question an operator facing a refused server is actually
+// asking: can this binary serve the artifact on disk, and if not, which side moved.
+//
+// It deliberately reuses the reader's own comparison rather than restating it, so the
+// answer here cannot disagree with the answer the server gives at startup — a check
+// command with its own logic would be a second source of truth about a pin whose whole
+// job is to be one. It checks the build pin only; the other refusal, an artifact older
+// than the last recorded collection pass, needs the state store, which this command does
+// not open.
+func artifactCheckCmd(resolve configFunc) *cobra.Command {
+	return &cobra.Command{
+		Use:   "check",
+		Short: "Say whether this build can serve the artifact on disk",
+		Long: `Read the artifact's header and compare it with this binary's own source stamp.
+
+Exits non-zero with the reason the server would give, naming both builds and which one is
+out of date. That makes it the question a deploy can ask before restarting: the unit fails
+at startup rather than serving documents it cannot interpret, and this answers the same
+question in milliseconds instead of a failed start.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := resolve()
+			if err != nil {
+				return err
+			}
+			path := cfg.DataDir + "/" + artifactDefaultName
+			a, err := compiled.OpenArtifact(path)
+			if err != nil {
+				return err
+			}
+			defer a.Close()
+			current, _ := compiled.CurrentBuild()
+			wrote := compiled.BuildStamp{Revision: a.Header.Build, Modified: a.Header.Modified, Time: a.Header.Created}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s: %d documents, written %s by %s; this binary is %s\n",
+				path, len(a.Documents()), a.Header.Created.UTC().Format(time.RFC3339), wrote, current)
+			return a.CheckCurrentBuild()
+		},
+	}
 }
 
 func artifactBuildCmd(resolve configFunc) *cobra.Command {
