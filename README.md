@@ -1581,6 +1581,16 @@ edited and not committed. A mismatch names the side that is out of date, using t
 own timestamp against the binary's commit date, because the operator can rebuild either one and
 only the file says which needs it.
 
+Deploying asks that question rather than guessing it. `make deploy` compiles into `bin/`, runs
+`retsin artifact check` — which prints both stamps and returns the server's own refusal, so a
+deploy sees the failed start before the unit does — rebuilds the artifact only when this binary
+cannot serve the file on disk, and restarts the service. The unit runs the repository's own
+`bin/retsin`, the way the llama.cpp and ninfer user services run their build output, so there is
+no second copy of the binary that can be older than the one just compiled, and the unit file under
+`~/.config/systemd/user` is a symlink to `deploy/retsin.service` rather than a copy that can
+drift. The search index carries no stamp, so its freshness is a file-age rule in the Makefile and
+is called out as a guess there; the artifact's is not.
+
 The other way a compiled file goes wrong is data, not code: a crawl that finishes after the
 artifact was built leaves the mirror holding documents the artifact has never seen. An artifact
 older than the last recorded collection pass is refused at startup, and one that went stale while
