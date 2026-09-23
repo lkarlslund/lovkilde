@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -23,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // decimalNumber matches a structural number at the head of an element's own text: "1.3.5 Bygningers
@@ -35,8 +37,13 @@ var decimalNumber = regexp.MustCompile(`^([0-9]+(\.[0-9]+)+)`)
 var tableish = regexp.MustCompile(`(?i)^(tr|td|th|r|c|rc|rader|celler|celle|kolonner|kolonne|rad|raekke|row|table|tabel|tabellag|billoptagelse)$`)
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "-addresses" {
+		countPaths()
+		return
+	}
 	if len(os.Args) < 2 {
 		fmt.Println("usage: annexshape <accession> [accession ...]")
+		fmt.Println("       annexshape -addresses   count paths in amendment prose read from stdin")
 		os.Exit(2)
 	}
 	a, err := lexdania.Scan(context.Background(), "data/xml")
@@ -46,6 +53,43 @@ func main() {
 	}
 	for _, acc := range os.Args[1:] {
 		census(a, acc)
+	}
+}
+
+// A second question, asked with -addresses: given amendment prose on stdin, one change per
+// line, how many of them now have a path? This is how the citation forms that BR10 refuses were
+// counted, and it is the number to watch when the resolver starts walking steps: a line with no
+// path is an address the mirror still cannot name.
+func countPaths() {
+	byKind := map[string]int{}
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 1<<20), 1<<20)
+	lines, withPath := 0, 0
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		lines++
+		a := lexdoc.ParseAddress(line)
+		if len(a.Steps) == 0 {
+			fmt.Printf("no path   %s\n", truncate(line, 100))
+			continue
+		}
+		withPath++
+		for _, s := range a.Steps {
+			byKind[s.Kind]++
+		}
+		fmt.Printf("%-24s %s\n", a.Path(), truncate(line, 76))
+	}
+	fmt.Printf("\n%d changes, %d with a path (%.1f%%)\n", lines, withPath, 100*float64(withPath)/float64(lines))
+	kinds := make([]string, 0, len(byKind))
+	for k := range byKind {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	for _, k := range kinds {
+		fmt.Printf("  %-9s %d\n", k, byKind[k])
 	}
 }
 

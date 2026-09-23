@@ -29,6 +29,19 @@ type Address struct {
 	Bilag     int
 	Heading   bool // "overskriften for § 12" / "rubrikaen"
 
+	// Steps is the same reference as the path a resolver walks: every level the sentence
+	// names, in the order it names them, with its number exactly as printed. The fields above
+	// hold one value per level and cannot hold this: a chapter is an int, so "kap. 1.3.5" —
+	// how BR10's annex numbers its own chapters, 126 times in Bilag I alone — has nowhere to
+	// go, and "bilag I" is printed in roman while reBilag reads digits. Steps is where M025
+	// puts those levels.
+	//
+	// Nothing reads it yet. The fields are still what decides behaviour, and ParseAddress
+	// fills both from the same sentence, so the agreement between them is asserted in the
+	// test rather than assumed: the one intended disagreement is a decimal chapter, which the
+	// fields cannot carry at all. A range ("stk. 2-5") also still lives in StkTo alone.
+	Steps []Step
+
 	// EntryIntoForce names the effectivity series explicitly: "§ 2, ikrafttrædelsesbestemmelse".
 	// The series prints its own § 1, § 2, ... and is not the law's numbering, so a plain "§ 2"
 	// must never reach it. That refusal is load-bearing for consolidation, and it left the series
@@ -39,6 +52,46 @@ type Address struct {
 	DocTitle       bool // "lovens titel affattes således"
 	Everywhere     bool // "overalt i loven ændres »X« til: »Y«" — no address at all
 	Recognised     bool
+}
+
+// Step is one level of an address path. Kind is the mirror's own word for the level, Number is
+// the level's number exactly as the sentence prints it — "1.3.5", "8.4.2.2", "I", "B.1.1.2",
+// "267", "8a" — and both are strings because the corpus puts dots and letters in numbers: an int
+// chapter cannot hold "1.3.5" and a digit-only pattern cannot read "bilag I".
+type Step struct {
+	Kind   string
+	Number string
+}
+
+// The levels an address can name, in the words a reader and an amendment both use. These are
+// deliberately not the publisher's element names: the artifact must not leak the schema, and an
+// amendment cites "kapitel 7" whether the target turned out to be an <Exitus> or an <Indentatio>.
+const (
+	KindBilag    = "bilag"
+	KindKapitel  = "kapitel"
+	KindAfsnit   = "afsnit"
+	KindParagraf = "paragraf"
+	KindStykke   = "stykke"
+	KindNr       = "nr"
+	KindLitra    = "litra"
+	KindTabel    = "tabel"
+)
+
+// Path is the address as one canonical string, "bilag I/kap. 1.12/stk. 3", derived from Steps and
+// from nothing else. String is the citation a reader sees; Path is the identity a machine wants —
+// a unit's address, an anchor, the key a consolidated view is cached under — and it is derived in
+// one place because a second derivation is how a table of contents starts linking to "#".
+func (a Address) Path() string {
+	var b strings.Builder
+	for _, s := range a.Steps {
+		if b.Len() > 0 {
+			b.WriteByte('/')
+		}
+		b.WriteString(s.Kind)
+		b.WriteByte(' ')
+		b.WriteString(s.Number)
+	}
+	return b.String()
 }
 
 func (a Address) String() string {
@@ -126,6 +179,91 @@ var (
 	// "forændres" as the verb.
 	reChangeVerb = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(affattes|ændres|ophæves|indsættes|tilføjes|udgår|erstattes)(?:$|[^\p{L}])`)
 )
+
+// reStep reads an address sentence once, left to right, so the levels come out in the order the
+// prose puts them. Each branch is one level; the alternation order is part of the behaviour: "kap.
+// 1.12" has to be read by the kapitel branch, which starts further left, rather than as a bare
+// decimal. Go picks the leftmost start and then the first branch that matches there.
+//
+// The number branches accept what the corpus prints: "1.3.5" and "8.5.1.4" for a chapter inside an
+// annex, "B.1.1.2" for the lettered series bilag 1 uses, "I" for a roman annex, "8a" for a
+// provision with a litra.
+var reStep = regexp.MustCompile(`(?i)` +
+	`\bbilag(?:et)?\s*([0-9]+|[a-z]+)` + // 1  "bilag 1", "bilag I", "bilag A"
+	`|\b(?:kapitel|kapitlet|kap\.)\s*([0-9]+(?:\.[0-9]+)*|[a-z]\.\s*[0-9]+(?:\.[0-9]+)*)` + // 2
+	`|([0-9]+(?:\.[0-9]+)+|[a-z]\.\s*[0-9]+(?:\.[0-9]+)*)` + // 3  a bare annex heading number
+	`|\bafsnit(?:et)?\s+([0-9]+|[ivxlcdm]+)` + // 4
+	`|§+\s*([0-9]+)` + // 5
+	`|\bstk\.?\s*([0-9]+)` + // 6
+	`|\bnr\.?\s*([0-9]+)` + // 7
+	`|\blitra\s*([a-z])` + // 8
+	`|\btabel\s*([0-9]+)`) // 9
+
+// parseSteps records the path an address sentence names. It is not a second authority on where an
+// edit goes — nothing consumes it until the resolver does — but while both representations exist
+// they have to agree, and address_test.go asserts that on every citation in the golden table.
+func parseSteps(s string) []Step {
+	var steps []Step
+	seen := map[string]bool{}
+	add := func(kind, number string) {
+		// One number per level, the first one printed. The replacement text a change carries
+		// repeats the number it is replacing — "kap. 1.12, stk. 3, affattes således: Stk. 3. …" —
+		// and reading the second one as a second level is how a path ends up longer than the
+		// address. The fields already take the first match of each kind; the path has to agree.
+		if seen[kind] {
+			return
+		}
+		seen[kind] = true
+		steps = append(steps, Step{kind, strings.ReplaceAll(number, " ", "")})
+	}
+	inAnnex := false
+	for _, m := range reStep.FindAllStringSubmatchIndex(s, -1) {
+		branch := -1
+		for g := 1; g*2 < len(m); g++ {
+			if m[g*2] >= 0 {
+				branch = g
+				break
+			}
+		}
+		text := func(g int) string { return s[m[g*2]:m[g*2+1]] }
+		switch branch {
+		case 1:
+			add(KindBilag, text(1))
+			inAnnex = true
+		case 2:
+			add(KindKapitel, text(2))
+		case 3:
+			// A dotted number is how an annex numbers its own chapters, and only an annex does
+			// it: outside one, a bare decimal is a figure in prose ("1.3" inside a quotation
+			// about kWh/m2). So it names a chapter only once the address has entered a bilag.
+			if !inAnnex {
+				continue
+			}
+			add(KindKapitel, text(3))
+		case 4:
+			add(KindAfsnit, text(4))
+		case 5:
+			number := text(5)
+			// A litra hugs the number ("§ 8a") or sits beside it ("§ 8 a"). The same rule the
+			// fields use, so the two representations cannot disagree about which provision is
+			// meant: a lone letter counts only when a non-letter follows, which is what keeps
+			// "§ 8 og 9" from reading as "§ 8o".
+			if lm := reParaLitra.FindStringSubmatch(s[m[11]:]); lm != nil {
+				number += lm[1]
+			}
+			add(KindParagraf, number)
+		case 6:
+			add(KindStykke, text(6))
+		case 7:
+			add(KindNr, text(7))
+		case 8:
+			add(KindLitra, text(8))
+		case 9:
+			add(KindTabel, text(9))
+		}
+	}
+	return steps
+}
 
 // ParseAddress reads a provision reference out of Danish amendment prose.
 //
@@ -279,6 +417,7 @@ func ParseAddress(s string) Address {
 	if m := reLitra.FindStringSubmatch(s); len(m) > 0 {
 		a.Litra = m[1]
 	}
+	a.Steps = parseSteps(s)
 	return a
 }
 
