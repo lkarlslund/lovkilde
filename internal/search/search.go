@@ -2,6 +2,7 @@ package search
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -23,6 +24,17 @@ type Query struct {
 	// filter — an agent that must quote canonical text can ask for xml-only hits and get an
 	// honest empty result rather than HTML text it has to notice was HTML.
 	Kind string
+
+	// Kinds, Statuses and Sources are the same filters as a set, for a reader who ticks several
+	// boxes: a unit passes when its document matches any of them. They combine with Kind and
+	// Status rather than replacing them, so a caller using one form is not surprised by the other.
+	Kinds    []string
+	Statuses []string
+	Sources  []string
+
+	// Accession keeps the search inside one document, which is how a reader looks for a
+	// word in the law in front of them without leaving it.
+	Accession string
 
 	// Status filters on the register's own claim: "Valid", "Historic", or "unknown" for a
 	// document whose payload does not say. The empty string means no opinion from the
@@ -89,6 +101,11 @@ type Hit struct {
 // highest-frequency expansions, which is the useful end of the range.
 const maxPrefixExpansions = 12
 
+// commonShare is the share of all units above which a word only adds to hits found by rarer
+// words. Two percent of the full index is about 120,000 provisions: "af" and "og" are far
+// above it, "lejemål", "forældremyndighed" and "testamente" far below.
+const commonShare = 0.02
+
 const (
 	bm25K1     = 1.2
 	foldWeight = 0.5
@@ -103,6 +120,12 @@ const (
 	// needs, so penalising length penalised the right answer.
 	//
 	// Zero is not "no ranking": idf, term frequency and coverage still order results.
+	//
+	// This is the value written into the index file. Serving ranks with DefaultRanking.B
+	// (ranking.go), which judging against questions with known answers set to 0.2 once
+	// document priors existed: that measurement was recall against grep, which cannot see
+	// that a whole annex answering every query is the wrong answer to each of them. A
+	// citation is now answered from the register's numbers instead (mcpserver.Cited).
 	bm25B = 0.0
 )
 
@@ -117,11 +140,26 @@ type termMatch struct {
 	posting []Posting
 }
 
-// Search ranks units against the query.
+// Search ranks units against the query and returns the best q.Limit of them.
 func (idx *Index) Search(q Query) []Hit {
 	limit := q.Limit
 	if limit <= 0 {
 		limit = 10
+	}
+	hits := idx.Rank(q)
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits
+}
+
+// Rank is Search without the limit: every matching unit, best first. Its length is the honest
+// total a results page reports, and a page further down is a slice of the same order, so
+// scrolling never shows a hit twice or skips one.
+func (idx *Index) Rank(q Query) []Hit {
+	rk := DefaultRanking
+	if idx.Ranking != nil {
+		rk = *idx.Ranking
 	}
 	ops := parseQuery(q.Text)
 	if len(ops) == 0 {
@@ -145,7 +183,7 @@ func (idx *Index) Search(q Query) []Hit {
 			continue
 		}
 		words = append(words, o.word)
-		byWord[o.word] = idx.resolve(o.word, o.op)
+		byWord[o.word] = idx.resolve(o.word, o.op, rk.Extend)
 		opOf[o.word] = o.op
 	}
 
@@ -188,12 +226,36 @@ func (idx *Index) Search(q Query) []Hit {
 	sawRaw := map[uint32]bool{}
 	nUnits := float64(len(idx.Units))
 
-	// Exclusions are scored too, because a term that has to be absent still has to be found
-	// before it can be removed; the units it names are then dropped.
+	// A word that sits in a large share of all provisions — "af", "og", "med" — says
+	// almost nothing about which provision is meant, and scoring every unit it appears in
+	// is what made a three-word question take seconds: "opsigelse af lejemål" scored 2.2
+	// million units for the sake of "af". Such a word only adds to units a rarer word has
+	// already found, unless every word asked is that common. Rare words go first so the
+	// units exist by the time the common ones arrive.
+	df := map[string]int{}
+	for _, w := range words {
+		for _, ch := range byWord[w] {
+			df[w] += len(ch.posting)
+		}
+	}
+	common := func(w string) bool { return float64(df[w]) > commonShare*nUnits }
+	anyRare := false
+	order := make([]string, 0, len(words))
 	for _, w := range words {
 		if opOf[w] == opNot {
 			continue
 		}
+		order = append(order, w)
+		if !common(w) {
+			anyRare = true
+		}
+	}
+	sort.SliceStable(order, func(i, j int) bool { return df[order[i]] < df[order[j]] })
+
+	// Exclusions are scored too, because a term that has to be absent still has to be found
+	// before it can be removed; the units it names are then dropped.
+	for _, w := range order {
+		boostOnly := anyRare && common(w)
 		for _, ch := range byWord[w] {
 			df := float64(len(ch.posting))
 			idf := math.Log(1 + (nUnits-df+0.5)/(df+0.5))
@@ -204,12 +266,18 @@ func (idx *Index) Search(q Query) []Hit {
 				if len(must) > 0 && !must.has(p.Unit) {
 					continue
 				}
+				if boostOnly && scored[p.Unit] == nil {
+					continue
+				}
 				u := &idx.Units[p.Unit]
 				if !idx.accept(u, q) {
 					continue
 				}
 				tf := float64(p.Tf)
 				b := idx.B
+				if rk.B >= 0 {
+					b = rk.B
+				}
 				tfPart := tf * (bm25K1 + 1) / (tf + bm25K1*(1-b+b*float64(u.Len)/idx.avgUnitLen))
 				h := scored[p.Unit]
 				if h == nil {
@@ -240,8 +308,39 @@ func (idx *Index) Search(q Query) []Hit {
 		}
 	}
 
+	// What the document is, how much of it answers, and whether its title names the subject:
+	// see ranking.go for why words alone rank a law below its own paperwork.
+	perDoc := map[int]int{}
+	for unit := range scored {
+		perDoc[idx.Units[unit].Doc]++
+	}
+	// The title is judged on the words that say something: "lov om leje" is asking for leje.
+	asked := make([]string, 0, len(words))
+	for _, w := range order {
+		if !common(w) {
+			asked = append(asked, w)
+		}
+	}
+	named, typed := namesDocument(words)
+	titleW := rk.Title
+	if named {
+		titleW = rk.Named
+	}
+	docFactor := map[int]float64{}
+	for doc, n := range perDoc {
+		d := &idx.Docs[doc]
+		f := rk.prior(d, typed) * rk.about(n)
+		if titleW != 1 {
+			if share := idx.titleShare(d.Title, asked); share > 0 {
+				f *= math.Pow(titleW, share)
+			}
+		}
+		docFactor[doc] = f
+	}
+
 	hits := make([]Hit, 0, len(scored))
 	for unit, h := range scored {
+		h.Score *= docFactor[idx.Units[unit].Doc]
 		covered := 0
 		for _, w := range words {
 			if opOf[w] == opNot {
@@ -262,9 +361,6 @@ func (idx *Index) Search(q Query) []Hit {
 		hits = append(hits, *h)
 	}
 	sortHits(hits)
-	if len(hits) > limit {
-		hits = hits[:limit]
-	}
 	return hits
 }
 
@@ -310,10 +406,19 @@ func sortHits(hits []Hit) {
 
 // resolve turns one query word into the dictionary terms that answer it: the exact term, or
 // its right-extensions, plus the folded stem when the index carries that stream.
-func (idx *Index) resolve(word string, op operator) []termMatch {
+func (idx *Index) resolve(word string, op operator, extend bool) []termMatch {
 	var out []termMatch
 	if i := idx.findTerm(word, StreamRaw); i >= 0 {
 		out = append(out, termMatch{display: word, query: word, weight: 1, op: op, posting: idx.Postings[i]})
+		// The word exists, but so may its inflections and compounds; a short word is left
+		// alone, because "lov" extended is half the dictionary.
+		if extend && len([]rune(word)) >= 5 {
+			for _, j := range idx.prefixTerms(word, maxPrefixExpansions) {
+				if j != i {
+					out = append(out, termMatch{display: idx.Terms[j], query: word, weight: prefixW, op: op, posting: idx.Postings[j]})
+				}
+			}
+		}
 	} else {
 		// No exact term: extend right. This is what lets "miljøbeskyttelse" reach
 		// "miljøbeskyttelsesloven" without a second index.
@@ -349,6 +454,18 @@ func (idx *Index) accept(u *UnitMeta, q Query) bool {
 		return false
 	}
 	if q.Source != "" && d.Source != q.Source {
+		return false
+	}
+	if q.Accession != "" && d.Accession != q.Accession {
+		return false
+	}
+	if len(q.Sources) > 0 && !slices.Contains(q.Sources, d.Source) {
+		return false
+	}
+	if len(q.Kinds) > 0 && !slices.Contains(q.Kinds, d.Kind) {
+		return false
+	}
+	if len(q.Statuses) > 0 && !slices.ContainsFunc(q.Statuses, func(s string) bool { return statusKey(s) == statusKey(d.Status) }) {
 		return false
 	}
 	if q.Status != "" && statusKey(d.Status) != statusKey(q.Status) {

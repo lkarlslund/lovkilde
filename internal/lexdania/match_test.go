@@ -110,7 +110,7 @@ func TestZeroWidthProvisionIsStillAmendable(t *testing.T) {
 		t.Fatalf("a provision carrying a zero-width mark is still the provision an amendment quotes: %+v",
 			v.Unresolved)
 	}
-	text := v.Doc.Root.PlainText()
+	text := v.Content.PlainText()
 	if !strings.Contains(text, "for Landsretten som første instans") {
 		t.Errorf("the substitution did not land, got:\n%s", text)
 	}

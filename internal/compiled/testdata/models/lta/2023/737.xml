@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="id8981c672-f6da-4a4c-b3aa-945e89f6a73e" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2022/05/17/LOVC.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="id891261ec-e938-4771-b1de-e370954be46f">
+    <DocumentType>LOV Æ#LOKDOK02</DocumentType>
+    <Rank>A</Rank>
+    <AccessionNumber>A20230073730</AccessionNumber>
+    <DocumentId>DI000856</DocumentId>
+    <UniqueDocumentId>237910</UniqueDocumentId>
+    <DocumentTitle>Lov om ændring af lov om autorisation af sundhedspersoner og om sundhedsfaglig virksomhed, sundhedsloven og lov om klage- og erstatningsadgang inden for sundhedsvæsenet (Skærpet straf ved ulovlige omskæringer af drengebørn, ændring af sundhedspersoners rapporteringspligt i forbindelse med utilsigtede hændelser og ophævelse af Styrelsen for Patientklagers pligt til at udgive en årsberetning)</DocumentTitle>
+    <Year>2023</Year>
+    <DiesSigni>2023-06-13</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2023-06-14</StartDate>
+    <EndDate REFid="submit_1">2024-08-20</EndDate>
+    <Status>Historic</Status>
+    <Number>737</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2023-06-14</DiesEdicti>
+    <DateOfHistoricMark>2024-08-19</DateOfHistoricMark>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">MARGRETHE R.</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Sophie Løhde</Signature>
+    <PlaceOfSignature>Givet på Christiansborg Slot</PlaceOfSignature>
+    <JournalNumber>Indenrigs- og Sundhedsmin., j.nr. 2204146</JournalNumber>
+    <Ministry>Indenrigs- og Sundhedsministeriet</Ministry>
+  </Meta>
+  <TitelGruppe id="id130cb2a3-717f-453c-b42c-35c0c365b6bd">
+    <Titel id="idee2f4c64-2de3-482d-bb81-9a03e46c5650">
+      <Linea>
+        <Char>Lov om ændring af lov om autorisation af sundhedspersoner og om sundhedsfaglig virksomhed, sundhedsloven og lov om klage- og erstatningsadgang inden for sundhedsvæsenet</Char>
+      </Linea>
+    </Titel>
+    <UnderTitel id="id629d17cb-72f1-4e8a-b163-ffb547279282">
+      <Linea>
+        <Char>(Skærpet straf ved ulovlige omskæringer af drengebørn, ændring af sundhedspersoners rapporteringspligt i forbindelse med utilsigtede hændelser og ophævelse af Styrelsen for Patientklagers pligt til at udgive en årsberetning)</Char>
+      </Linea>
+    </UnderTitel>
+  </TitelGruppe>
+  <DokumentIndhold id="id3ac068ba-ce51-4677-ad1a-a12f13838fa4">
+    <Hymne id="id80dccf29-6402-4603-8ab7-5535d5c9c7ef">
+      <Exitus>
+        <Linea>
+          <Char>VI MARGRETHE DEN ANDEN, af Guds Nåde Danmarks Dronning, gør vitterligt:</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char>Folketinget har vedtaget og Vi ved Vort samtykke stadfæstet følgende lov:</Char>
+        </Linea>
+      </Exitus>
+    </Hymne>
+    <AendringCentreretParagraf id="id1af4fe77-b0ec-481a-8fe4-82f93f70a7c6" localId="1">
+      <Explicatus>§ 1</Explicatus>
+      <Exitus>
+        <Linea>
+          <Char>I lov om autorisation af sundhedspersoner og om sundhedsfaglig virksomhed, jf. lovbekendtgørelse nr. 122 af 24. januar 2023, foretages følgende ændringer:</Char>
+        </Linea>
+      </Exitus>
+      <AendringsNummer id="ida838ac09-7cba-428d-91ea-eba5ce4855d2">
+        <Explicatus>1.</Explicatus>
+        <Aendring id="iddb79794a-41c9-484e-9545-e5b870ba2952">
+          <AendringDefinition id="id0dd0ad5e-09a0-4164-a961-e2070c5129ee">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 74</Char>
+                <Char> indsættes som </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">stk. 5:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="id7d52982a-51fb-4872-9b09-602df486c3fc">
+            <AendringNyTekst>
+              <Stk id="ida3452480-4d96-456e-916e-d7a58621398c">
+                <Explicatus>Stk. 5.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>En person, der ikke har autorisation som læge eller fungerer som en læges medhjælp, jf. § 18, må ikke fjerne forhuden på en dreng under 18 år.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer id="id7c594148-668f-47ae-9d29-6560fdb69a23">
+        <Explicatus>2.</Explicatus>
+        <Aendring id="idd7ad1b8d-84a9-4d15-af2d-3c665b6f3951">
+          <AendringDefinition id="idb2dbff8d-f596-41c9-ae23-9830cb15a7aa">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 89 </Char>
+                <Char>indsættes som </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">stk. 2:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="idea201697-1880-4e24-b2d5-c10959f9910b">
+            <AendringNyTekst>
+              <Stk id="id44883b0c-bc8e-4f5a-b360-d5d090fbac50">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Den, der overtræder § 74, stk. 5, straffes med fængsel i indtil 1 år, medmindre højere straf er forskyldt efter anden lovgivning.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+    </AendringCentreretParagraf>
+    <AendringCentreretParagraf id="id71fb9966-edda-4735-9f18-1fc43943242d" localId="2">
+      <Explicatus>§ 2</Explicatus>
+      <Exitus>
+        <Linea>
+          <Char>I sundhedsloven, jf. lovbekendtgørelse nr. 248 af 8. marts 2023, som ændret ved lov nr. 907 af 21. juni 2022, § 1 i lov nr. 368 af 2. april 2023 og lov nr. 413 af 25. april 2023, foretages følgende ændring:</Char>
+        </Linea>
+      </Exitus>
+      <AendringsNummer id="idffaa7a46-f591-42f5-a199-8fece9cae031">
+        <Explicatus>1.</Explicatus>
+        <Aendring id="id43aff2ff-36b2-4a61-8cbd-49667165569e">
+          <AendringDefinition id="idf4e2c508-8e5b-42f5-8f88-a0d3d4a5ba97">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 199, stk. 2, 2. pkt.,</Char>
+                <Char> ændres »hvornår og i hvilken form rapporteringen skal ske, og hvad den skal indeholde« til: »hvornår rapporteringen skal eller ikke skal ske, i hvilken form rapporteringen skal ske, og hvad den i givet fald skal indeholde«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="idc179e12d-ca17-4e95-8ce1-ffdded4a0850">
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+    </AendringCentreretParagraf>
+    <AendringCentreretParagraf id="ida16ffbc6-1776-4b21-ace6-263af43a4e6b" localId="3">
+      <Explicatus>§ 3</Explicatus>
+      <Exitus>
+        <Linea>
+          <Char>I lov om klage- og erstatningsadgang inden for sundhedsvæsenet, jf. lovbekendtgørelse nr. 9 af 4. januar 2023, foretages følgende ændringer:</Char>
+        </Linea>
+      </Exitus>
+      <AendringsNummer id="id6893b38d-40cf-4ec7-8479-5bb755d31f27">
+        <Explicatus>1.</Explicatus>
+        <Aendring id="id661e664e-5b3e-4fe5-bc94-20e92f2d4a8a">
+          <AendringDefinition id="id91ac9fbe-30b8-423f-a652-8edf47e06869">
+            <Exitus>
+              <Linea>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 12, stk. 5 </Char>
+                <Char>og </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">6, </Char>
+                <Char>ophæves.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="idc3528600-72dd-4f09-b808-dc23ad817ab9">
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+        <Rykningsklausul id="id078e6273-b64b-41ad-835f-51d4f08fef7e">
+          <Exitus>
+            <Linea>
+              <Char>Stk. 7 bliver herefter stk. 5.</Char>
+            </Linea>
+          </Exitus>
+        </Rykningsklausul>
+      </AendringsNummer>
+      <AendringsNummer id="id78313d41-74e3-4ab5-9f6c-0028acdaac99">
+        <Explicatus>2.</Explicatus>
+        <Aendring id="id182d9f38-7697-4d1b-a3f9-f347a15e4a5b">
+          <AendringDefinition id="id83e4e10d-2766-4a37-a5ec-a4664cde7cca">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 16, stk. 1,</Char>
+                <Char> udgår »og stk. 5, 1.-3. pkt</Char>
+                <Char formaChar="Italic">.</Char>
+                <Char>«</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="idb303d0d5-6ce4-48ee-8c9c-3a15b65ff449">
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer id="id05174fbd-7843-4bc2-b0fd-86f247d153f4">
+        <Explicatus>3.</Explicatus>
+        <Aendring id="id73dc80c8-c706-46fb-96d4-ae5b93947bdc">
+          <AendringDefinition id="id30fcb317-a6d5-43d6-8ce5-10edd3d0c77d">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 16</Char>
+                <Char> indsættes efter stk. 1 som nyt stykke:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="id8d86d614-903b-420b-96b4-122d2336df31">
+            <AendringNyTekst>
+              <Stk id="id26ffa820-304d-47f4-bcda-2149f4ba8efc">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Sundhedsvæsenets Disciplinærnævn udarbejder en årsberetning om nævnets virksomhed.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Regionen bidrager efter Sundhedsvæsenets Disciplinærnævns anmodning med oplysninger til brug for årsberetningen, herunder oplysninger om klager, der er bortfaldet efter en dialog med regionen, jf. § 2, stk. 3.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Årsberetningen offentliggøres og sendes til indenrigs- og sundhedsministeren, Styrelsen for Patientsikkerhed, Sundhedsstyrelsen, regionerne og kommunerne.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+        <Rykningsklausul id="id5ecf94c1-b1a0-4ef6-ad73-b68da361f353">
+          <Exitus>
+            <Linea>
+              <Char>Stk. 2 bliver herefter stk. 3.</Char>
+            </Linea>
+          </Exitus>
+        </Rykningsklausul>
+      </AendringsNummer>
+      <AendringsNummer id="id8318df91-faf0-454d-9bb3-5d67cf45e49d">
+        <Explicatus>4.</Explicatus>
+        <Aendring id="ida3050cce-3a86-444e-a369-ef4906e9aae2">
+          <AendringDefinition id="id43ad23d0-35f6-4762-bee5-d241213e7d4b">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 16 c, stk. 2, 2. pkt.,</Char>
+                <Char> udgår », og stk. 5, 1.-3. pkt.«</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="ida6ef8cc3-13ad-4cff-9ca8-605b0716719c">
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+    </AendringCentreretParagraf>
+    <IkraftCentreretParagraf id="id5dc96d41-240f-4d6a-9cf3-febff41b6cce" localId="4">
+      <Explicatus>§ 4</Explicatus>
+      <Stk id="id503d6846-3999-4a45-97c3-604174591171">
+        <Exitus>
+          <Linea>
+            <Char>Loven træder i kraft den 1. juli 2023.</Char>
+          </Linea>
+        </Exitus>
+      </Stk>
+    </IkraftCentreretParagraf>
+    <IkraftCentreretParagraf id="id1c92c3f3-2f2f-478a-8110-1dc80bd5e8a3" localId="5">
+      <Explicatus>§ 5</Explicatus>
+      <Stk id="iddc49ee4b-9d08-46ea-9917-6fe84e6e50c2">
+        <Exitus>
+          <Linea>
+            <Char>Loven gælder ikke for Færøerne og Grønland, men kan ved kongelig anordning sættes i kraft for Færøerne med de ændringer, som de færøske forhold tilsiger.</Char>
+          </Linea>
+        </Exitus>
+      </Stk>
+    </IkraftCentreretParagraf>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="idca858b1b-02e1-4156-8e80-9fa605f8cd53">
+    <UnderskriftStedDato />
+    <Segl>
+      <Linea>
+        <Char>Under Vor Kongelige Hånd og Segl</Char>
+      </Linea>
+    </Segl>
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

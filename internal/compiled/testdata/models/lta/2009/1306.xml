@@ -1,0 +1,1163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2009/09/14/BEKH.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>BEK H#LOKDOK04</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20090130605</AccessionNumber>
+    <DocumentId>BM000287</DocumentId>
+    <UniqueDocumentId>129198</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om sideaktiviteter i almene boligorganisationer m.v.</DocumentTitle>
+    <Year>2009</Year>
+    <DiesSigni>2009-12-15</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2009-12-18</StartDate>
+    <EndDate REFid="submit_1">2023-04-28</EndDate>
+    <Status>Historic</Status>
+    <Number>1306</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2009-12-18</DiesEdicti>
+    <DateOfHistoricMark>2013-12-19</DateOfHistoricMark>
+    <Concerns id="concerns_1" />
+    <Ref_Accn REFid="concerns_1">A20130102329</Ref_Accn>
+    <Ref_Af REFid="concerns_1">2013-08-21</Ref_Af>
+    <Ref_Text REFid="concerns_1">Bekendtgørelse af lov om almene boliger m.v.</Ref_Text>
+    <Change id="change_1" />
+    <Ref_Accn REFid="change_1">B20130010905</Ref_Accn>
+    <Ref_Af REFid="change_1">2013-02-05</Ref_Af>
+    <Ref_Text REFid="change_1">Bekendtgørelse om ændring af bekendtgørelse om sideaktiviteter i almene boligorganisationer m.v.</Ref_Text>
+    <Change id="change_2" />
+    <Ref_Accn REFid="change_2">B20130104305</Ref_Accn>
+    <Ref_Af REFid="change_2">2013-08-27</Ref_Af>
+    <Ref_Text REFid="change_2">Bekendtgørelse om ændring af bekendtgørelse om sideaktiviteter i almene boligorganisationer m.v.\n(Anlæg til forsyning med el baseret på vedvarende energikilder)</Ref_Text>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Karen Ellemann</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Mikael Lynnerup Kristensen</Signature>
+    <PlaceOfSignature>Indenrigs- og Socialministeriet</PlaceOfSignature>
+    <JournalNumber>Indenrigs- og Socialmin., j.nr. 2009-992</JournalNumber>
+    <Ministry>Social- og Boligministeriet</Ministry>
+  </Meta>
+  <TitelGruppe>
+    <Titel>
+      <Linea>
+        <Char>Bekendtgørelse om sideaktiviteter i almene boligorganisationer m.v.</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold>
+    <Indledning>
+      <Exitus>
+        <Linea>
+          <Char>I medfør af § 32 og § 185, stk. 1, nr. 2, i lov om almene boliger m.v., jf. lovbekendtgørelse nr. 1204 af 10. december 2009, fastsættes:</Char>
+        </Linea>
+      </Exitus>
+    </Indledning>
+    <Afsnit id="Afs0">
+      <Kapitel id="Kap1">
+        <Explicatus>Kapitel 1</Explicatus>
+        <Rubrica>
+          <Linea>
+            <Char>Reglernes anvendelsesområde</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe id="Kap1_X1">
+          <Paragraf id="Par1" localId="1">
+            <Explicatus>§ 1.</Explicatus>
+            <Stk id="Par1_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen finder anvendelse på almene boligorganisationer, jf. dog stk. 4.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par1_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>§§ 2, 6, 9, 12, 13, 16, 18, 20, 25-27 og 29 finder tilsvarende anvendelse på selvejende institutioner, der ejer almene ældreboliger.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par1_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>§§ 2, 6, 9, 15, 16,18, 20, 25-27 og 29 finder tilsvarende anvendelse på selvejende institutioner, der ejer almene ungdomsboliger.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par1_Stk4">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>§ 3, stk. 1, § 4, § 5, stk. 1, § 8, § 10, § 12, stk. 2, og § 17 finder ikke anvendelse på almene administrationsorganisationer.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="Kap2">
+        <Explicatus>Kapitel 2</Explicatus>
+        <Rubrica>
+          <Linea>
+            <Char>Almindelige bestemmelser om de almene boligorganisationers aktivitetsområder</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe id="Kap2_X1">
+          <Paragraf id="Par2" localId="2">
+            <Explicatus>§ 2.</Explicatus>
+            <Stk id="Par2_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Almene boligorganisationers virksomhedsområde omfatter udover boligorganisationernes kerneaktiviteter, jf. § 6, stk. 1, i lov om almene boliger m.v. (almenboligloven), aktiviteter, som har en naturlig tilknytning til boligerne og administrationen af disse, eller som er baseret på den viden, boligorganisationen har oparbejdet gennem sin virksomhed (sideaktiviteter), jf. lovens § 6, stk. 2.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Denne bekendtgørelse finder alene anvendelse på boligorganisationernes sideaktiviteter, jf. kapitel 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par2_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Almene boligorganisationer og deres afdelinger kan kun udøve sideaktiviteter i det omfang, sådanne aktiviteter er omfattet af bestemmelserne i kapitel 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="Kap3">
+        <Explicatus>Kapitel 3</Explicatus>
+        <Rubrica>
+          <Linea>
+            <Char>Sideaktiviteter</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe id="Kap3_X1">
+          <Rubrica>
+            <Linea>
+              <Char>Erhvervsarealer</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par3" localId="3">
+            <Explicatus>§ 3.</Explicatus>
+            <Stk id="Par3_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>En almen boligorganisation kan etablere erhvervsarealer i byggeri, der falder inden for almene boligorganisationers kerneaktiviteter, jf. § 6, stk. 1, i almenboligloven.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning,</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Index id="Par3_Stk1_X1">
+                  <Indentatio formaInd="Nummer" id="Par3_Stk1_Num1">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at der er et boligsocialt behov for erhvervsarealerne i boligområdet,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par3_Stk1_Num2">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at omfanget af erhvervet står i forsvarligt forhold til boligarealet,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par3_Stk1_Num3">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at erhvervsarealerne udskilles i en særlig afdeling, som har skøde på ejendommen,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par3_Stk1_Num4">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at erhvervsarealerne udlejes til et selskab som nævnt i § 4,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par3_Stk1_Num5">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at udlejningen til selskabet sker til en leje, der svarer til balancelejen med tillæg for værdien af eventuel grundkapital og offentlig lånegaranti, og</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par3_Stk1_Num6">
+                    <Explicatus>6)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at kommunalbestyrelsen godkender boligorganisationens disposition.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="Par3_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Kravet i stk. 1, nr. 3 gælder ikke ved omdannelse af boliger til erhverv.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par3_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Kravene i stk. 1, nr. 3 og 4 gælder ikke ved udlejning af ubebyggede arealer, medmindre udlejningen sker med henblik på byggeri på lejet grund.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par3_Stk4">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan administrere opførelse og drift af de erhvervsarealer, som er nævnt i stk. 1.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par3_Stk5">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Kommunalbestyrelsen kan godkende, at kravet i stk. 1, nr. 3 fraviges ved mindre på- og tilbygninger til eksisterende afdelinger, ved indretning af uudnyttede tagetager, ved påbygning af yderligere etager og ved opførelse af mindre, fritstående bygninger, når dette skønnes forsvarligt efter en vurdering af risikoen ved byggeprojektet sammenholdt med afdelingens og boligorganisationens økonomiske forhold.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par3_Stk6">
+              <Explicatus>Stk. 6.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Kommunalbestyrelsen kan godkende, at kravet i stk. 1, nr. 4 fraviges ved byggerier, der har et meget begrænset omfang samt ved begrænsede udvidelser af eksisterende erhvervsarealer.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par4" localId="4">
+            <Explicatus>§ 4.</Explicatus>
+            <Stk id="Par4_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan etablere og foretage indskud i et selskab, jf. § 23, som fremlejer erhvervsarealer etableret i henhold til § 3, stk. 1.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Fremleje skal ske til markedsleje.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at kommunalbestyrelsen godkender boligorganisationens disposition.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X2">
+          <Rubrica>
+            <Linea>
+              <Char>Kapitel 12 institutioner og boliger</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par5" localId="5">
+            <Explicatus>§ 5.</Explicatus>
+            <Stk id="Par5_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>En afdeling kan have skøde på de institutioner og boliger, som er omfattet af kapitel 12 i almenboligloven.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par5_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan administrere opførelse og drift af de institutioner og boliger, som er nævnt i stk. 1.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X3">
+          <Rubrica>
+            <Linea>
+              <Char>Administrationsejendomme</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par6" localId="6">
+            <Explicatus>§ 6. </Explicatus>
+            <Stk id="Par6_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan eje og administrere opførelse og drift af egne administrationsejendomme.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X4">
+          <Rubrica>
+            <Linea>
+              <Char>Kursuslokaler</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par7" localId="7">
+            <Explicatus>§ 7.</Explicatus>
+            <Stk id="Par7_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan eje og administrere opførelse og drift af kursuslokaler til brug for ansatte i boligorganisationen og dennes afdelinger og for beboerne i boligorganisationens afdelinger samt til brug for ansatte og beboere i administrerede boligorganisationer og disses afdelinger.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par7_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Udgifter til opførelse og drift af kursuslokaler skal stå i et rimeligt forhold til boligorganisationens størrelse og økonomiske forhold.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Udgifter til opførelsen kan finansieres af boligorganisationens arbejdskapital.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Udgifter til driften kan i begrænset omfang afholdes af arbejdskapitalen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par7_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Kursuslokaler kan i forbindelse med sociale aktiviteter og fritidsaktiviteter, jf. § 18, stk. 1, anvendes af andre end de personer, der er nævnt i stk. 1.</Char>
+                </Linea>
+                <Linea>
+                  <Char>De betingelser, der er nævnt i § 18, stk. 2-5, finder tilsvarende anvendelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X5">
+          <Rubrica>
+            <Linea>
+              <Char>Erhvervelse af eksisterende ejendomme</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par8" localId="8">
+            <Explicatus>§ 8.</Explicatus>
+            <Stk id="Par8_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>En afdeling kan erhverve eksisterende private ejendomme, herunder private og kommunale udlejningsboliger samt parcelhuse, med henblik på etablering af boliger, der falder inden for almene boligorganisationers kerneaktiviteter efter § 6, stk. 1, i almenboligloven eller etablering af erhvervsarealer i tilknytning til disse boliger.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Erhvervelse forudsætter, at der inden for maksimalt 10 år fra erhvervelsen kan opnås balance mellem udgifter og indtægter.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Erhvervelsen kan tillige ske i forbindelse med byfornyelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par8_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ved erhvervelse af ejendomme, som indeholder både boliger og erhvervsarealer, finder reglerne i § 3, stk. 1, nr.1, 2 og 6 tilsvarende anvendelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Kommunalbestyrelsen kan som vilkår for sin godkendelse efter § 3, stk. 1, nr. 6, stille krav om, at boligorganisationen med midler fra boligorganisationens egenkapital indestår for dækning af ekstraordinære tab som følge af udlejningsvanskeligheder i erhvervsarealerne.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par8_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ved erhvervelse af ejendomme, som udelukkende indeholder erhvervsarealer, finder reglerne i § 3, stk. 1, nr. 1-6 tilsvarende anvendelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X6">
+          <Rubrica>
+            <Linea>
+              <Char>Engagementer i forsyningsvirksomhed o.l.</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par9" localId="9">
+            <Explicatus>§ 9.</Explicatus>
+            <Stk id="Par9_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen eller en afdeling kan have skøde på, og boligorganisationen kan administrere opførelse og drift af anlæg til</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Index id="Par9_Stk1_X1">
+                  <Indentatio formaInd="Nummer" id="Par9_Stk1_Num1">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>vandforsyning</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par9_Stk1_Num2">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>varmeforsyning</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par9_Stk1_Num3">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>kombineret kraft/varmeforsyning</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par9_Stk1_Num4">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>radio/tv-signalforsyning</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par9_Stk1_Num5">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>elektroniske kommunikationstjenester, og</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par9_Stk1_Num6">
+                    <Explicatus>6)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>renovation.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="Par9_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Det er en forudsætning, at kundekredsen til anlæg nævnt i stk. 1 kun i begrænset omfang omfatter andre end boligorganisationen, boligorganisationens afdelinger, administrerede boligorganisationer og disse afdelinger eller lejere i de nævnte boligorganisationernes afdelinger og kun, når dette sker som følge af den kommunale planlægning.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Betingelsen om den kommunale planlægning gælder dog ikke for de aktiviteter, der er nævnt i stk. 1, nr. 4 og 5.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par9_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen eller en afdeling kan foretage indskud i og deltage i ledelsen af anlæg som nævnt i stk. 1.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at boligorganisationen eller afdelingen aftager anlæggets produkter.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X7">
+          <Rubrica>
+            <Linea>
+              <Char>Administration af ejendomme og institutioner m.v.</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par10" localId="10">
+            <Explicatus>§ 10.</Explicatus>
+            <Stk id="Par10_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan etablere og foretage indskud i et selskab, jf. § 23, som administrerer opførelse og drift af private udlejningsboliger, ejerboliger, private ustøttede andelsboliger samt erhvervsarealer, der ejes af andre end boligorganisationen eller en afdeling af denne.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning,</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Index id="Par10_Stk1_X1">
+                  <Indentatio formaInd="Nummer" id="Par10_Stk1_Num1">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at boligorganisationen har én eller flere boligafdelinger eller har fået tilsagn om offentlig støtte til opførelse af almene boliger i det boligområde, hvor de nævnte ejendomme er beliggende, og</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par10_Stk1_Num2">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at kommunalbestyrelsen godkender boligorganisationens disposition.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="Par10_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Reglerne i stk. 1 gælder ikke for de aktiviteter, som er nævnt i §§ 11-16.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par11" localId="11">
+            <Explicatus>§ 11. </Explicatus>
+            <Stk id="Par11_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan administrere drift af kommunale beboelsesejendomme.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par12" localId="12">
+            <Explicatus>§ 12.</Explicatus>
+            <Stk id="Par12_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan administrere opførelse og drift af andre kommunale ejendomme end beboelsesejendomme og de ejendomme, der er nævnt i kapitel 12 i almenboligloven, hvis ejendommen er en integreret del af en bebyggelse, der er opført i medfør af almenboligloven, lov om boligbyggeri, lov om byggestøtte eller lov om boliger for ældre og personer med handicap.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par12_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>En afdeling kan have skøde på servicearealer, jf. § 5, stk. 6, i almenboligloven.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par12_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan administrere opførelse og drift af de servicearealer, som er nævnt i stk. 2.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par13" localId="13">
+            <Explicatus>§ 13.</Explicatus>
+            <Stk id="Par13_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Udover de ejendomme m.v., som er nævnt i § 12, kan boligorganisationen administrere opførelse og drift af andre kommunale institutioner og selvejende institutioner, der har driftsoverenskomst med kommunen eller regionen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par14" localId="14">
+            <Explicatus>§ 14.</Explicatus>
+            <Stk id="Par14_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan med kommunalbestyrelsens godkendelse administrere drift af private udlejningsboliger.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at kommunalbestyrelsen har anvisningsret til minimum hver fjerde ledige bolig.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Hvis de private udlejningsboliger er beliggende i en anden kommune end den, hvori boligorganisationen har hjemsted, jf. § 108, stk. 2, i Indenrigs- og Socialministeriets bekendtgørelse om drift af almene boliger m.v., kræves godkendelse fra såvel hjemstedskommunens som beliggenhedskommunens kommunalbestyrelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par14_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Uanset stk. 1, kan KAB s.m.b.a. dog fortsat administrere de selskaber, fonde og andelsboligforeninger og de private boliger, der er knyttet hertil, som boligorganisationen administrerede ved sin godkendelse i 1986.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par14_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Stk. 1, 2. pkt., finder ikke anvendelse på udlejningsboliger, som ejes af ejendomsselskabet TOR I/S.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par15" localId="15">
+            <Explicatus>§ 15.</Explicatus>
+            <Stk id="Par15_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan med kommunalbestyrelsens godkendelse administrere drift af private kollegier, hvortil der ikke ydes offentlig støtte.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at kommunalbestyrelsen har anvisningsretten til minimum hver fjerde ledige bolig.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Hvis kollegierne er beliggende i en anden kommune end den, hvori boligorganisationen har hjemsted, kræves godkendelse fra såvel hjemstedskommunens som beliggenhedskommunens kommunalbestyrelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par16" localId="16">
+            <Explicatus>§ 16.</Explicatus>
+            <Stk id="Par16_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan administrere drift af grundejerforeninger, ejerforeninger, gård- og vejlaug o.lign., hvori boligorganisationen, boligorganisationens afdelinger, administrerede boligorganisationer eller disses afdelinger er medlem.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X8">
+          <Rubrica>
+            <Linea>
+              <Char>Renholdelse og vedligeholdelse af visse gårdanlæg o.l.</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par17" localId="17">
+            <Explicatus>§ 17.</Explicatus>
+            <Stk id="Par17_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan etablere og foretage indskud i et selskab, jf. § 23, som udfører vedligeholdelse og foretager renholdelse m.v. af gårdanlæg og andre opholdsarealer, som ejes af andre end boligorganisationen eller en afdeling af denne.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er tillige en forudsætning, at boligorganisationen har én eller flere boligafdelinger eller har fået tilsagn om offentlig støtte til opførelse af almene boliger i det boligområde, hvor de nævnte gårdanlæg og opholdsarealer er beliggende.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at kommunalbestyrelsen godkender boligorganisationens disposition.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X9">
+          <Rubrica>
+            <Linea>
+              <Char>Sociale aktiviteter og fritidsaktiviteter</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par18" localId="18">
+            <Explicatus>§ 18.</Explicatus>
+            <Stk id="Par18_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>En boligorganisation kan iværksætte sociale aktiviteter og fritidsaktiviteter, herunder forebyggende arbejde, jf. § 37, stk. 2, i almenboligloven.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Aktiviteterne skal primært være rettet mod beboere i en eller flere afdelinger i boligorganisationen eller i almene afdelinger, der er administreret af boligorganisationen.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Tilsvarende kan en afdeling iværksætte sådanne aktiviteter inden for afdelingen.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at der ikke er tale om løsning af en kommunal opgave.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par18_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den enkelte boligorganisation eller den enkelte afdeling hæfter kun for sin andel af udgifterne.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par18_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Det skal af en note til boligorganisationens eller den enkelte afdelings årsregnskab fremgå, hvilke udgifter driften af aktiviteterne har belastet boligorganisationen eller afdelingen med.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par18_Stk4">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ønskes der i en afdeling afholdt udgifter til en social aktivitet, i hvilken andre end afdelingens beboere vil kunne deltage, skal afdelingens budget umiddelbart efter dets godkendelse, indsendes til den tilsynsførende kommunalbestyrelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Udgifterne til den sociale aktivitet skal fremgå af en note til budgettet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Opstår der ønske om en aktivitet, som nævnt i 1. pkt., uden at der i afdelingens budget er afsat midler til aktiviteten, skal kommunalbestyrelsen underrettes om aktiviteten og om udgiften hertil.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Har kommunalbestyrelsen ikke inden 3 måneder fra modtagelsen af budgettet eller underretningen reageret, kan afdelingen iværksætte aktiviteten.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par18_Stk5">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den orientering af kommunalbestyrelsen, som er nævnt i stk. 4, skal dog ikke finde sted for så vidt angår</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Index id="Par18_Stk5_X1">
+                  <Indentatio formaInd="Nummer" id="Par18_Stk5_Num1">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>aktiviteter, som en boligorganisation iværksætter som led i en af kommunen godkendt helhedsplan i et problemramt boligområde,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par18_Stk5_Num2">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>aktiviteter, hvorom der efter fritidslovgivningen eller anden lovgivning allerede er indgået aftale mellem boligorganisationen og kommunen, eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par18_Stk5_Num3">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>enkeltarrangementer, hvor deltagelsen af andre end afdelingens beboere sker uplanlagt og tilfældigt.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X10">
+          <Rubrica>
+            <Linea>
+              <Char>Intern teknisk rådgivning og intern håndværksvirksomhed</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par19" localId="19">
+            <Explicatus>§ 19.</Explicatus>
+            <Stk id="Par19_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan udføre intern teknisk rådgivning og intern håndværksvirksomhed.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Udførelsen skal ske i en separat afdeling af boligorganisationen.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Ydelserne må ikke sælges til andre, herunder til andre almene boligorganisationer, medmindre disse administreres af boligorganisationen, eller der er tale om samdrift i samme bebyggelse af to eller flere afdelinger under forskellige boligorganisationer.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Ydelserne må dog sælges til lejerne i boligorganisationens eller i administrerede boligorganisationers afdelinger, hvis ydelserne alene vedrører det lejede.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Der må ikke udføres arbejder, som efter gældende regler skal udbydes.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X11">
+          <Rubrica>
+            <Linea>
+              <Char>Indskud i godkendte administrationsorganisationer og byfornyelsesselskaber</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par20" localId="20">
+            <Explicatus>§ 20.</Explicatus>
+            <Stk id="Par20_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan foretage indskud i almene administrationsorganisationer og i byfornyelsesselskaber, der er godkendt i medfør af lov om byfornyelse eller den tidligere lov om byfornyelse og boligforbedring.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Indskuddet skal stå i et rimeligt forhold til boligorganisationens størrelse og økonomiske forhold.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X12">
+          <Rubrica>
+            <Linea>
+              <Char>Særlige byfornyelsesselskaber</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par21" localId="21">
+            <Explicatus>§ 21.</Explicatus>
+            <Stk id="Par21_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan etablere og foretage indskud i et selskab, jf. § 23, der som forretningsfører forestår ekstern byfornyelse efter lov om byfornyelse og udvikling af byer, lov om byfornyelse eller lov om byfornyelse og boligforbedring.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at kommunalbestyrelsen godkender boligorganisationens disposition.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par21_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Selskabet må kun forestå indenlandske arbejder, og må således ikke udøve kommerciel virksomhed i udlandet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X13">
+          <Rubrica>
+            <Linea>
+              <Char>Eksportselskaber</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par22" localId="22">
+            <Explicatus>§ 22.</Explicatus>
+            <Stk id="Par22_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan etablere og foretage indskud i et selskab, jf. § 23, til salg i udlandet af viden om boligbyggeri og boligadministration.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at kommunalbestyrelsen godkender boligorganisationens disposition.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X14">
+          <Rubrica>
+            <Linea>
+              <Char>Indskud i sideaktivitets-selskaber m.v.</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par23" localId="23">
+            <Explicatus>§ 23. </Explicatus>
+            <Stk id="Par23_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Det er en forudsætning for kommunalbestyrelsens godkendelse af boligorganisationens etablering og indskud i et selskab efter reglerne i §§ 4, 10, 17, 21 og 22</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Index id="Par23_Stk1_X1">
+                  <Indentatio formaInd="Nummer" id="Par23_Stk1_Num1">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at selskabet er et aktie- eller anpartsselskab, hvor boligorganisationen ejer mindst 10 pct. af aktie -eller anpartskapitalen,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par23_Stk1_Num2">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at selskabet udelukkende behæftes og forpligtes af forhold, der vedrører aktiviteter, der godkendt efter ovennævnte regler,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par23_Stk1_Num3">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at boligorganisationen kun hæfter med sit indskud for tab i selskabet,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par23_Stk1_Num4">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at selskabet, hvis det udøver de i §§ 10, 21 og 22 nævnte aktiviteter, tegner en professionel ansvarsforsikring med en passende forsikringssum mod tab som følge af rådgivningsfejl, og</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio formaInd="Nummer" id="Par23_Stk1_Num5">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>at indskuddet foretages efter markedsøkonomiske investeringsprincipper med henblik på at opnå en normal forrentning af de investerede midler.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="Par23_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan deltage i selskabets ledelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par23_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Kommunalbestyrelsen træffer i forbindelse med sin godkendelse afgørelse om, hvorvidt boligorganisationen skal eje alle aktier eller anparter i selskabet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par23_Stk4">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Kommunalbestyrelsen kan godkende, at flere af de aktiviteter, som er nævnt i stk. 1, udøves af samme selskab.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par24" localId="24">
+            <Explicatus>§ 24.</Explicatus>
+            <Stk id="Par24_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan udlåne medarbejdere og driftsmateriel o.l. til de selskaber, som boligorganisationen eller administrerede boligorganisationer har foretaget indskud i efter reglerne i §§ 4, 10, 17, 21 og 22.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at boligorganisationen opnår fuld dækning for omkostningerne ved udlånet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X15">
+          <Rubrica>
+            <Linea>
+              <Char>Salg af viden om boligadministration</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par25" localId="25">
+            <Explicatus>§ 25.</Explicatus>
+            <Stk id="Par25_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan udgive og sælge publikationer og bøger m.v. samt udvikle og sælge forvaltningskoncepter og edb-baserede produkter og lignende til administration af boligbyggeri, der er opført med offentlig støtte.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe id="Kap3_X16">
+          <Rubrica>
+            <Linea>
+              <Char>Idé- og arkitektkonkurrencer</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="Par26" localId="26">
+            <Explicatus>§ 26.</Explicatus>
+            <Stk id="Par26_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan afholde udgifter til idé- og arkitektkonkurrencer i forbindelse med etablering af byggeri, hvortil der ydes offentlig støtte efter almenboligloven.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="Kap4">
+        <Explicatus>Kapitel 4</Explicatus>
+        <Rubrica>
+          <Linea>
+            <Char>Det kommunale tilsyn</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe id="Kap4_X1">
+          <Paragraf id="Par27" localId="27">
+            <Explicatus>§ 27.</Explicatus>
+            <Stk id="Par27_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Kommunalbestyrelsen påser, at boligorganisationen overholder bestemmelserne i kapitel 3 om sideaktiviteter.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Kommunalbestyrelsen kan til enhver tid afkræve boligorganisationen yderligere oplysninger om hver enkelt aktivitet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par27_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Hvis en boligorganisations aktiviteter strider mod kommunale økonomiske eller planlægningsmæssige forhold, herunder energimæssige eller sociale hensyn, kan kommunalbestyrelsen påbyde aktiviteten standset.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par27_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Finder kommunalbestyrelsen, at en aktivitet ikke falder inden for almene boligorganisationers kerneaktiviteter efter § 6, stk. 1, i lov om almene boliger m.v., eller er omfattet af kapitel 3 i denne bekendtgørelse, skal kommunalbestyrelsen påbyde aktiviteten standset.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par28" localId="28">
+            <Explicatus>§ 28.</Explicatus>
+            <Stk id="Par28_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Har en boligorganisation foretaget indskud i et selskab, jf. § 23, kontrollerer kommunalbestyrelsen i egenskab af tilsynsmyndighed med boligorganisationen, boligorganisationens engagement i selskabet eller virksomheden.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Kommunalbestyrelsen kan afkræve boligorganisationen de oplysninger, som boligorganisationen i kraft af sit indskud er i besiddelse af om selskabet eller virksomheden.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Kommunalbestyrelsen kan påbyde indskuddet nedbragt eller afviklet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="Kap5">
+        <Explicatus>Kapitel 5</Explicatus>
+        <Rubrica>
+          <Linea>
+            <Char>Straffebestemmelser</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe id="Kap5_X1">
+          <Paragraf id="Par29" localId="29">
+            <Explicatus>§ 29.</Explicatus>
+            <Stk id="Par29_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Udførelse af aktiviteter, der ikke er omfattet af kapitel 3, eller overtrædelse af betingelser angivet i kapitel 3 for udførelse af aktiviteter, straffes med bøde, medmindre højere straf er forskyldt efter anden lovgivning.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det samme gælder overtrædelse af et kommunalt påbud efter §§ 27 og 28.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par29_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Der kan pålægges selskaber m.v. (juridiske personer) strafansvar efter reglerne i straffelovens 5. kapitel.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="Kap6">
+        <Explicatus>Kapitel 6</Explicatus>
+        <Rubrica>
+          <Linea>
+            <Char>Ikrafttrædelses- og overgangsbestemmelser</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe id="Kap6_X1">
+          <Paragraf id="Par30" localId="30">
+            <Explicatus>§ 30.</Explicatus>
+            <Stk id="Par30_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen træder i kraft den 1. januar 2010.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par30_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Samtidig ophæves bekendtgørelse nr. 876 af 3. oktober 1996 om sideaktiviteter i almene boligorganisationer m.v. med senere ændringer, jf. dog § 31.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par31" localId="31">
+            <Explicatus>§ 31.</Explicatus>
+            <Stk id="Par31_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan have skøde på og administrere driften af erhvervsarealer, der er etableret efter § 3, stk. 1, i bekendtgørelse nr. 876 af 3. oktober 1996 om sideaktiviteter i almene boligorganisationer m.v. med senere ændringer på de vilkår, som er fastsat i den nævnte bestemmelse. § 31, stk. 1 og 2, samt § 32 i den bekendtgørelse, som er nævnt i 1. pkt., finder fortsat anvendelse på de nævnte aktiviteter.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par31_Stk2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Bestemmelsen i § 3, stk. 2, i bekendtgørelse nr. 876 af 3. oktober 1996 om sideaktiviteter i almene boligorganisationer m.v. med senere ændringer finder fortsat anvendelse på administration af opførelse og drift af erhvervsarealer, som hverken boligorganisation eller en afdeling har skøde på.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at administrationsaftale er indgået inden den 1. januar 2010.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Administrationsaftalen kan ikke forlænges eller fornyes ved udløb. § 31, stk. 1 og 2, samt § 32 i den bekendtgørelse, som er nævnt i 1. pkt., finder fortsat anvendelse på den nævnte aktivitet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par31_Stk3">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Bestemmelsen i § 6 i bekendtgørelse nr. 876 af 3. oktober 1996 om sideaktiviteter i almene boligorganisationer m.v. med senere ændringer finder fortsat anvendelse på ejerskab samt administration af opførelse og drift af ferieboliger.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det er en forudsætning, at ferieboligerne er etableret eller bindende aftaler herom er indgået med en sælger af en ejendom eller med rådgivere eller entreprenører inden den 1. januar 2010. § 31, stk. 1 og 2, samt § 32 i den bekendtgørelse, som er nævnt i 1. pkt., finder fortsat anvendelse på den nævnte aktivitet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par31_Stk4">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan på hidtil gældende vilkår opretholde indskud i danske håndværksvirksomheder, jf. § 17 i bekendtgørelse nr. 876 af 3. oktober 1996 om sideaktiviteter i almene boligorganisationer m.v. med senere ændringer. § 28, § 31, stk. 1 og 2, samt § 32 i den bekendtgørelse, som er nævnt i 1. pkt., finder fortsat anvendelse på den nævnte aktivitet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par31_Stk5">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Boligorganisationen kan på hidtil gældende vilkår opretholde indskud i danske virksomheder, der har som et væsentlig formål at levere varer, tjenesteydelser eller entreprenørydelser til almene boligorganisationer eller afdelinger, jf. § 18 i i bekendtgørelse nr. 876 af 3. oktober 1996 om sideaktiviteter i almene boligorganisationer m.v. med senere ændringer. § 28, § 31, stk. 1 og 2, samt § 32 i den bekendtgørelse, som er nævnt i 1. pkt., finder fortsat anvendelse på den nævnte aktivitet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="Par31_Stk6">
+              <Explicatus>Stk. 6.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>En almen administrationsorganisation kan på hidtil gældende vilkår opretholde indskud i tidligere datterorganisationer, jf. § 20, 3. pkt. i bekendtgørelse nr. 876 af 3. oktober 1996 om sideaktiviteter i almene boligorganisationer m.v. med senere ændringer. § 31, stk. 1 og 2, samt § 32 i den bekendtgørelse, som er nævnt i 1. pkt., finder fortsat anvendelse på den nævnte aktivitet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+    </Afsnit>
+  </DokumentIndhold>
+  <UnderskriftGruppe>
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

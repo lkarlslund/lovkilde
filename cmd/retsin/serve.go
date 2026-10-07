@@ -61,9 +61,12 @@ The page's HTML is the same walk that produces the markdown an agent reads, with
 escaped where it is built: a provision containing "<script>" arrives as text about a script, not
 as a script. There is no JavaScript, no build step, and no asset pipeline.
 
-/--index/--artifact mean what they mean for "mcp": a missing index or artifact downgrades the
-server and says so, and one that is present but unreadable or from another build stops it.
-Without an index the site still browses and reads, and says it cannot search.`,
+--index/--artifact mean what they mean for "mcp". The search index is the server's own: when it
+is missing, unreadable or built from another artifact, the server rebuilds it from the artifact
+in the background (about a minute) and saves it; lookups and browsing answer meanwhile, and the
+site says search is on its way. A missing artifact is downloaded from --hf-repo, and a newer one
+installed every --auto-update; without one the server does not start, and one that is present but
+unreadable stops it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			srv, err := openServingServer(cmd.Context(), resolve, o)
@@ -84,13 +87,14 @@ Without an index the site still browses and reads, and says it cannot search.`,
 		fmt.Sprintf("cap every MCP answer at this many characters (default %d); web pages are not capped",
 			mcpserver.DefaultMaxChars))
 	cmd.Flags().StringVar(&o.Index, "index", "",
-		"full-text index to serve (default <data-dir>/"+indexDefaultName+"); if it is missing, search says so and browsing still works")
+		"where the search index is kept (default: beside the artifact, named for its stamp); built from the artifact when it is missing or from another artifact")
 	cmd.Flags().StringVar(&o.Artifact, "artifact", "",
-		"compiled document artifact to read text from (default <data-dir>/"+artifactDefaultName+"); if it is missing, documents parse the XML instead and say so")
+		"serve this artifact file and no other (default: the current one, followed as new ones are installed)")
 	cmd.Flags().IntVar(&o.ArtifactCacheMB, "artifact-cache-mb", mcpserver.DefaultArtifactCacheBytes>>20,
 		"megabytes of artifact payloads the serving cache may hold")
 	cmd.Flags().BoolVar(&verbose, "verbose-requests", false,
 		"log every request line; off by default because a public page's traffic is a list of other people's questions")
+	addFetchFlags(cmd, &o)
 	return cmd
 }
 

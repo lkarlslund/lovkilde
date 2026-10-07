@@ -1,7 +1,11 @@
 package lexdania
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
@@ -125,6 +129,7 @@ var concepts = map[string]concept{
 func contentOf(root *Node) lexdoc.Content {
 	b := &contentBuilder{}
 	b.walk(&b.c.Order, root, walkCtx{})
+	b.c.Order = regroup(b.c.Order, b.divisions)
 	b.c.Unmapped = b.unmapped
 	return b.c
 }
@@ -150,6 +155,19 @@ type contentBuilder struct {
 	// element was both a second chapter and a paragraph of prose; a provision's rubric was
 	// printed inside its own text as well as above it.
 	labelled map[*Node]*Node
+
+	// tables places rendered text in the table cell it was printed in; see lexdoc.Segment.Table.
+	tableCount int
+	cells      []cellPos
+
+	// divisions are the book and afsnit a payload prints as loose lines between its chapters,
+	// "Fjerde bog. Strafferetsplejen", "Andet afsnit. Efterforskning …", and the element they are
+	// printed in: the chapters after them are theirs.
+	divisions []division
+	partDepth int
+
+	// carried is a heading the site printed at the end of the provision before the one it heads.
+	carried string
 }
 
 // walk classifies the children of n, recursing through containers. Structure is not stable
@@ -166,9 +184,58 @@ type walkCtx struct {
 }
 
 func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
-	for _, c := range n.Elems {
+	heads := func(p *lexdoc.Provision, c *Node) {
+		trailing := trailingHeading(c, b.labelled[c])
+		if trailing != "" && p.Heading == trailing {
+			p.Heading = ""
+		}
+		if b.carried != "" && p.Heading == "" {
+			p.Heading = b.carried
+		}
+		// A rubric that closes the element, after every subsection, heads the next provision,
+		// which may open the next chapter.
+		b.carried = trailing
+	}
+	for i := 0; i < len(n.Elems); i++ {
+		c := n.Elems[i]
 		if b.labelled[n] == c {
 			continue // its words are this element's heading, not a piece of content
+		}
+		if c.Name == "Rubrica" && !ctx.inAnnex && i+1 < len(n.Elems) && concepts[n.Elems[i+1].Name].kind == conceptProvision {
+			// "a. Pristillæg m.v. til VE-elektricitet" printed between a chapter's heading and its
+			// first provision heads that provision.
+			b.carried = strings.TrimSpace(DisplayText(c))
+			continue
+		}
+		if !ctx.inAnnex && !ctx.inForce {
+			if m := looseDivision(c); m != nil {
+				// Printed inside the chapter before it, the line heads what follows that chapter.
+				at := len(b.c.Order)
+				if b.partDepth > 0 {
+					at++
+				}
+				b.divisions = append(b.divisions, division{at: at, book: strings.EqualFold(m[2], "bog"),
+					part: lexdoc.Part{Printed: m[1] + " " + strings.ToLower(m[2]), Number: strconv.Itoa(lexdoc.DanishOrdinals[strings.ToLower(m[1])]), Heading: strings.TrimSpace(m[3])}})
+				continue
+			}
+		}
+		if loose, end := looseProvision(n.Elems, i); loose != nil {
+			// A subsection the site prints straight under a chapter, opening "§ 36.", is that
+			// provision: left to the chapter it was prose the law did not have.
+			b.watch = map[*Node]bool{}
+			b.spanStart = map[*Node]int{}
+			b.spanEnd = map[*Node]int{}
+			p := b.provision(loose)
+			b.watch, b.spanStart, b.spanEnd = nil, nil, nil
+			lead := lexdoc.Squeeze(reLooseLead.FindString(DisplayText(c)))
+			p.Printed, p.Number, p.Litra = lead, lexdoc.FirstNumber(lead), lexdoc.ParaLitra(lead)
+			if ctx.inForce {
+				b.c.EntryIntoForce = append(b.c.EntryIntoForce, p)
+			} else {
+				*order = append(*order, lexdoc.Node{Provision: &p})
+			}
+			i = end - 1
+			continue
 		}
 		con, known := concepts[c.Name]
 		if !known {
@@ -176,11 +243,15 @@ func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
 		}
 		switch con.kind {
 		case conceptProvision, conceptEntryIntoForce:
+			if !ctx.inAnnex && !ctx.inForce && con.kind == conceptProvision {
+				c = b.takeDivisions(c)
+			}
 			b.watch = map[*Node]bool{}
 			b.spanStart = map[*Node]int{}
 			b.spanEnd = map[*Node]int{}
 			p := b.provision(c)
 			b.watch, b.spanStart, b.spanEnd = nil, nil, nil
+			heads(&p, c)
 			if ctx.inForce || con.kind == conceptEntryIntoForce {
 				b.c.EntryIntoForce = append(b.c.EntryIntoForce, p)
 				continue
@@ -197,8 +268,11 @@ func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
 
 		case conceptPart:
 			part := &lexdoc.Part{Kind: con.part}
-			part.Number = lexdoc.FirstNumber(c.Attrs["localId"])
+			part.Number = lexdoc.NumberWithLitra(c.Attrs["localId"])
 			part.Printed = strings.TrimSpace(c.Elem("Explicatus").TextOrNull())
+			if part.Number == "" && con.part == lexdoc.PartChapter {
+				part.Number = lexdoc.NumberWithLitra(part.Printed)
+			}
 			if con.part == lexdoc.PartAfsnit {
 				// An afsnit carries id="Afs1" and no localId, and prints "Afsnit I": the
 				// printed roman numeral is the only number the element has, and it is what
@@ -213,7 +287,9 @@ func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
 				}
 			}
 			part.Heading = b.label(c)
+			b.partDepth++
 			b.walk(&part.Order, c, ctx)
+			b.partDepth--
 			*order = append(*order, lexdoc.Node{Part: part})
 
 		case conceptPreamble:
@@ -276,8 +352,46 @@ func (b *contentBuilder) appendix(n *Node) {
 	if len(ap.Order) == 0 {
 		ap.Segments = b.render(nil, n, true)
 	}
+	// The annex's number is what it prints, "Bilag 5". The site's payload keeps that in a title
+	// line the label does not come from, and numbering by the first digit of the label made all
+	// nine annexes of the financial business act "bilag 1".
+	if !reAnnexTitle.MatchString(ap.Label) {
+		if m := reAnnexID.FindStringSubmatch(n.Attrs["id"]); m != nil {
+			ap.Number = m[1]
+		}
+		titles := 0
+		for _, seg := range ap.Segments {
+			if reAnnexTitle.MatchString(Squeeze(seg.Text)) {
+				titles++
+			}
+		}
+		for _, seg := range ap.Segments {
+			if m := reAnnexTitle.FindStringSubmatch(Squeeze(seg.Text)); m != nil && titles < 3 {
+				ap.Number, ap.Label = strings.TrimRight(strings.ReplaceAll(m[1], " ", ""), ".,;: "), Squeeze(seg.Text)
+				break
+			}
+		}
+		if titles >= 3 {
+			// "Fortegnelse over bilag": a list of the annexes, printed as one, names them all and
+			// is none of them. Numbered by its first line it was a second bilag 1.
+			ap.Number, ap.Label = "", "Fortegnelse over bilag"
+		}
+	}
 	b.c.Appendices = append(b.c.Appendices, *ap)
 }
+
+var (
+	// reAnnexTitle is an annex's printed title: "Bilag 5", "Bilag 5.".
+	reAnnexTitle = regexp.MustCompile(`(?i)^bilag[\s\x{a0}]+([0-9]+(?:\s?[a-z](?:[^\p{L}]|$))?)`)
+	// reAnnexID is the payload's id for an annex: id="B5", id="B4A".
+	reAnnexID = regexp.MustCompile(`^B([0-9]+[A-Za-z]?)$`)
+)
+
+// reRangeStubHead is the range a repealed run of provisions prints after "§§": "34 a-34 b.", "16-21.".
+var reRangeStubHead = regexp.MustCompile(`^(?:§§\s*)?([0-9]+)(\s?[a-zæøå])?\s*[-–]\s*[0-9]+(?:\s?[a-zæøå])?\s*\.`)
+
+// reLeadingParaLabel is a provision's label opening its text: "§ 30 mm.".
+var reLeadingParaLabel = regexp.MustCompile(`^§\s*([0-9]+)\s*([a-zæøå]{1,2})?\s*\.`)
 
 // provision builds one provision: its identity, its text, and the spans of its subsections.
 func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
@@ -290,6 +404,16 @@ func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
 		p.Number = lexdoc.FirstNumber(p.Printed)
 	}
 	p.Litra = lexdoc.ParaLitra(p.Printed)
+	if p.Printed == "" && p.Number == "" {
+		// "§ 30 mm. Undervisningsministeren kan …" with no label element: the provision's number
+		// is the one its text opens with, or it answers to no citation at all.
+		if m := reLeadingParaLabel.FindStringSubmatch(lexdoc.Squeeze(DisplayText(n))); m != nil {
+			p.Number, p.Litra = m[1], strings.ToLower(m[2])
+			if r := []rune(p.Litra); len(r) == 2 && r[0] != r[1] {
+				p.Litra = ""
+			}
+		}
+	}
 
 	var segs []lexdoc.Segment
 	segs = appendRun(segs, n.Runs[0])
@@ -324,7 +448,7 @@ func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
 				}
 				marker := strings.TrimSpace(it.node.Elem("Explicatus").TextOrNull())
 				item := lexdoc.Item{Span: lexdoc.Span{From: b.spanStart[it.node], To: end}, Label: marker}
-				item.Nr, item.Litra = lexdoc.ItemMarker(marker)
+				item.Nr, item.Litra, item.Suffix = lexdoc.ItemMarkerSuffix(marker)
 				if item.Nr == 0 && item.Litra == "" {
 					// The Explicatus of a numbered paragraph often carries the marker
 					// ("2)"), so an explicit one wins over position.
@@ -340,6 +464,22 @@ func (b *contentBuilder) provision(n *Node) lexdoc.Provision {
 		segs = appendRun(segs, n.Runs[i+1])
 	}
 	p.Segments = segs
+	if strings.TrimSpace(p.Printed) == "§§" {
+		// "§§ " then "34 a-34 b." and "(Ophævet)": a repealed range printed with its numbers in
+		// the text, whose localId is a sequence number (56, for aktivloven's §§ 34 a-34 b). Numbered
+		// by the localId, it was found in place of § 56, and §§ 16-21 in place of § 35.
+		for _, sg := range segs {
+			t := strings.TrimSpace(sg.Text)
+			if t == "" || t == "§§" {
+				continue
+			}
+			if m := reRangeStubHead.FindStringSubmatch(t); m != nil {
+				p.Number, p.Litra = m[1], strings.TrimSpace(m[2])
+			}
+			break
+		}
+	}
+	p.Normalise()
 	return p
 }
 
@@ -358,6 +498,36 @@ func (b *contentBuilder) render(out []lexdoc.Segment, n *Node, block bool) []lex
 	if watched {
 		b.spanStart[n] = len(out)
 	}
+	switch n.Name {
+	case "Table":
+		b.tableCount++
+		b.cells = append(b.cells, cellPos{table: b.tableCount})
+		defer func() { b.cells = b.cells[:len(b.cells)-1] }()
+	case "Tr":
+		if k := len(b.cells); k > 0 {
+			b.cells[k-1].row++
+			b.cells[k-1].col, b.cells[k-1].in = 1, false
+		}
+	case "Td", "Th":
+		if k := len(b.cells); k > 0 {
+			from := len(out)
+			cur := b.cells[k-1]
+			b.cells[k-1].in = true
+			defer func() {
+				for i := from; i < len(out); i++ {
+					if out[i].Table == 0 {
+						out[i].Table, out[i].Row, out[i].Col = cur.table, cur.row, cur.col
+					}
+				}
+				span := 1
+				if v, err := strconv.Atoi(strings.TrimSpace(n.Attrs["colspan"])); err == nil && v > 1 {
+					span = v
+				}
+				b.cells[k-1].col += span
+				b.cells[k-1].in = false
+			}()
+		}
+	}
 	out = appendRun(out, n.Runs[0])
 	for i, c := range n.Elems {
 		if b.labelled[n] == c {
@@ -370,6 +540,13 @@ func (b *contentBuilder) render(out []lexdoc.Segment, n *Node, block bool) []lex
 			from := len(out)
 			out = b.render(out, c, block)
 			markNote(&out, from, c.ID())
+		} else if c.Name == "Char" && c.Attrs["formaChar"] == "Superscript" && reNoteMarker.MatchString(DisplayText(c)) {
+			// "Stk. 4. <SUP>2)</SUP> Told af varer …": an older payload's reference to a note
+			// printed below the text, with no link to say so. It is no word of the provision's,
+			// and read as one it was a condition "2)".
+			from := len(out)
+			out = b.render(out, c, block)
+			markNote(&out, from, "ref:"+strings.TrimSpace(DisplayText(c)))
 		} else {
 			out = b.render(out, c, block)
 		}
@@ -377,6 +554,9 @@ func (b *contentBuilder) render(out []lexdoc.Segment, n *Node, block bool) []lex
 	}
 	if block || blockElements[n.Name] {
 		markBreak(&out)
+	}
+	if n.Name == "Exitus" && len(out) > 0 {
+		out[len(out)-1].Para = true
 	}
 	if watched {
 		b.spanEnd[n] = len(out)
@@ -450,13 +630,21 @@ func markBreak(out *[]lexdoc.Segment) {
 	*out = append(*out, lexdoc.Segment{Break: true})
 }
 
-// markNote tags the segment that begins a footnote's text.
+// markNote tags the segments of a footnote's text with the note's id. Every one is tagged, not
+// only the first: a note the site prints as an endnote is set at its reference, inside the
+// provision's text, and an untagged remainder read as the provision's own words — its "4)" as a
+// numbered condition, its sentences as the subsection's, so "1. pkt." named the note's first.
+// reNoteMarker is a note reference as an older payload prints it in superscript: "2)".
+var reNoteMarker = regexp.MustCompile(`^\s*[0-9]{1,3}\)\s*$`)
+
 func markNote(out *[]lexdoc.Segment, from int, id string) {
 	if id == "" {
 		return
 	}
 	if from < len(*out) {
-		(*out)[from].Note = id
+		for i := from; i < len(*out); i++ {
+			(*out)[i].Note = id
+		}
 		return
 	}
 	*out = append(*out, lexdoc.Segment{Note: id})
@@ -510,4 +698,189 @@ func knownConceptBelow(n *Node) bool {
 		}
 	})
 	return found
+}
+
+// reLooseLead is a provision's printed number at the head of a subsection's text: "§ 36.", "§ 8 a.".
+var reLooseLead = regexp.MustCompile(`^§[\s\x{a0}]*[0-9]+(?:[\s\x{a0}]*[a-zæøå])?\.`)
+
+// reLooseStk is a later subsection's printed label: "Stk. 2.".
+var reLooseStk = regexp.MustCompile(`^Stk\.[\s\x{a0}]*[0-9]+\.`)
+
+// looseProvision reads a provision the site printed without its provision element: a <Stk> that
+// opens with "§ 36." among a chapter's children, with the subsections labelled "Stk. 2." after it.
+// It returns the provision as a <Paragraf> holding those subsections, and the index after them.
+func looseProvision(elems []*Node, i int) (*Node, int) {
+	if elems[i].Name != "Stk" || !reLooseLead.MatchString(DisplayText(elems[i])) {
+		return nil, i
+	}
+	p := &Node{Name: "Paragraf", Attrs: map[string]string{}, Runs: []string{""}}
+	j := i
+	for ; j < len(elems); j++ {
+		if j > i && (elems[j].Name != "Stk" || !reLooseStk.MatchString(DisplayText(elems[j]))) {
+			break
+		}
+		p.Elems = append(p.Elems, elems[j])
+		p.Runs = append(p.Runs, "")
+	}
+	return p, j
+}
+
+// trailingHeading is the rubric an HTML payload prints as the last element of a provision, after
+// its text: "c. Generelle bestemmelser …" closing § 58 b's element heads § 59. Read as § 58 b's
+// own heading, every "overskriften før § 59" missed and every heading sat one provision early.
+func trailingHeading(n, labelled *Node) string {
+	if len(n.Elems) < 2 {
+		return ""
+	}
+	last := n.Elems[len(n.Elems)-1]
+	if last.Name != "Rubrica" {
+		return ""
+	}
+	if labelled != nil && labelled != last {
+		return "" // the provision has a rubric of its own in front; the last one is not a heading
+	}
+	return strings.TrimSpace(DisplayText(last))
+}
+
+// reLooseDivision is a book or an afsnit printed as a line of its own: "Fjerde bog.
+// Strafferetsplejen", "Andet afsnit. Efterforskning, tvangsindgreb m.v.".
+var reLooseDivision = regexp.MustCompile(`(?i)^(første|anden|andet|tredje|fjerde|femte|sjette|syvende|ottende|niende|tiende|ellevte|tolvte)\s+(bog|afsnit)\.?\s*(.*)$`)
+
+// division is a book or an afsnit printed as a loose line, and the place in the law's top-level
+// order of the first part it heads.
+type division struct {
+	at   int
+	book bool
+	part lexdoc.Part
+}
+
+// regroup puts the law's top-level chapters under the books and afsnit printed as loose lines
+// between them: retsplejeloven's "Fjerde bog. Strafferetsplejen" and its "Andet afsnit. …", which
+// an act names ("Overskriften til fjerde bog, andet afsnit") and repeals whole.
+func regroup(order []lexdoc.Node, divs []division) []lexdoc.Node {
+	if len(divs) == 0 {
+		return order
+	}
+	var out []lexdoc.Node
+	var book, sec *lexdoc.Part
+	open := func(d division) {
+		p := d.part
+		if d.book {
+			p.Kind = lexdoc.PartBook
+			book, sec = &p, nil
+			out = append(out, lexdoc.Node{Part: book})
+			return
+		}
+		p.Kind = lexdoc.PartAfsnit
+		sec = &p
+		if book != nil {
+			book.Order = append(book.Order, lexdoc.Node{Part: sec})
+		} else {
+			out = append(out, lexdoc.Node{Part: sec})
+		}
+	}
+	d := 0
+	for k, n := range order {
+		for d < len(divs) && divs[d].at <= k {
+			open(divs[d])
+			d++
+		}
+		switch {
+		case sec != nil:
+			sec.Order = append(sec.Order, n)
+		case book != nil:
+			book.Order = append(book.Order, n)
+		default:
+			out = append(out, n)
+		}
+	}
+	for ; d < len(divs); d++ {
+		open(divs[d])
+	}
+	return out
+}
+
+// takeDivisions takes the book and afsnit lines a provision ends with — "Andet afsnit.
+// Rettergangsmåden" printed inside the last provision of the chapter before it — out of the
+// provision, and records them as heading what follows.
+func (b *contentBuilder) takeDivisions(c *Node) *Node {
+	k := len(c.Elems)
+	var found []division
+	for k > 0 {
+		e := c.Elems[k-1]
+		m := looseDivision(e)
+		if m == nil || strings.TrimSpace(c.Runs[k]) != "" {
+			break
+		}
+		found = append([]division{{book: strings.EqualFold(m[2], "bog"),
+			part: lexdoc.Part{Printed: m[1] + " " + strings.ToLower(m[2]), Number: strconv.Itoa(lexdoc.DanishOrdinals[strings.ToLower(m[1])]), Heading: strings.TrimSpace(m[3])}}}, found...)
+		k--
+	}
+	if len(found) == 0 {
+		return c
+	}
+	at := len(b.c.Order)
+	if b.partDepth > 0 {
+		at++
+	}
+	for _, d := range found {
+		d.at = at
+		b.divisions = append(b.divisions, d)
+	}
+	cp := *c
+	cp.Elems = c.Elems[:k]
+	cp.Runs = append([]string(nil), c.Runs[:k+1]...)
+	return &cp
+}
+
+// looseDivision reads a book or afsnit line from an element holding text alone; anything with
+// elements of its own is not one, and reading its whole text to find out was most of a large law's
+// build.
+func looseDivision(c *Node) []string {
+	if len(c.Elems) > 1 || concepts[c.Name].kind == conceptProvision {
+		return nil
+	}
+	if len(c.Elems) == 1 && len(c.Elems[0].Elems) > 0 {
+		return nil
+	}
+	// Every ordinal the pattern accepts starts with one of a few letters, and the first letter
+	// of the text is in the first non-blank run: checking it spares building the whole text of
+	// every element that holds only text, which almost none of them is a division line.
+	if !ordinalStart(firstRune(c)) {
+		return nil
+	}
+	return reLooseDivision.FindStringSubmatch(DisplayText(c))
+}
+
+// firstRune is the first non-space rune of the node's text as PlainText would render it, or 0.
+func firstRune(n *Node) rune {
+	for i, run := range n.Runs {
+		if t := strings.TrimSpace(run); t != "" {
+			r, _ := utf8.DecodeRuneInString(t)
+			return r
+		}
+		if i < len(n.Elems) {
+			if r := firstRune(n.Elems[i]); r != 0 {
+				return r
+			}
+		}
+	}
+	return 0
+}
+
+// ordinalStart says whether r can begin første … tolvte under reLooseDivision's (?i): f, a, t,
+// s (and ſ, which case-insensitive matching folds to s), o, n, e.
+func ordinalStart(r rune) bool {
+	switch unicode.ToLower(r) {
+	case 'f', 'a', 't', 's', 'ſ', 'o', 'n', 'e':
+		return true
+	}
+	return false
+}
+
+// cellPos is where rendering stands in a table: its number, its row, the grid column of the next
+// cell.
+type cellPos struct {
+	table, row, col int
+	in              bool
 }

@@ -171,8 +171,18 @@ var htmlClasses = map[string]htmlTarget{
 	// and becomes the container's Rubrica; the number lives on the container, which
 	// is what Sections() reads, so mapping a heading onto a second Kapitel would
 	// invent a chapter.
-	"kapitel":                  {Role: roleSection, Name: "Kapitel", Basis: basisID},
-	"kapiteloverskrift2":       {Role: roleText, Name: "Rubrica", Basis: basisText},
+	"kapitel":            {Role: roleSection, Name: "Kapitel", Basis: basisID},
+	"kapiteloverskrift2": {Role: roleText, Name: "Rubrica", Basis: basisText},
+	// The pair the mid-century payloads print inside <DIV CLASS=KAPITEL>, in about 3,450 sampled
+	// chapters each: the printed "Kapitel 3" and its heading. Unmapped, every such chapter was a
+	// part with no number, so "Overskriften til kapitel 13" had nothing to resolve to.
+	"kapitelnummer":     {Role: roleMarker, Name: "Explicatus", Basis: basisName},
+	"kapiteloverskrift": {Role: roleText, Name: "Rubrica", Basis: basisName},
+	// An afsnit's number and heading, "Afsnit X" and "Investeringsrådgivere", printed the way a
+	// chapter's are. Unread, every afsnit of lov om finansiel virksomhed had no number, and "efter
+	// afsnit X indsættes" found nothing to go by.
+	"afsnitsnummer":            {Role: roleMarker, Name: "Explicatus", Basis: basisName},
+	"afsnitsoverskrift":        {Role: roleText, Name: "Rubrica", Basis: basisName},
 	"ktitle1":                  {Role: roleText, Name: "Rubrica", Basis: basisName},
 	"ktitle2":                  {Role: roleText, Name: "Rubrica", Basis: basisName},
 	"atitle1":                  {Role: roleText, Name: "Rubrica", Basis: basisName},
@@ -226,7 +236,13 @@ var htmlClasses = map[string]htmlTarget{
 	// Footnotes. This is the pair the pilot's measurement paid for: 266 of 277 Nota
 	// ids in the XML reappear as a name= on the inline marker, which is the only
 	// thing tying a footnote to the sentence it qualifies.
-	"fodnote":           {Role: roleNote, Name: "Nota", Basis: basisText},
+	"fodnote": {Role: roleNote, Name: "Nota", Basis: basisText},
+	// The endnote form older payloads use, under "Officielle noter": the same note, printed at
+	// the end and linked by <a name="FN501">.
+	"slutnotetekst": {Role: roleNote, Name: "Nota", Basis: basisName},
+	// The same endnote as Word exported it, in 216 payloads: unread, a title note such as the
+	// EU directives B20050010005 implements was a stray paragraph after the last annex.
+	"msofootnotetext":   {Role: roleNote, Name: "Nota", Basis: basisName},
 	"fodnotenr":         {Role: roleNote, Name: "Nota", Attr: "ref", Basis: basisName},
 	"fodnotehenvisning": {Role: roleNote, Name: "Nota", Attr: "ref", Basis: basisName},
 
@@ -257,6 +273,7 @@ var htmlClasses = map[string]htmlTarget{
 	// Hymns (church Acts) and prose or headings that are not provisions.
 	"hymne2":             {Role: roleSection, Name: "Hymne", Basis: basisText},
 	"tekstoverskrift":    {Role: roleText, Name: "Rubrica", Basis: basisText},
+	"tekstoverskriftb":   {Role: roleText, Name: "Rubrica", Basis: basisText}, // a chapter's title in the older payloads: retsplejeloven 2005
 	"overskriftstekst1":  {Role: roleText, Name: "Rubrica", Basis: basisName},
 	"overskriftstekst3":  {Role: roleText, Name: "Rubrica", Basis: basisName},
 	"overskriftsnummer2": {Role: roleMarker, Name: "Explicatus", Basis: basisName},
@@ -460,6 +477,9 @@ func classifyHTMLFamily(class string) (htmlTarget, bool) {
 		"ktitle":           {Role: roleText, Name: "Rubrica", Basis: basisName},
 		"atitle":           {Role: roleText, Name: "Rubrica", Basis: basisName},
 		"tab":              {Role: roleTable, Name: "Table", Basis: basisName},
+		// "Stk0" holds a provision's opening text, "<b>§ 1.</b> Denne lov …", and its later
+		// subsections; read as prose, lov om finansiel virksomhed 2006 had no § 1.
+		"stk": {Role: roleSection, Name: "Stk", Basis: basisName},
 	}
 	if t, ok := families[stem]; ok {
 		return t, true

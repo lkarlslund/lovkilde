@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="id9beb8907-b8a8-4483-8f44-5ef86736ac28" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2016/09/26/BEKC.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="idd08af095-b995-4f47-b596-17ac8acecd4f">
+    <DocumentType>BEK Æ#LOKDOK05</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20180110505</AccessionNumber>
+    <DocumentId>CQ000612</DocumentId>
+    <UniqueDocumentId>202443</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om ændring af bekendtgørelse om skibsregistrering</DocumentTitle>
+    <Year>2018</Year>
+    <DiesSigni>2018-08-28</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2018-08-31</StartDate>
+    <EndDate REFid="submit_1">2023-01-14</EndDate>
+    <Status>Historic</Status>
+    <Number>1105</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2018-08-31</DiesEdicti>
+    <DateOfHistoricMark>2023-01-13</DateOfHistoricMark>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Kristina Ravn</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Ditte Marie Nørgård</Signature>
+    <PlaceOfSignature>Søfartsstyrelsen</PlaceOfSignature>
+    <JournalNumber>Erhvervsmin.,\nSøfartsstyrelsen, j.nr. 2018022583</JournalNumber>
+    <Ministry>Erhvervsministeriet</Ministry>
+    <AdministrativeAuthority>Søfartsstyrelsen</AdministrativeAuthority>
+  </Meta>
+  <TitelGruppe id="ida877ec77-eff8-4b15-9189-14620610a9a4">
+    <Titel id="id61965190-6189-4df5-8ba8-790e96a6a420">
+      <Linea>
+        <Char>Bekendtgørelse om ændring af bekendtgørelse om skibsregistrering</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="ide0f53a38-0b37-4f8e-bbed-2eb9a9f68035">
+    <AendringCentreretParagraf id="idfcb4a2d4-ba4a-4632-81f3-cb2de0582158" localId="1">
+      <Explicatus>§ 1 </Explicatus>
+      <Exitus>
+        <Linea>
+          <Char>I bekendtgørelse nr. 41 af 22. januar 1999 om skibsregistrering, som senest ændret ved bekendtgørelse nr. 110 af 14. februar 2018, foretages følgende ændringer:</Char>
+        </Linea>
+      </Exitus>
+      <AendringsNummer id="id0dbc1000-8f6a-414c-9bf2-f247d4521346">
+        <Explicatus>1.</Explicatus>
+        <Aendring id="idc21ed7e5-f378-4d86-84c5-3b69fc8a7454">
+          <AendringDefinition id="idfb178b90-b95e-48c2-97cd-d06c80388323">
+            <Exitus>
+              <Linea>
+                <Char signiChar="AendringURN" formaChar="Italic">Indledningen</Char>
+                <Char> affattes således:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="id432c01ac-f74d-4257-a810-ece316efb0c3">
+            <AendringNyTekst>
+              <Indledning id="ideb5a59f0-30ef-4454-b5f2-4cddc944e5b7">
+                <Exitus>
+                  <Linea>
+                    <Char>I medfør af § 3, stk. 3, § 12, stk. 2 og 4, § 14, stk. 2, § 15, stk. 2 og 4, § 27, § 33, § 36, stk. 2, § 39, stk. 3, § 39 d, stk. 3, § 46 c, § 46 d og § 514 a i søloven, jf. lovbekendtgørelse nr. 75 af 17. januar 2014, som ændret ved lov nr. 526 af 7. juni 2006 og lov nr. 1546 af 19. december 2017, fastsættes efter bemyndigelse i henhold til § 1, stk. 1, nr. 10, i bekendtgørelse nr. 744 af 24. juni 2013 om henlæggelse af visse beføjelser til Søfartsstyrelsen og om klageadgang m.v.:</Char>
+                  </Linea>
+                </Exitus>
+              </Indledning>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer id="id39f90fc4-7dc9-4c75-866d-51d2f1df7e74">
+        <Explicatus>2.</Explicatus>
+        <Aendring id="id972e526f-c209-4c21-8547-1b0e087c643c">
+          <AendringDefinition id="idc1f16d0b-6332-49c3-8b04-f10dce41f86d">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 16, stk. 1, 3. pkt.,</Char>
+                <Char> indsættes efter »åbent«: », jf. dog stk. 5«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="idfeda57e5-99ec-40a0-9aa1-d9bdc0dea95f">
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer id="idf2036a8c-26f2-4dee-96c9-06fdd7ac6277">
+        <Explicatus>3.</Explicatus>
+        <Aendring id="ida4dc271b-205f-4a70-9c78-d3b2bf11f759">
+          <AendringDefinition id="id377577eb-b525-4909-9d11-33012b8c69f6">
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 16</Char>
+                <Char> indsættes som </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">stk. 5:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="id2838aed7-21ff-4b97-925c-1830341becca">
+            <AendringNyTekst>
+              <Stk id="iddd92ccd3-fa7c-482f-95d0-2c909fb95e79">
+                <Explicatus>Stk. 5.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Anmeldelser om registerskift fra Det Almindelige Skibsregister (DAS) til Dansk Internationalt Skibsregister (DIS) og omvendt kan indgives til Søfartsstyrelsen hele døgnet via virk.dk.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Såfremt andet ikke fremgår af anmeldelsen, regnes retsvirkningerne af sådanne anmeldelser fra det tidspunkt på den dag, som dokumentet er modtaget i Skibsregistret.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Såfremt det fremgår af anmeldelsen, at skiftet skal ske på et senere tidspunkt, end da anmeldelsen blev modtaget i Skibsregistret, registreres skiftet ikke før det pågældende tidspunkt.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Anmeldelse kan dog ikke indgives for registerskifter, som ligger mere end en måned efter, anmeldelsen blev indgivet til Skibsregistret.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+    </AendringCentreretParagraf>
+    <IkraftCentreretParagraf id="id54c8a808-e22e-44ad-9748-49f3a0edac0d" localId="2">
+      <Explicatus>§ 2</Explicatus>
+      <Stk id="idfaa1502a-150b-4078-80df-bca7f30aa76a">
+        <Exitus>
+          <Linea>
+            <Char>Bekendtgørelsen træder i kraft den 1. september 2018.</Char>
+          </Linea>
+        </Exitus>
+      </Stk>
+    </IkraftCentreretParagraf>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="id664be43a-0ecd-4aba-a259-fd3ba5e7633e">
+    <UnderskriftStedDato id="idfade61d3-6a65-48b2-8bf0-f567c7aba5de" />
+    <Underskriver id="id52ddfd63-b15f-4de0-b81d-f549983e92c7" />
+  </UnderskriftGruppe>
+</Dokument>

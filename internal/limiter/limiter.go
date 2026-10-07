@@ -7,7 +7,7 @@
 //     ("once per 10 seconds") and answers 429 beyond it, so there is nothing to
 //     learn and no room to be more aggressive. A pinned bucket encodes an
 //     obligation, not an observation.
-//   - Adaptive buckets self-tune. retsininformation.dk sends no Retry-After and no
+//   - Adaptive buckets self-tune. retsinformation.dk sends no Retry-After and no
 //     rate-limit header on 429 (measured), so the only way to discover a safe
 //     document interval is to probe. Adaptive buckets start at their floor -- the
 //     pace believed safe is the pace used -- double on pushback, and step back

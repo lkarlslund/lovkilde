@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 func main() {
@@ -124,18 +125,15 @@ func main() {
 	for i, v := range views {
 		changed := 0
 		var examples []string
-		for _, s := range v.Sections() {
-			if s.Kind != "paragraf" {
-				continue
-			}
+		for _, s := range paragraphs(v) {
 			fp := fingerprint(s)
 			if fp == "" {
 				continue
 			}
-			if was, ok := baseFP[fp]; ok && was != s.RawNumber {
+			if was, ok := baseFP[fp]; ok && was != s.printed {
 				changed++
 				if len(examples) < 3 {
-					examples = append(examples, fmt.Sprintf("%s→%s", was, s.RawNumber))
+					examples = append(examples, fmt.Sprintf("%s→%s", was, s.printed))
 				}
 			}
 		}
@@ -156,9 +154,9 @@ func main() {
 		if v == nil {
 			continue
 		}
-		beforeText := before.Text()
+		beforeText := lawText(before)
 
-		var mine []lexdania.UnresolvedEdit
+		var mine []lexdoc.UnresolvedEdit
 		for _, u := range v.Unresolved {
 			if u.Edit.Source == act.Accession {
 				mine = append(mine, u)
@@ -210,13 +208,13 @@ func main() {
 	}
 }
 
-func classify(u lexdania.UnresolvedEdit, before, baseView *lexdania.View, beforeText string, baseFP map[string]string) string {
+func classify(u lexdoc.UnresolvedEdit, before, baseView *lexdania.View, beforeText string, baseFP map[string]string) string {
 	e := u.Edit
 	addr := e.Address.String()
 	if addr == "" {
 		addr = e.Address.Raw
 	}
-	if e.Kind == lexdania.EditInsertProvision {
+	if e.Kind == lexdoc.EditInsertProvision {
 		return "INSERT"
 	}
 	if !e.Address.Recognised {
@@ -230,14 +228,14 @@ func classify(u lexdania.UnresolvedEdit, before, baseView *lexdania.View, before
 	if e.Address.Heading {
 		return "HEADING"
 	}
-	if before.Section(addr) != nil {
+	if _, ok := before.ProvisionText(addr); ok {
 		return "WORDING"
 	}
 
 	// The address does not resolve now. Ask whether it ever did, and whether the thing it
-	// points at is absent or merely not modelled as a node.
-	if baseView.Section(addr) != nil {
-		fp := fingerprint(baseView.Section(addr))
+	// points at is absent or merely not modelled as a unit.
+	if was, ok := baseView.ProvisionText(addr); ok {
+		fp := fingerprint(para{text: was})
 		if fp != "" && strings.Contains(beforeText, fp) {
 			return "ORPHAN"
 		}
@@ -246,14 +244,14 @@ func classify(u lexdania.UnresolvedEdit, before, baseView *lexdania.View, before
 	if e.Address.Paragraph == "" {
 		return "NOADDR"
 	}
-	parent := before.Section("§ " + e.Address.Paragraph)
-	if parent == nil {
+	parentText, ok := before.ProvisionText("§ " + e.Address.Paragraph)
+	if !ok {
 		return "NO-PARAGRAAF"
 	}
 	// The paragraph is there. Numbered items and subsections print inline in Danish texts
 	// ("1) …", "Stk. 2. …"), so an unresolved item address means one of two quite different
 	// things: the words are printed and we never made a node for them, or they are not there.
-	body := oneLine(parent.Display())
+	body := oneLine(parentText)
 	switch {
 	case e.Address.Litra != "" && strings.Contains(body, e.Address.Litra+")"):
 		return "LITRA-INLINE"
@@ -303,29 +301,37 @@ func touched(v *lexdania.View, addr string) string {
 	return ""
 }
 
-func paragraphs(v *lexdania.View) []*lexdania.Section {
-	var out []*lexdania.Section
-	for _, s := range v.Sections() {
-		if s.Kind == "paragraf" {
-			out = append(out, s)
-		}
+// para is one provision of the law's own series: the number it prints and its text.
+type para struct{ printed, text string }
+
+func paragraphs(v *lexdania.View) []para {
+	var out []para
+	for _, ref := range v.Content.Provisions() {
+		out = append(out, para{strings.TrimSpace(ref.Provision.Printed), oneLine(ref.Provision.Text())})
 	}
 	return out
+}
+
+// lawText is the whole derived law as one line, for asking whether some words survive anywhere.
+func lawText(v *lexdania.View) string {
+	var b strings.Builder
+	for _, p := range paragraphs(v) {
+		b.WriteString(p.text)
+		b.WriteByte(' ')
+	}
+	return b.String()
 }
 
 func fingerprints(v *lexdania.View) map[string]string {
 	counts := map[string]int{}
 	nums := map[string]string{}
-	for _, s := range v.Sections() {
-		if s.Kind != "paragraf" {
-			continue
-		}
+	for _, s := range paragraphs(v) {
 		fp := fingerprint(s)
 		if fp == "" {
 			continue
 		}
 		counts[fp]++
-		nums[fp] = s.RawNumber
+		nums[fp] = s.printed
 	}
 	out := map[string]string{}
 	for fp, n := range counts {
@@ -341,11 +347,12 @@ func fingerprints(v *lexdania.View) map[string]string {
 
 // fingerprint is a provision's whole text minus its own number, so the same words printed
 // under another number are recognised as the same provision.
-func fingerprint(s *lexdania.Section) string {
-	t := oneLine(s.Display())
-	n := strings.TrimSpace(s.RawNumber)
-	if i := strings.Index(t, n); i >= 0 {
-		t = strings.TrimSpace(t[i+len(n):])
+func fingerprint(s para) string {
+	t := s.text
+	if n := strings.TrimSpace(s.printed); n != "" {
+		if i := strings.Index(t, n); i >= 0 {
+			t = strings.TrimSpace(t[i+len(n):])
+		}
 	}
 	if len(t) < 20 {
 		return ""

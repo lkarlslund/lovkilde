@@ -43,7 +43,7 @@ import (
 
 // SampleManifestHeader marks a manifest file and carries the seed, so a plan made
 // today can be reproduced or compared after a month of archive growth.
-const SampleManifestHeader = "# retsin sample manifest v1"
+const SampleManifestHeader = "# retsin-update sample manifest v1"
 
 // SampleStratum is one labelled bucket of the paired-truth sample.
 //

@@ -24,15 +24,17 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
 )
 
-// pageSize is how many browse rows one page carries. It is a page's worth of scanning for a
-// person, not a limit on the dataset: the total is always shown.
-const pageSize = 200
+// pageSize is how many browse rows one load carries; scrolling to the end brings the next as
+// many. It is a screenful of scanning for a person, not a limit on the dataset: the total is
+// always shown.
+const pageSize = 100
 
 // Handler is one server's web front end. It holds no state of its own.
 type Handler struct {
@@ -83,13 +85,14 @@ func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 	// counts are what the listing can actually filter by, not a separate promise.
 	facets := h.srv.Browse(mcpserver.BrowseRequest{Limit: 1})
 	h.render(w, "index", map[string]any{
-		"PageTitle": "Søg i dansk lovgivning",
-		"Status":    h.srv.Status(),
-		"Search":    h.srv.HasSearch(),
-		"Kinds":     facets.Kinds,
-		"Years":     facets.Years,
-		"Total":     facets.Total,
-		"Queries":   indexQueries,
+		"PageTitle":     "Søg i dansk lovgivning",
+		"Status":        h.srv.StatusDA(),
+		"Search":        h.srv.HasSearch(),
+		"SearchPending": h.srv.SearchPending(),
+		"Kinds":         kindToggles(facets.Kinds, nil),
+		"Years":         facets.Years,
+		"Total":         facets.Total,
+		"Queries":       indexQueries,
 	})
 }
 
@@ -111,26 +114,56 @@ type searchPage struct {
 	// eventually reads the wrong one.
 	PageTitle string
 	Query     string
-	Kind      string
 	Since     string
 	Until     string
 
-	// Status is the register's own label the results were narrowed to, and Statuses are the
-	// three counts beside the choice. The counts come from the archive's metadata rather than
-	// the index, so they describe the mirror, not the subset a text query could reach.
-	Status   string
+	// Kinds and Statuses are the toggles, each knowing whether it is on. The counts come from
+	// the archive's metadata rather than the index, so they describe the mirror, not the
+	// subset a text query could reach.
+	Kinds    []toggle
+	Statuses []toggle
+	Sources  []toggle
+
+	// Within narrows to one document, and WithinTitle names it on the page.
+	Within      string
+	WithinTitle string
+	AllLink     string // the same search without the document limit
+
 	Hits     []hitView
+	Cited    []citedView // documents the query cites by number, above the ranked hits
 	Total    int
+	From     int
+	To       int
+	More     string // the next page's address, or "" at the end
+	Filtered bool   // a filter beyond the words is on
 	Mirror   string
-	Kinds    []mcpserver.Facet
-	Statuses []mcpserver.Facet
 	Warn     []string
 	HasQuery bool
 	NoIndex  bool
 }
 
+// toggle is one filter choice shown as a switch: the value the form sends, the words the reader
+// sees, how many documents carry it, and whether it is on.
+type toggle struct {
+	Value string
+	Label string
+	Hint  string
+	Count int
+	On    bool
+}
+
+// citedView is a document the query names by its number.
+type citedView struct {
+	Title  string
+	Label  string // "LOV nr. 1399 af 2019"
+	Link   string
+	Status string
+}
+
 type hitView struct {
+	N          int
 	Title      string
+	DocLink    string
 	Address    string
 	Snippet    string
 	Provenance string
@@ -141,32 +174,56 @@ type hitView struct {
 	ELI        string
 }
 
+// searchPageSize is how many hits one load brings; scrolling brings the next as many.
+const searchPageSize = 20
+
 func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	v := r.URL.Query()
+	q := strings.TrimSpace(v.Get("q"))
+	kinds := nonEmpty(v["kind"])
+	statuses := nonEmpty(v["status"])
 	req := mcpserver.SearchRequest{
-		Query:  q,
-		Kind:   r.URL.Query().Get("kind"),
-		Since:  yearOf(r.URL.Query().Get("since")),
-		Until:  yearOf(r.URL.Query().Get("until")),
-		Status: r.URL.Query().Get("status"),
+		Query:    q,
+		Kinds:    kinds,
+		Statuses: statuses,
+		Since:    yearOf(v.Get("since")),
+		Until:    yearOf(v.Get("until")),
+		Within:   strings.TrimSpace(v.Get("in")),
+		Offset:   offsetOf(v.Get("offset")),
+		Limit:    searchPageSize,
+		Language: "da",
 	}
-	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil {
-		req.Limit = n
-	}
+	req.Sources = nonEmpty(v["kilde"])
+	facets := h.srv.Browse(mcpserver.BrowseRequest{Limit: 1})
 	page := searchPage{
 		Query:     q,
-		Kind:      req.Kind,
-		Since:     r.URL.Query().Get("since"),
-		Until:     r.URL.Query().Get("until"),
-		Status:    req.Status,
+		Since:     v.Get("since"),
+		Until:     v.Get("until"),
+		Kinds:     kindToggles(facets.Kinds, kinds),
+		Statuses:  statusToggles(facets.Statuses, statuses),
+		Sources:   sourceToggles(h.srv.SourceFacets(), req.Sources),
+		Within:    req.Within,
 		HasQuery:  q != "",
-		Kinds:     h.srv.Browse(mcpserver.BrowseRequest{Limit: 1}).Kinds,
-		Statuses:  h.srv.Browse(mcpserver.BrowseRequest{Limit: 1}).Statuses,
 		PageTitle: "Søgning",
+	}
+	page.Filtered = len(kinds) > 0 || len(statuses) > 0 || len(req.Sources) > 0 || req.Since > 0 || req.Until > 0 || req.Within != ""
+	if req.Within != "" {
+		page.WithinTitle = req.Within
+		if title, ok := h.srv.Citation(req.Within); ok {
+			page.WithinTitle = title
+		}
+		all := url.Values{}
+		for key, vals := range v {
+			if key != "in" && key != "offset" && key != "del" {
+				all[key] = vals
+			}
+		}
+		page.AllLink = "/search?" + all.Encode()
 	}
 	if q != "" {
 		page.PageTitle = "Søgning efter " + q
 	}
+	fragment := v.Get("del") == "1"
 	res, err := h.srv.Search(req)
 	if err != nil {
 		// A server without an index answers with the reason, and the page offers browsing
@@ -177,9 +234,28 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Mirror = res.Mirror
-	page.Total = len(res.Hits)
+	page.Total = res.Total
+	for _, c := range res.Cited {
+		label := fmt.Sprintf("nr. %d af %d", c.Number, c.Year)
+		if t := strings.Fields(c.DocumentType); len(t) > 0 {
+			label = t[0] + " " + label
+		}
+		page.Cited = append(page.Cited, citedView{Title: c.Title, Label: label, Link: documentLink(c.Reference, ""), Status: c.Status})
+	}
 	page.Warn = res.Warnings
-	for _, hit := range res.Hits {
+	page.From = res.Offset + 1
+	page.To = res.Offset + len(res.Hits)
+	if res.Next > 0 {
+		next := url.Values{}
+		for key, vals := range v {
+			if key != "offset" && key != "del" {
+				next[key] = vals
+			}
+		}
+		next.Set("offset", strconv.Itoa(res.Next))
+		page.More = "/search?" + next.Encode()
+	}
+	for i, hit := range res.Hits {
 		ref := hit.Reference
 		if ref == "" {
 			// Reference is the unique handle: a proposal stores every stage under one ELI,
@@ -187,6 +263,8 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 			ref = hit.ELI
 		}
 		page.Hits = append(page.Hits, hitView{
+			N:          res.Offset + i + 1,
+			DocLink:    documentLink(ref, ""),
 			Title:      hit.Citation,
 			Address:    hit.Address,
 			Snippet:    hit.Snippet,
@@ -198,7 +276,97 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 			ELI:        hit.ELI,
 		})
 	}
+	if fragment {
+		h.renderFragment(w, "search", "hits", page)
+		return
+	}
 	h.render(w, "search", page)
+}
+
+// renderFragment writes one named block of a page without its layout: the next screenful of a
+// list, which the page's script appends where the previous one ended.
+func (h *Handler) renderFragment(w http.ResponseWriter, page, block string, data any) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl[page].ExecuteTemplate(w, block, data); err != nil {
+		fmt.Fprintf(w, "\n<p class=bad>Fejl under visning: %v", err)
+	}
+}
+
+// kindNames are the Danish names of the register's media, so a toggle says what it holds
+// rather than a code only the register's own staff would read.
+var kindNames = map[string][2]string{
+	"lta":      {"Love og bekendtgørelser", "Lovtidende A"},
+	"ltb":      {"Bevillinger", "Lovtidende B"},
+	"ltc":      {"Traktater og aftaler", "Lovtidende C"},
+	"mt":       {"Vejledninger og skrivelser", "Ministerialtidende"},
+	"ft":       {"Lovforslag", "Folketingstidende"},
+	"fob":      {"Ombudsmandens udtalelser", "Folketingets Ombudsmand"},
+	"retsinfo": {"Øvrige dokumenter", "cirkulærer, afgørelser m.m."},
+	"accn":     {"Afgørelser", "ankenævn"},
+}
+
+// kindName is the toggle's words for a medium, falling back to the code for one not named.
+func kindName(kind string) string {
+	if n, ok := kindNames[kind]; ok {
+		return n[0]
+	}
+	return kind
+}
+
+// kindOrder puts the media a reader most often means first: law, then the bills that make it,
+// then guidance; a medium not listed follows, as the archive counted it.
+var kindOrder = []string{"lta", "ft", "mt", "ltc", "retsinfo", "accn", "fob", "ltb"}
+
+func kindToggles(facets []mcpserver.Facet, on []string) []toggle {
+	out := make([]toggle, 0, len(facets))
+	facets = slices.Clone(facets)
+	rank := func(kind string) int {
+		if i := slices.Index(kindOrder, kind); i >= 0 {
+			return i
+		}
+		return len(kindOrder)
+	}
+	slices.SortStableFunc(facets, func(a, b mcpserver.Facet) int { return rank(a.Name) - rank(b.Name) })
+	for _, f := range facets {
+		t := toggle{Value: f.Name, Label: kindName(f.Name), Count: f.Count, On: slices.Contains(on, f.Name)}
+		if n, ok := kindNames[f.Name]; ok {
+			t.Hint = n[1]
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+func statusToggles(facets []mcpserver.Facet, on []string) []toggle {
+	out := make([]toggle, 0, len(facets))
+	for _, f := range facets {
+		value := f.Name
+		if value == "" {
+			value = "unknown"
+		}
+		selected := slices.ContainsFunc(on, func(s string) bool { return statusShort(s) == statusShort(value) })
+		out = append(out, toggle{Value: value, Label: statusShort(value), Count: f.Count, On: selected})
+	}
+	return out
+}
+
+func sourceToggles(facets []mcpserver.Facet, on []string) []toggle {
+	out := make([]toggle, 0, len(facets))
+	for _, f := range facets {
+		out = append(out, toggle{Value: f.Name, Label: provenanceLabel(f.Name), Hint: provenanceExplained(f.Name), Count: f.Count, On: slices.Contains(on, f.Name)})
+	}
+	return out
+}
+
+// nonEmpty drops the blank values a form sends for an unticked choice.
+func nonEmpty(values []string) []string {
+	var out []string
+	for _, v := range values {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // gapText says the measured distance in words rather than showing -1 for "not graded".
@@ -236,6 +404,32 @@ type documentPage struct {
 	Addr           string
 	Groups         []relatedGroupView
 	FullLink       string
+
+	// Ref is the document's handle for a form that reloads it, DateTool whether the page offers
+	// to show the text as of a chosen date, and OriginalLink the page without that date.
+	Ref          string
+	DateTool     bool
+	OriginalLink string
+
+	// Refused are the changes a consolidated text could not take in, and ConsolidateLink the
+	// page with the text as amended, offered when the document has been amended since.
+	Refused         []refusedView
+	AsOf            string
+	ConsolidateLink string
+	ConsolidateOn   string
+}
+
+// refusedView is one change the consolidated text leaves out, as the page shows it.
+type refusedView struct {
+	ID       string // the list entry's own anchor, which a provision's marker links to
+	Act      string
+	ActLink  string
+	Number   string
+	Target   string
+	InForce  string
+	Reason   string
+	Wording  string
+	Concerns bool
 }
 
 // contentsLink is one line of the table of contents with the address of the page that holds it.
@@ -298,6 +492,16 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 		FullLink:       documentLink(orString(res.Accession, res.ELIURL), ""),
 	}
 	page.AmendmentsNote = res.AmendmentsNote
+	page.AsOf = res.AsOf
+	page.Ref = orString(res.Accession, res.ELIURL)
+	// A date is worth offering where amendments are known to exist: on anything else every
+	// date shows the same text, and a tool that never changes anything teaches distrust.
+	page.DateTool = res.AmendmentsNote != "" || res.AsOf != "" || len(res.RefusedChanges) > 0
+	page.OriginalLink = documentLink(page.Ref, addr)
+	if res.ConsolidateOn != "" {
+		page.ConsolidateOn = res.ConsolidateOn
+		page.ConsolidateLink = documentLink(orString(res.Accession, res.ELIURL), addr) + "&as_of=" + url.QueryEscape(res.ConsolidateOn)
+	}
 	page.PageTitle = res.Citation
 	if addr != "" {
 		// A tab that says only the law's title is useless with twenty provision tabs open.
@@ -306,7 +510,28 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 	// The renderer escapes everything it takes from the document on the way in, so the body is
 	// marked safe as a whole; TestHTMLSaysWhatPlainTextSays and
 	// TestHTMLEscapesTextThatLooksLikeMarkup are what that rests on.
-	page.Body = template.HTML(res.HTML)
+	body := res.HTML
+	marked := map[string][]string{}
+	for i, c := range res.RefusedChanges {
+		v := refusedView{
+			ID:       fmt.Sprintf("ikke-indarbejdet-%d", i+1),
+			Act:      orString(c.ActTitle, c.Act),
+			Number:   strings.TrimSuffix(c.Number, "."),
+			Target:   c.Target,
+			InForce:  c.InForce,
+			Reason:   refusalReasonDA(c.Reason),
+			Wording:  c.Wording,
+			Concerns: c.Concerns,
+		}
+		if c.Act != "" {
+			v.ActLink = documentLink(c.Act, "")
+		}
+		page.Refused = append(page.Refused, v)
+		if c.Anchor != "" {
+			marked[c.Anchor] = append(marked[c.Anchor], v.ID)
+		}
+	}
+	page.Body = template.HTML(markRefusedHTML(body, marked))
 	if res.HTML == "" {
 		// The as-of view is still built by the amendment engine, which has no HTML mode, so it
 		// is shown as text rather than pretending to be marked up.
@@ -340,6 +565,27 @@ func (h *Handler) document(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "document", page)
 }
 
+// markRefusedHTML puts a note at the head of each provision a refused change names, linking to
+// the change in the list: a reader of § 5 learns there that § 5 may not read as the law does.
+// The anchors are the renderer's own ids, and the note is markup this package writes.
+func markRefusedHTML(body string, marked map[string][]string) string {
+	for anchor, ids := range marked {
+		open := fmt.Sprintf("<section id=%q>", anchor)
+		at := strings.Index(body, open)
+		if at < 0 {
+			continue
+		}
+		links := make([]string, len(ids))
+		for i, id := range ids {
+			links[i] = fmt.Sprintf(`<a href="#%s">nr. %s</a>`, id, strings.TrimPrefix(id, "ikke-indarbejdet-"))
+		}
+		note := `<p class="refused-mark">En ændring af denne bestemmelse er ikke indarbejdet (se ` + strings.Join(links, ", ") +
+			` under »Ændringer, der ikke er indarbejdet«). Bestemmelsen kan stadig vise den tidligere ordlyd.</p>`
+		body = body[:at+len(open)] + note + body[at+len(open):]
+	}
+	return body
+}
+
 // related asks for the same law's other links, keyed on what the lookup identified. An
 // accession is preferred because it is unique; the ELI URL is what a document without one has.
 func (h *Handler) related(res *mcpserver.LookupResult) []mcpserver.RelatedGroup {
@@ -370,10 +616,10 @@ type browsePage struct {
 	// substring, and Statuses the counts beside the choice.
 	Status   string
 	TypeCode string
-	Statuses []mcpserver.Facet
-	Kinds    []mcpserver.Facet
+	Statuses []toggle
+	Kinds    []toggle
 	Years    []mcpserver.Facet
-	Pages    []pageLink
+	More     string // the next screenful's address, or "" at the end
 	From     int
 	To       int
 }
@@ -389,12 +635,6 @@ type browseRow struct {
 	// Status is the register's own claim about the document: "Valid", "Historic", or ""
 	// when its payload does not say.
 	Status string
-}
-
-type pageLink struct {
-	Label   string
-	Href    string
-	Current bool
 }
 
 func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
@@ -417,17 +657,16 @@ func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
 		Title:    res.Title,
 		Status:   res.Status,
 		TypeCode: req.TypeCode,
-		Statuses: res.Statuses,
-		Kinds:    res.Kinds,
+		Statuses: statusToggles(res.Statuses, nonEmpty([]string{res.Status})),
+		Kinds:    kindToggles(res.Kinds, nonEmpty([]string{res.Kind})),
 		Years:    res.Years,
-		Pages:    pages(res),
 		From:     min(res.Offset+1, max(res.Total, 1)),
 		To:       min(res.Offset+len(res.Items), res.Total),
 	}
 	page.PageTitle = "Alle dokumenter"
 	switch {
 	case res.Kind != "":
-		page.PageTitle = "Dokumenter af typen " + res.Kind
+		page.PageTitle = kindName(res.Kind)
 	case res.Year != 0:
 		page.PageTitle = "Dokumenter fra " + yearText(res.Year)
 	}
@@ -442,31 +681,19 @@ func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
 			Status: item.Status,
 		})
 	}
+	if next := res.Offset + len(res.Items); next < res.Total {
+		page.More = browseQueryArgs(res.Kind, res.Year, res.Title, res.Status, res.TypeCode, next)
+	}
+	if q.Get("del") == "1" {
+		h.renderFragment(w, "browse", "rows", page)
+		return
+	}
 	h.render(w, "browse", page)
-}
-
-func pages(res *mcpserver.BrowseResult) []pageLink {
-	if res.Total <= pageSize {
-		return nil
-	}
-	out := []pageLink{{
-		Label:   fmt.Sprintf("1–%d", min(pageSize, res.Total)),
-		Href:    browseQueryArgs(res.Kind, res.Year, res.Title, res.Status, res.TypeCode, 0),
-		Current: res.Offset == 0,
-	}}
-	for start := pageSize; start < res.Total; start += pageSize {
-		out = append(out, pageLink{
-			Label:   fmt.Sprintf("%d–%d", start+1, min(start+pageSize, res.Total)),
-			Href:    browseQueryArgs(res.Kind, res.Year, res.Title, res.Status, res.TypeCode, start),
-			Current: start == res.Offset,
-		})
-	}
-	return out
 }
 
 func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprint(w, h.srv.Status())
+	fmt.Fprint(w, h.srv.StatusDA())
 }
 
 // documentLink is the one way a link to a provision gets built, so every link in the interface

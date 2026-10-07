@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/crawl"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 )
 
@@ -39,11 +39,11 @@ func TestArtifactServingAnswersWhatTheParseAnswers(t *testing.T) {
 	}
 
 	byParse := ask()
-	if s.textSource() == "" || !strings.Contains(s.textSource(), "parsing XML") {
-		t.Fatalf("a server with no artifact should say it parses: %q", s.textSource())
+	if !strings.Contains(s.textSource(), testArchive(s).Root) {
+		t.Fatalf("a server with no artifact should name the library it reads: %q", s.textSource())
 	}
 
-	artPath := writeFixtureArtifact(t, s.archive)
+	artPath := writeFixtureArtifact(t, testArchive(s))
 	if err := s.UseArtifact(artPath, 1<<20); err != nil {
 		t.Fatalf("serving from the fixture artifact: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestArtifactServingAnswersWhatTheParseAnswers(t *testing.T) {
 // mirror gets quoted as a complete one.
 func TestServingNamesTheRemedyForADocumentTheArtifactLacks(t *testing.T) {
 	s := newTestServer(t)
-	artPath := writeFixtureArtifact(t, s.archive, accCanon)
+	artPath := writeFixtureArtifact(t, testArchive(s), accCanon)
 	if err := s.UseArtifact(artPath, 1<<20); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestServingNamesTheRemedyForADocumentTheArtifactLacks(t *testing.T) {
 	if err == nil {
 		t.Fatal("a document missing from the artifact answered without an error")
 	}
-	for _, want := range []string{accCanon, "artifact", "retsin artifact build"} {
+	for _, want := range []string{accCanon, "artifact", "retsin-update artifact build"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the error does not name %q: %v", want, err)
 		}
@@ -111,52 +111,29 @@ func TestServingNamesTheRemedyForADocumentTheArtifactLacks(t *testing.T) {
 	}
 }
 
-// A server and an artifact from different builds have to refuse each other at startup, and the
-// message has to name the side that needs rebuilding. The artifact holds the model as JSON, so a
-// file from another revision decodes into this server's types with another revision's meaning and
-// answers with fields that no longer say what they said.
-func TestServingRefusesAnArtifactFromAnotherBuild(t *testing.T) {
+// A server reads an artifact written by another build when both hold the same document model:
+// binaries and artifacts are not locked together, so a change to rendering or wording deploys with
+// a restart. The refusals — another model, either way, and a file from before model versions — are
+// pinned in internal/compiled (TestAnArtifactIsReadByModelNotBuild).
+func TestServingReadsAnArtifactOfItsModelFromAnotherBuild(t *testing.T) {
 	s := newTestServer(t)
 	restore := compiled.CurrentBuild
 	t.Cleanup(func() { compiled.CurrentBuild = restore })
 
 	wrote := compiled.BuildStamp{Revision: strings.Repeat("a", 40), Time: time.Now().Add(-2 * time.Hour)}
 	compiled.CurrentBuild = func() (compiled.BuildStamp, bool) { return wrote, true }
-	artPath := writeFixtureArtifact(t, s.archive)
+	artPath := writeFixtureArtifact(t, testArchive(s))
 
-	if err := s.UseArtifact(artPath, 1<<20); err != nil {
-		t.Fatalf("an artifact this build wrote was refused: %v", err)
-	}
-
-	// A server built from a commit the artifact predates: the artifact is the stale side.
 	compiled.CurrentBuild = func() (compiled.BuildStamp, bool) {
 		return compiled.BuildStamp{Revision: strings.Repeat("b", 40), Time: time.Now()}, true
 	}
-	fresh := New(s.archive, "https://www.retsinformation.dk/", "test")
-	err := fresh.UseArtifact(artPath, 1<<20)
-	if err == nil {
-		t.Fatal("an artifact from another build was accepted")
+	fresh := New(testArchive(s), "https://www.retsinformation.dk/", "test")
+	if err := fresh.UseArtifact(artPath, 1<<20); err != nil {
+		t.Fatalf("an artifact of this model from another build was refused: %v", err)
 	}
-	for _, want := range []string{"is stale", artPath, "retsin artifact build"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the refusal does not name %q: %v", want, err)
-		}
-	}
-	if !strings.Contains(fresh.textSource(), "parsing XML") {
-		t.Errorf("a server that refused its artifact does not say what it is serving from: %q", fresh.textSource())
-	}
-
-	// The other direction: the artifact is newer than the server, so telling the operator to rebuild
-	// the artifact would send them the wrong way.
-	compiled.CurrentBuild = func() (compiled.BuildStamp, bool) {
-		return compiled.BuildStamp{Revision: strings.Repeat("b", 40), Time: wrote.Time.Add(-time.Hour)}, true
-	}
-	err = New(s.archive, "https://www.retsinformation.dk/", "test").UseArtifact(artPath, 1<<20)
-	if err == nil || strings.Contains(err.Error(), "is stale") {
-		t.Errorf("an artifact newer than its server was reported as stale: %v", err)
-	}
-	if err != nil && !strings.Contains(err.Error(), "newer source") {
-		t.Errorf("the refusal does not name the server as the side to rebuild: %v", err)
+	res, err := fresh.Lookup(LookupRequest{Document: accHTML, Address: "§ 1"})
+	if err != nil || !strings.Contains(res.Text, "Bekendtgørelsen finder anvendelse") {
+		t.Errorf("the artifact did not answer: %v", err)
 	}
 }
 
@@ -168,6 +145,12 @@ func TestServingRefusesAnArtifactFromAnotherBuild(t *testing.T) {
 // record no stamp and every artifact in this package would be refused as unverifiable, which is
 // correct behaviour for a real file and a wall between these tests and their subject.
 func writeFixtureArtifact(t *testing.T, a *lexdania.Archive, skip ...string) string {
+	t.Helper()
+	return writeFixtureArtifactAfter(t, a, nil, skip...)
+}
+
+// writeFixtureArtifactAfter is writeFixtureArtifact for an artifact built after a collection pass.
+func writeFixtureArtifactAfter(t *testing.T, a *lexdania.Archive, pass *compiled.Collection, skip ...string) string {
 	t.Helper()
 	if _, have := compiled.CurrentBuild(); !have {
 		restore := compiled.CurrentBuild
@@ -184,22 +167,33 @@ func writeFixtureArtifact(t *testing.T, a *lexdania.Archive, skip ...string) str
 	if err != nil {
 		t.Fatal(err)
 	}
-	wr, err := compiled.NewWriter(f, a.Root)
+	wr, err := compiled.NewWriterAfter(f, a.Root, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range a.Entries() {
+	// What the artifact build stores: each document's model with its changes, and the catalogue
+	// in the archive's scan order (lexdania.ArtifactRecords).
+	var catalogue []lexdania.CatalogueRecord
+	for _, e := range a.ScanOrder() {
 		if left[e.Accession] {
+			catalogue = append(catalogue, lexdania.CatalogueRecord{Entry: e})
 			continue
 		}
-		doc, _, ok := a.Open(e.Accession)
+		doc, path, ok := a.Open(e.Accession)
 		if !ok {
 			t.Fatalf("opening %s", e.Accession)
 		}
-		if err := wr.Add(e.Accession, doc.Model()); err != nil {
+		m, rec := lexdania.ArtifactRecords(e, doc, path)
+		if err := wr.Add(e.Accession, m); err != nil {
 			t.Fatal(err)
 		}
+		catalogue = append(catalogue, rec)
 	}
+	payload, err := json.Marshal(catalogue)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wr.SetCatalogue(payload)
 	if err := wr.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -209,66 +203,16 @@ func writeFixtureArtifact(t *testing.T, a *lexdania.Archive, skip ...string) str
 	return path
 }
 
-// A collection pass that ran after the artifact was compiled leaves the mirror holding documents
-// the artifact has never seen. The server refuses that at startup, and a server that booted before
-// it happened has to catch it per answer, because the crawl finishes at night and the server does
-// not restart.
-func TestServingRefusesAnArtifactOlderThanTheMirror(t *testing.T) {
+// The status line carries the artifact's own date, so an operator can tell which build answers.
+func TestStatusDatesTheServedArtifact(t *testing.T) {
 	s := newTestServer(t)
-	artPath := writeFixtureArtifact(t, s.archive)
-
-	stampPath := filepath.Join(t.TempDir(), "sweep.record")
-	pulled := time.Now().Add(time.Hour)
-	if err := crawl.PublishSweepRecord(stampPath, crawl.SweepRecord{PulledAt: pulled, IssuesKnown: true}); err != nil {
+	if err := s.UseArtifact(writeFixtureArtifact(t, testArchive(s)), 1<<20); err != nil {
 		t.Fatal(err)
 	}
-
-	fresh := New(s.archive, "https://www.retsinformation.dk/", "test")
-	fresh.SweepStampPath = stampPath
-	err := fresh.UseArtifact(artPath, 1<<20)
-	if err == nil || !strings.Contains(err.Error(), "older than the mirror") {
-		t.Fatalf("an artifact older than the mirror was accepted: %v", err)
-	}
-	if !strings.Contains(err.Error(), "retsin artifact build") {
-		t.Errorf("the refusal does not say what to rebuild: %v", err)
-	}
-
-	// Booting with no collection record is legitimate — and then the pass runs while the server is
-	// up. The answer that reads the old compiled text is the thing that has to say so.
-	if err := s.UseArtifact(artPath, 1<<20); err != nil {
-		t.Fatal(err)
-	}
-	res, err := s.Lookup(LookupRequest{Document: accCanon})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Warnings) != 0 {
-		t.Fatalf("a server with no collection record warned about staleness: %q", res.Warnings)
-	}
-
-	s.SweepStampPath = stampPath
-	res, err = s.Lookup(LookupRequest{Document: accCanon})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var warned string
-	for _, w := range res.Warnings {
-		if strings.Contains(w, "compiled text") {
-			warned = w
-		}
-	}
-	if warned == "" {
-		t.Fatalf("no staleness warning among %q", res.Warnings)
-	}
-	for _, want := range []string{"retsin artifact build", "collection pass"} {
-		if !strings.Contains(warned, want) {
-			t.Errorf("the warning does not name %q: %s", want, warned)
-		}
-	}
-
-	// The status line carries the artifact's own date, so an operator comparing it against the pull
-	// date does not have to open the file to find out which is which.
 	if !strings.Contains(s.textSource(), "built") {
 		t.Errorf("the status line does not date the artifact: %q", s.textSource())
 	}
 }
+
+// testArchive is the XML archive a test server was started with.
+func testArchive(s *Server) *lexdania.Archive { return s.base.lib.(*lexdania.Archive) }

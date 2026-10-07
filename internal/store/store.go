@@ -5,7 +5,7 @@
 // Deliberate boundary: Badger holds STATE, not the ARCHIVE. Legal document bytes
 // live as plain XML files under data/xml (see internal/archive), because those
 // files are the product and must stay greppable, diffable and portable. The
-// database is a derived index: if meta/kv is lost, `retsin rebuild` reconstructs
+// database is a derived index: if meta/kv is lost, `retsin-update rebuild` reconstructs
 // it offline by re-scanning the XML, costing zero requests.
 //
 // Key layout (all values are tab-separated text so the store remains readable
@@ -860,7 +860,19 @@ type Accession struct {
 	ELIURL    string
 	SHA256    string
 	Bytes     int64
-	ChangedAt string
+	ChangedAt string // when the stored bytes last changed
+
+	// FetchedAt is when the document was last downloaded, whether or not the bytes changed.
+	// Empty on records written before it existed, where ChangedAt is the best lower bound.
+	FetchedAt string
+}
+
+// HeldSince is the latest time the stored copy is known to have been current.
+func (a Accession) HeldSince() string {
+	if a.FetchedAt > a.ChangedAt {
+		return a.FetchedAt
+	}
+	return a.ChangedAt
 }
 
 // GetAccession reads a stored-body record.
@@ -880,12 +892,12 @@ func (s *Store) GetAccession(ctx context.Context, accession string) (Accession, 
 			return err
 		}
 		f := strings.Split(string(v), "\t")
-		if len(f) < 5 {
-			g := make([]string, 5)
+		if len(f) < 6 {
+			g := make([]string, 6)
 			copy(g, f)
 			f = g
 		}
-		out = Accession{Accession: accession, ELIURL: f[0], SHA256: f[1], ChangedAt: f[3]}
+		out = Accession{Accession: accession, ELIURL: f[0], SHA256: f[1], ChangedAt: f[3], FetchedAt: f[5]}
 		out.Bytes, _ = strconv.ParseInt(f[2], 10, 64)
 		found = true
 		return nil
@@ -895,7 +907,7 @@ func (s *Store) GetAccession(ctx context.Context, accession string) (Accession, 
 
 // PutAccession records a stored body.
 func (s *Store) PutAccession(ctx context.Context, a Accession) error {
-	v := strings.Join([]string{a.ELIURL, a.SHA256, strconv.FormatInt(a.Bytes, 10), a.ChangedAt, a.Accession}, "\t")
+	v := strings.Join([]string{a.ELIURL, a.SHA256, strconv.FormatInt(a.Bytes, 10), a.ChangedAt, a.Accession, a.FetchedAt}, "\t")
 	return s.db.Update(func(tx *badger.Txn) error { return tx.Set([]byte(prefixAccession+a.Accession), []byte(v)) })
 }
 
@@ -916,16 +928,24 @@ func (s *Store) PutChanges(ctx context.Context, changes []Change) error {
 	if len(changes) == 0 {
 		return nil
 	}
-	b := s.db.NewWriteBatch()
-	defer b.Cancel()
-	for _, c := range changes {
-		key := []byte(prefixChange + c.Date + "|" + c.Accession + "|" + c.Reason)
-		v := strings.Join([]string{c.DocumentID, c.DocType, c.Href, c.SeenAt}, "\t")
-		if err := b.Set(key, []byte(v)); err != nil {
-			return err
+	// A change already recorded keeps its first sighting: SeenAt is what a held copy is
+	// compared against to decide whether it predates the change (see crawl.QueueFeedChanges),
+	// and the current day is harvested again on every run.
+	return s.db.Update(func(tx *badger.Txn) error {
+		for _, c := range changes {
+			key := []byte(prefixChange + c.Date + "|" + c.Accession + "|" + c.Reason)
+			if _, err := tx.Get(key); err == nil {
+				continue
+			} else if !errors.Is(err, badger.ErrKeyNotFound) {
+				return err
+			}
+			v := strings.Join([]string{c.DocumentID, c.DocType, c.Href, c.SeenAt}, "\t")
+			if err := tx.Set(key, []byte(v)); err != nil {
+				return err
+			}
 		}
-	}
-	return b.Flush()
+		return nil
+	})
 }
 
 // Issues is the work a collection pass could not finish, and a fingerprint of which

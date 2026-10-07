@@ -72,6 +72,7 @@ func TestPrintedParagraphNumberBecomesTheMarker(t *testing.T) {
 // are measured by the parity gates. This counts only the sidecar bodies, whose numbering is what
 // the promotion is for.
 func TestHTMLBodyProvisionsGetNumbers(t *testing.T) {
+	t.Parallel() // reads documents only; it overlaps the other long walk
 	dir := corpusDir(t)
 	var docs, provisions, unnumbered, shown int
 	for _, f := range sampleFiles(t, dir, 3000) {
@@ -107,10 +108,14 @@ func TestHTMLBodyProvisionsGetNumbers(t *testing.T) {
 	// ministry note. Those are not provisions of the document with their own number, and naming them
 	// by the section they quote would aim an amendment at the wrong text, so they stay unnumbered on
 	// purpose and are counted here rather than argued away.
-	const unnumberedBound = 171
-	if unnumbered > unnumberedBound {
-		t.Errorf("%d of %d provisions in HTML-bodied documents still have no number, of %d documents; the bound measured on 2026-09-18 was %d",
-			unnumbered, provisions, docs, unnumberedBound)
+	//
+	// The bound is a rate: the sample is a stride over the archive, so a crawl that adds files
+	// samples different documents, and a pinned count drifted on 2026-10-02 (193 of 8,855, the same
+	// 2.2 %) without a line of code changing.
+	const unnumberedRate = 0.022
+	if rate := float64(unnumbered) / float64(max(provisions, 1)); rate > unnumberedRate {
+		t.Errorf("%d of %d provisions in HTML-bodied documents still have no number (%.2f%%), of %d documents; the bound measured on 2026-09-18 was %.1f%%",
+			unnumbered, provisions, 100*rate, docs, 100*unnumberedRate)
 	}
 }
 

@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2011/03/21/LSVC.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>LSV L#LOKDOK27</DocumentType>
+    <Rank>A</Rank>
+    <AccessionNumber>201013L00171</AccessionNumber>
+    <DocumentId>AX013374</DocumentId>
+    <UniqueDocumentId>137514</UniqueDocumentId>
+    <DocumentTitle>Forslag til Lov om ændring af sundhedsloven\n(Udvidet adgang til offentlige registre og elektroniske patientjournaler m.v.)</DocumentTitle>
+    <Year>2010</Year>
+    <DiesSigni>2011-05-30</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2011-05-31</StartDate>
+    <EndDate REFid="submit_1">2011-05-31</EndDate>
+    <Status>Valid</Status>
+    <Number>171</Number>
+    <ParliamentarySession>1</ParliamentarySession>
+    <DateOfFirstReading>2011-03-31</DateOfFirstReading>
+    <DateOfSecondReading>2011-05-26</DateOfSecondReading>
+    <DateOfThirdReading>2011-05-30</DateOfThirdReading>
+    <NumberOfTheAct>605</NumberOfTheAct>
+    <IntroducedBy>Indenrigs- og sundhedsministeren (Bertel Haarder (V)).</IntroducedBy>
+    <SpokesmenDuringFirstReading>(1.beh) Birgitte Josefsen (V), Karen J. Klint (S), Liselott Blixt (DF), Jonas Dahl (SF), Vivi Kier (KF), Manu Sareen (RV).</SpokesmenDuringFirstReading>
+    <SubmittedToTheFollowingStandingCommittees>Efter 1.beh henvist til Sundhedsudvalget (SUU)</SubmittedToTheFollowingStandingCommittees>
+    <Ministry>Folketinget</Ministry>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Thor Pedersen</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Jens Vibjerg</Signature>
+    <PlaceOfSignature>Folketinget</PlaceOfSignature>
+    <JournalNumber>Indenrigs- og Sundhedsmin., j.nr. 1005465</JournalNumber>
+  </Meta>
+  <DokumentHoved>
+    <Linea>
+      <Char>Vedtaget af Folketinget ved 3. behandling den 30. maj 2011</Char>
+    </Linea>
+  </DokumentHoved>
+  <TitelGruppe>
+    <TitelPrefiks>
+      <Linea>
+        <Char>Forslag</Char>
+      </Linea>
+    </TitelPrefiks>
+    <TitelPrefiks>
+      <Linea>
+        <Char>til</Char>
+      </Linea>
+    </TitelPrefiks>
+    <Titel>
+      <Linea>
+        <Char>Lov om ændring af sundhedsloven</Char>
+      </Linea>
+    </Titel>
+    <UnderTitel>
+      <Linea>
+        <Char>(Udvidet adgang til offentlige registre og elektroniske patientjournaler m.v.)</Char>
+      </Linea>
+    </UnderTitel>
+  </TitelGruppe>
+  <DokumentIndhold>
+    <AendringCentreretParagraf id="6243b3ff-fc53-4c36-89e0-1b040ae9dcd4" localId="1">
+      <Explicatus>§ 1</Explicatus>
+      <Exitus>
+        <Linea>
+          <Char>I sundhedsloven, jf. lovbekendtgørelse nr. 913 af 13. juli 2010, som ændret ved § 2 i lov nr. 1546 af 21. december 2010 og lov nr. 327 af 18. april 2011, foretages følgende ændringer:</Char>
+        </Linea>
+      </Exitus>
+      <AendringsNummer>
+        <Explicatus>1.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a, stk. 1,</Char>
+                <Char> ændres »og sygehusansatte tandlæger« til:</Char>
+              </Linea>
+              <Linea>
+                <Char>», tandlæger, jordemødre, sygeplejersker, sundhedsplejersker, social- og sundhedsassistenter, radiografer og ambulancebehandlere med særlig kompetence«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>2.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a, stk. 1,</Char>
+                <Char> indsættes som </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">2. pkt.:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst>
+              <Exitus>
+                <Linea>
+                  <Char>Indenrigs- og sundhedsministeren kan fastsætte regler om, at andre sundhedspersoner, der som led i deres virksomhed deltager i behandling af patienter, kan indhente oplysninger efter reglerne i 1. pkt.</Char>
+                </Linea>
+              </Exitus>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>3.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a, stk. 2,</Char>
+                <Char> ændres »de i stk. 1 nævnte« til:</Char>
+              </Linea>
+              <Linea>
+                <Char>»dem, der er omfattet af stk. 1, 1. pkt., eller af regler udstedt i medfør af stk. 1, 2. pkt.,«, og i </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a, stk. 3, 1. pkt.,</Char>
+                <Char> ændres »de i stk. 1 nævnte,« til:</Char>
+              </Linea>
+              <Linea>
+                <Char>»dem, der er omfattet af stk. 1, 1. pkt., eller af regler udstedt i medfør af stk. 1, 2. pkt., og«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>4.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a, stk. 3, 2. pkt.,</Char>
+                <Char> ændres »i stk. 1 nævnt sundhedsperson ansat.« til:</Char>
+              </Linea>
+              <Linea>
+                <Char>»sundhedsperson ansat, som er omfattet af stk. 1, 1. pkt., eller af regler udstedt i medfør af stk. 1, 2. pkt.«</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>5.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a, stk. 5, 1. pkt.,</Char>
+                <Char> ændres »Læger og sygehusansatte tandlæger« til:</Char>
+              </Linea>
+              <Linea>
+                <Char>»Sundhedspersoner, som er omfattet af stk. 1, 1. pkt., eller af regler udstedt i medfør af stk. 1, 2. pkt.,«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>6.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a, stk. 6,</Char>
+                <Char> ændres »læger og sygehusansatte tandlæger« til:</Char>
+              </Linea>
+              <Linea>
+                <Char>»sundhedspersoner, som er omfattet af stk. 1, 1. pkt., eller af regler udstedt i medfør af stk. 1, 2. pkt.,«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>7.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 a</Char>
+                <Char> indsættes som </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">stk. 10:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst>
+              <Stk>
+                <Explicatus>Stk. 10.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Uden for de i stk. 1-9 nævnte tilfælde kan læger og sygehusansatte tandlæger under disses ansvar med patientens samtykke lade andre, der er tilknyttet samme behandlingsenhed, hvor patienten er i behandling, i fornødent omfang indhente oplysninger om patienten som nævnt i stk. 1, 1. pkt., når det er nødvendigt i forbindelse med aktuel behandling af patienten som led i den samlede sundhedsfaglige indsats.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>8.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 b, stk. 1, 1. pkt.,</Char>
+                <Char> ændres »§ 42 a, stk. 6« til:</Char>
+              </Linea>
+              <Linea>
+                <Char>»§ 42 a stk. 6 og 10«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>9.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 42 b, stk. 1, 2. pkt.,</Char>
+                <Char> indsættes efter »oplysningerne«:</Char>
+              </Linea>
+              <Linea>
+                <Char>», eller under hvis ansvar oplysningerne indhentes«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>10.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>I </Char>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 45, 1. pkt.,</Char>
+                <Char> indsættes efter »kan«:</Char>
+              </Linea>
+              <Linea>
+                <Char>»og skal efter anmodning«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>11.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char formaChar="Italic" signiChar="AendringURN">§ 193 a</Char>
+                <Char> affattes således:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst>
+              <Paragraf>
+                <Explicatus>§ 193 a.</Explicatus>
+                <Stk>
+                  <Exitus>
+                    <Linea>
+                      <Char>Indenrigs- og sundhedsministeren kan fastsætte krav til it-anvendelsen på sundhedsområdet, herunder krav til elektroniske patientjournaler og til anvendelsen af standarder.</Char>
+                    </Linea>
+                  </Exitus>
+                </Stk>
+                <Stk>
+                  <Explicatus>Stk. 2.</Explicatus>
+                  <Exitus>
+                    <Linea>
+                      <Char>Indenrigs- og sundhedsministeren kan fastsætte regler om, at private sygehuse og klinikker m.v. skal overholde krav fastsat i medfør af stk. 1.</Char>
+                    </Linea>
+                  </Exitus>
+                </Stk>
+              </Paragraf>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer>
+        <Explicatus>12.</Explicatus>
+        <Aendring>
+          <AendringDefinition>
+            <Exitus>
+              <Linea>
+                <Char>Efter § 196 indsættes:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion>
+            <AendringNyTekst>
+              <Kapitel>
+                <Explicatus>Kapitel 60 a</Explicatus>
+                <Rubrica>
+                  <Linea>
+                    <Char>Kommunal og regional adgang til offentlige registre til brug for tilrettelæggelse og planlægning af indsatsen på sundhedsområdet</Char>
+                  </Linea>
+                </Rubrica>
+                <ParagrafGruppe>
+                  <Paragraf>
+                    <Explicatus>§ 197.</Explicatus>
+                    <Stk>
+                      <Exitus>
+                        <Linea>
+                          <Char>Regionsrådene kan til brug for tilrettelæggelse og planlægning af den regionale indsats på sundhedsområdet efter regler fastsat i medfør af stk. 3 indhente og behandle personoplysninger fra offentlige registre om patienters modtagelse af sundhedsydelser.</Char>
+                        </Linea>
+                      </Exitus>
+                    </Stk>
+                    <Stk>
+                      <Explicatus>Stk. 2.</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>Kommunalbestyrelserne kan til brug for tilrettelæggelse og planlægning af den kommunale indsats på sundhedsområdet efter regler fastsat i medfør af stk. 3 indhente og behandle personoplysninger fra offentlige registre om pa­tienters modtagelse af sundhedsydelser.</Char>
+                        </Linea>
+                      </Exitus>
+                    </Stk>
+                    <Stk>
+                      <Explicatus>Stk. 3.</Explicatus>
+                      <Exitus>
+                        <Linea>
+                          <Char>Indenrigs- og sundhedsministeren fastsætter regler om, hvilke registre og personoplysninger regionsrådene og kommunalbestyrelserne kan få adgang til efter stk. 1 og 2, og om behandlingen af disse oplysninger.</Char>
+                        </Linea>
+                      </Exitus>
+                    </Stk>
+                  </Paragraf>
+                </ParagrafGruppe>
+              </Kapitel>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+    </AendringCentreretParagraf>
+    <IkraftCentreretParagraf id="374ed71d-b714-4e99-bccb-12fab5e14708" localId="2">
+      <Explicatus>§ 2</Explicatus>
+      <Stk>
+        <Exitus>
+          <Linea>
+            <Char>Loven træder i kraft den 1. september 2011.</Char>
+          </Linea>
+        </Exitus>
+      </Stk>
+    </IkraftCentreretParagraf>
+    <IkraftCentreretParagraf id="81827c50-14bc-4b95-9caa-71ac2c09ee38" localId="3">
+      <Explicatus>§ 3</Explicatus>
+      <Stk>
+        <Exitus>
+          <Linea>
+            <Char>Loven gælder ikke for Færøerne og Grønland.</Char>
+          </Linea>
+        </Exitus>
+      </Stk>
+    </IkraftCentreretParagraf>
+  </DokumentIndhold>
+  <UnderskriftGruppe>
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

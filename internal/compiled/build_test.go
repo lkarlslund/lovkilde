@@ -59,7 +59,7 @@ func TestArtifactNamesTheStaleSide(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "is stale") {
 		t.Fatalf("an older artifact did not name itself as stale: %v", err)
 	}
-	if !strings.Contains(err.Error(), "retsin artifact build") {
+	if !strings.Contains(err.Error(), "retsin-update artifact build") {
 		t.Errorf("the refusal does not say what to rebuild: %v", err)
 	}
 
@@ -113,28 +113,5 @@ func TestDirtyTreeIsAnotherBuild(t *testing.T) {
 	}
 	if dirty := (BuildStamp{Revision: "abc", Modified: true}).String(); !strings.HasSuffix(dirty, "-dirty") {
 		t.Errorf("a dirty stamp does not say it is dirty: %q", dirty)
-	}
-}
-
-// The build pin catches code moving underneath an artifact; this catches the other way a compiled
-// file is wrong, which is that it describes a corpus that has since grown. A crawl that ran after
-// the artifact was built leaves the mirror holding documents the artifact has never seen.
-func TestArtifactRefusesDataItCannotRepresent(t *testing.T) {
-	a := openFixture(t)
-
-	// No collection record means no date to compare against, which must not read as "stale".
-	if err := a.CheckNotOlderThan(time.Time{}, "the last recorded collection pass"); err != nil {
-		t.Errorf("an unknown pull date refused the artifact: %v", err)
-	}
-	if err := a.CheckNotOlderThan(a.Header.Created.Add(-time.Hour), "the last recorded collection pass"); err != nil {
-		t.Errorf("an artifact newer than the pass was refused: %v", err)
-	}
-
-	err := a.CheckNotOlderThan(a.Header.Created.Add(time.Hour), "the last recorded collection pass")
-	if err == nil || !strings.Contains(err.Error(), "older than the mirror") {
-		t.Fatalf("an artifact older than the mirror was not refused for that reason: %v", err)
-	}
-	if !strings.Contains(err.Error(), "retsin artifact build") {
-		t.Errorf("the refusal does not say what to rebuild: %v", err)
 	}
 }

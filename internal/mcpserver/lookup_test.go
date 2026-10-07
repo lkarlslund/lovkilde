@@ -270,7 +270,7 @@ func TestLookupRejectsWhatItCannotResolve(t *testing.T) {
 func TestLookupTruncatesWithoutBreakingText(t *testing.T) {
 	s := newTestServer(t)
 	long := strings.Repeat("Rædselsfuld sædelse. ", 4000)
-	dir := s.archive.Root
+	dir := testArchive(s).Root
 	path := filepath.Join(dir, "lta", "1996", "4.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -398,7 +398,7 @@ func TestServerStatus(t *testing.T) {
 	if strings.Contains(st, time.Now().Format("2006-01-02")) {
 		t.Errorf("Status = %q quotes today, which is how a process start passes for an index time", st)
 	}
-	if got := newTestServer(t).Status(); !strings.Contains(got, "index built undated") {
+	if got := newTestServer(t).Status(); !strings.Contains(got, "no search index") || strings.Contains(got, "index built") {
 		t.Errorf("a server with no index claims an index time: %q", got)
 	}
 }

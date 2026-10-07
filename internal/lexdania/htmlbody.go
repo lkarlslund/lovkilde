@@ -3,6 +3,7 @@ package lexdania
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -240,6 +241,55 @@ func (b *htmlBuilder) insideNote() bool {
 	return false
 }
 
+// insideAnnex reports an open annex section; with synthetic, only one opened by openAnnex counts
+// as closed by the next annex heading, and a payload's own <div class="bilag"> is inside one too.
+func (b *htmlBuilder) insideAnnex(synthetic bool) bool {
+	for _, f := range b.stack {
+		if f.node != nil && f.node.Name == "Bilag" && (f.htmlTag != syntheticAnnexTag || !synthetic) {
+			return true
+		}
+	}
+	return false
+}
+
+// syntheticAnnexTag marks an annex section the payload never opened with an element of its own.
+const syntheticAnnexTag = "#bilag"
+
+// reLooseAnnexHeader is "Bilag 1" printed as bare text between elements.
+var reLooseAnnexHeader = regexp.MustCompile(`(?i)\bbilag\s+[0-9]+\s*[a-z]?\s*$`)
+
+// openAnnex starts an annex section where the payload prints an annex heading outside any. A dozen
+// older laws print "Bilag 1" as bare text before <p class="BilagsOverskrift"> with no <div
+// class="bilag"> around it: lov om finansiel virksomhed's list of activities was read as part of
+// § 23, and every change to the annex was refused. The bare "Bilag N" goes into the section as its
+// header; an earlier section opened here ends at the next.
+func (b *htmlBuilder) openAnnex() {
+	// The annex stands beside the law's chapters, as a <div class="bilag"> does: whatever is open,
+	// down to the body itself, ends here, the bare "Bilag N" taken from the text it trails.
+	header := ""
+	for len(b.stack) > 1 {
+		f := b.cur()
+		if pend := f.pending.String(); header == "" && reLooseAnnexHeader.MatchString(Squeeze(pend)) {
+			header = reLooseAnnexHeader.FindString(Squeeze(pend))
+			f.pending.Reset()
+			f.pending.WriteString(strings.TrimSuffix(Squeeze(pend), header))
+		}
+		b.pop(true)
+	}
+	if pend := b.cur().pending.String(); header == "" && reLooseAnnexHeader.MatchString(Squeeze(pend)) {
+		header = reLooseAnnexHeader.FindString(Squeeze(pend))
+		b.cur().pending.Reset()
+		b.cur().pending.WriteString(strings.TrimSuffix(Squeeze(pend), header))
+	}
+	node := &Node{Name: "Bilag", Attrs: map[string]string{}, Runs: []string{""}}
+	b.text("\n")
+	b.addChild(node)
+	b.push(htmlFrame{htmlTag: syntheticAnnexTag, node: node})
+	if header != "" {
+		b.text(header + "\n")
+	}
+}
+
 func (b *htmlBuilder) skipping() bool {
 	for _, f := range b.stack {
 		if f.skip {
@@ -280,7 +330,17 @@ func (b *htmlBuilder) start(tag string, attrs map[string]string) {
 		b.inIkraft = true
 	}
 
+	if lc := strings.ToLower(class); (lc == "bilagsoverskrift" || lc == "bilagstitel") && !b.insideAnnex(true) {
+		b.openAnnex()
+	}
 	target := classifyHTML(tag, class)
+	if tag == "a" && class == "" && isEndnoteLink(attrs) {
+		// Older payloads print notes as endnotes under "Officielle noter" and link to them with a
+		// bare <a href="#FN501">: a reference outside the note, the note's own marker inside it.
+		// Unread, a law's title footnote — the EU directives it implements — had no text at all,
+		// and every amendment to it was refused.
+		target = htmlTarget{Role: roleNote, Name: "Nota", Attr: "ref", Basis: basisName}
+	}
 	if target.Role == roleUnknown {
 		b.body.recordUnmapped(tag, class)
 		// Placement still follows the tag, so an unknown class costs a name, not
@@ -340,7 +400,7 @@ func (b *htmlBuilder) start(tag string, attrs map[string]string) {
 	// against the other instead of merely compared by text.
 	// name is kept as well: a footnote's identity is the name= on its own marker,
 	// and dropping it makes the note unanchorable.
-	for _, key := range []string{"id", "localId", "name"} {
+	for _, key := range []string{"id", "localId", "name", "colspan"} {
 		if v := attrs[key]; v != "" {
 			node.Attrs[key] = v
 		}
@@ -599,4 +659,15 @@ var htmlBlockTags = map[string]bool{
 	"h3": true, "h4": true, "h5": true, "h6": true, "li": true, "ol": true, "p": true,
 	"table": true, "tbody": true, "td": true, "tfoot": true, "th": true,
 	"thead": true, "tr": true, "ul": true,
+}
+
+// isEndnoteLink reports a link to or from an endnote: "#FN501" from the text, "#_FN501" back.
+func isEndnoteLink(attrs map[string]string) bool {
+	href := strings.TrimPrefix(attrs["href"], "#")
+	for _, prefix := range []string{"FN", "_FN", "SN", "_SN"} { // footnotes and slutnoter
+		if strings.HasPrefix(href, prefix) {
+			return true
+		}
+	}
+	return false
 }

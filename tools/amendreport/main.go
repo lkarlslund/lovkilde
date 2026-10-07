@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 func cut(s string, n int) string {
@@ -62,10 +63,10 @@ func main() {
 
 	fmt.Println("\nAPPLIED (where each landed)")
 	for _, ap := range v.Applied {
-		fmt.Printf("  %-14s %-6s %-22s %-28s %s\n", ap.Edit.Source, ap.Edit.Kind, ap.Edit.Address.Raw, ap.Section, cut(ap.Note, 40))
+		fmt.Printf("  %-14s %-6s %-22s %-28s %s\n", ap.Edit.Source, ap.Edit.Kind, ap.Edit.Address.Raw, ap.Where, cut(ap.Note, 40))
 	}
 
-	by := map[string][]lexdania.UnresolvedEdit{}
+	by := map[string][]lexdoc.UnresolvedEdit{}
 	for _, u := range v.Unresolved {
 		key := u.Reason
 		if u.Reason == "" {
@@ -161,7 +162,7 @@ func main() {
 			before[ref.Provision.Address()] += len([]rune(ref.Provision.Text()))
 		}
 		after := map[string]int{}
-		for _, ref := range v.Doc.Model().Content.Provisions() {
+		for _, ref := range v.Content.Provisions() {
 			after[ref.Provision.Address()] += len([]rune(ref.Provision.Text()))
 		}
 		var losses []loss
@@ -182,9 +183,9 @@ func main() {
 		type touch struct{ kind, src, where, note string }
 		byPr := map[string]touch{}
 		for _, a := range v.Applied {
-			k := strings.ToLower(a.Section)
+			k := strings.ToLower(a.Where)
 			k = strings.NewReplacer("§", "", " ", "", ".", "").Replace(k)
-			byPr[k] = touch{string(a.Edit.Kind), a.Edit.Source, a.Section, a.Note}
+			byPr[k] = touch{string(a.Edit.Kind), a.Edit.Source, a.Where, a.Note}
 		}
 		replaced := 0
 		for _, l := range losses {

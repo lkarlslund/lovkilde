@@ -218,17 +218,25 @@ func TestDeleteStykkeRenumbersByPosition(t *testing.T) {
 func TestSetHeadingChangesTextAndField(t *testing.T) {
 	c := sampleLaw()
 	p := mustFindProvision(t, c, "§ 3")
-	if !p.SetHeading("Særlige tilfælde", "Undtagelser") {
-		t.Fatal("heading rewrite refused although the rubric is the provision's own first words")
-	}
+	p.SetHeading("Undtagelser")
 	if p.Heading != "Undtagelser" {
 		t.Errorf("Heading field = %q", p.Heading)
 	}
 	if !strings.Contains(p.Text(), "Undtagelser") || strings.Contains(p.Text(), "Særlige tilfælde") {
 		t.Errorf("heading text in the provision = %q", p.Text())
 	}
-	if p.SetHeading("rubric the provision never had", "x") {
-		t.Error("heading rewrite accepted a rubric that is not there")
+}
+
+// The XML reader keeps a provision's rubric out of its text, so a heading rewrite cannot depend
+// on finding the old words there. It used to, and refused every one read from the XML.
+func TestSetHeadingWhenTheRubricIsNotInTheText(t *testing.T) {
+	p := &Provision{Number: "12", Heading: "Gammel", Segments: []Segment{{Text: "§ 12. Tekst."}}}
+	c := &Content{Order: []Node{{Provision: p}}}
+	if !c.SetHeadingChange(Located{Provision: p}, "Ny") {
+		t.Fatal("heading rewrite refused")
+	}
+	if p.Heading != "Ny" || p.Text() != "§ 12. Tekst." {
+		t.Errorf("heading %q, text %q", p.Heading, p.Text())
 	}
 }
 
@@ -314,5 +322,88 @@ func TestDeleteItemKeepsTheSubsection(t *testing.T) {
 	}
 	if p.DeleteItem(1, 9) {
 		t.Error("deleting a condition that does not exist was accepted")
+	}
+}
+
+// "I § 5, stk. 2, indsættes som nr. 3:" whose new text the reader took for a subsection: it is the
+// condition the address numbers, at the end of stk. 2's list, and stk. 3 keeps its number.
+func TestANewConditionDonatedAsASubsectionGoesInTheList(t *testing.T) {
+	p := &Provision{Number: "5", Printed: "§ 5.", Segments: []Segment{
+		{Text: "§ 5."}, {Text: "Første."}, {Text: "Stk. 2."}, {Text: "Udgifter kan medtages, hvis:"}, {Text: "1)"}, {Text: "udgifterne sker som led i noget, eller"},
+		{Text: "2)"}, {Text: "udgifterne er nødvendige."}, {Text: "Stk. 3."}, {Text: "Udgifter til konsulenter kompenseres:"}, {Text: "1)"}, {Text: "Aftale A."}}}
+	p.Normalise()
+	c := &Content{Order: []Node{{Provision: p}}}
+	def := "I § 5, stk. 2 , indsættes som nr. 3 :"
+	out := c.Apply(Edit{Kind: EditInsertProvision, Address: ParseAddress(def), Definition: def,
+		NewStykker: [][]Segment{{{Text: "3) udgifterne er direkte relateret."}}}, NewText: []Segment{{Text: "3) udgifterne er direkte relateret."}}})
+	if !out.Applied {
+		t.Fatalf("refused: %s", out.Reason)
+	}
+	if len(p.Stykker) != 3 || len(p.Stykker[1].Items) != 3 || p.Stykker[2].Nr != 3 {
+		t.Errorf("stykker %+v\n%q", p.Stykker, p.Text())
+	}
+}
+
+// "I § 8 indsættes efter stk. 2 som nye stykker:" handed over as one subsection printing three
+// labels: three subsections, and the old stk. 3 becomes stk. 6.
+func TestNewSubsectionsHandedOverAsOneAreThree(t *testing.T) {
+	p := &Provision{Number: "8", Printed: "§ 8.", Segments: []Segment{{Text: "§ 8."}, {Text: "Første."}, {Text: "Stk. 2."}, {Text: "Anden."}, {Text: "Stk. 3."}, {Text: "Chefen fastsætter retningslinjer."}}}
+	p.Normalise()
+	c := &Content{Order: []Node{{Provision: p}}}
+	def := "I § 8 indsættes efter stk. 2 som nye stykker:"
+	out := c.Apply(Edit{Kind: EditInsertProvision, Address: ParseAddress(def), Definition: def, NewStykker: [][]Segment{{
+		{Text: "Stk. 3."}, {Text: "Terminaladgang."}, {Text: "Stk. 4."}, {Text: "Typer af oplysninger."}, {Text: "Stk. 5."}, {Text: "Flypassagerer."}}}})
+	if !out.Applied {
+		t.Fatalf("refused: %s", out.Reason)
+	}
+	if sp := p.Stykker[len(p.Stykker)-1].Span; len(p.Stykker) != 6 || !strings.HasPrefix(SegmentsText(p.Segments[sp.From:sp.To]), "Stk. 6.") || !strings.Contains(SegmentsText(p.Segments[sp.From:sp.To]), "Chefen") {
+		t.Errorf("%d stykker: %q", len(p.Stykker), p.Text())
+	}
+}
+
+// "§ 1, stk. 1, nr. 6, affattes således: 6) …" where the list ends at nr. 5: the next condition.
+func TestRewritingTheConditionAfterTheLastAddsIt(t *testing.T) {
+	p := &Provision{Number: "1", Printed: "§ 1.", Segments: []Segment{{Text: "§ 1."}, {Text: "Følgende stoffer må ikke anvendes:"},
+		{Text: "1)"}, {Text: "Svovlsyre."}, {Text: "2)"}, {Text: "Phosphor."}, {Text: "Stk. 2."}, {Text: "Forbuddet gælder ikke fyrværkeri."}}}
+	p.Normalise()
+	c := &Content{Order: []Node{{Provision: p}}}
+	def := "§ 1, stk. 1, nr. 3, affattes således:"
+	out := c.Apply(Edit{Kind: EditReplaceProvision, Address: ParseAddress(def), Definition: def, NewText: []Segment{{Text: "»3) Urea-hydrogenperoxid.«"}}})
+	if !out.Applied || len(p.Stykker[0].Items) != 3 || len(p.Stykker) != 2 {
+		t.Fatalf("outcome %+v; %q", out, p.Text())
+	}
+	def = "§ 1, stk. 1, nr. 5, affattes således:"
+	if out := c.Apply(Edit{Kind: EditReplaceProvision, Address: ParseAddress(def), Definition: def, NewText: []Segment{{Text: "»5) Noget.«"}}}); out.Applied {
+		t.Errorf("nr. 5 after a list ending at nr. 3 was added: %q", p.Text())
+	}
+}
+
+// "I § 361, stk. 1, indsættes som nr. 33: »33) …«" where the mirror's list, short of conditions
+// the official text has, ends at 31): nothing moves, and the new condition keeps the act's number.
+func TestAConditionAddedAtTheEndKeepsTheNumberTheActGivesIt(t *testing.T) {
+	p := &Provision{Number: "361", Printed: "§ 361.", Segments: []Segment{{Text: "§ 361."}, {Text: "Følgende betaler:"},
+		{Text: "1)"}, {Text: "Forvaltere."}, {Text: "2)"}, {Text: "Andre forvaltere."}, {Text: "Stk. 2."}, {Text: "Andet."}}}
+	p.Normalise()
+	c := &Content{Order: []Node{{Provision: p}}}
+	def := "I § 361, stk. 1, indsættes som nr. 4:"
+	out := c.Apply(Edit{Kind: EditInsertProvision, Address: ParseAddress(def), Definition: def, NewProse: []string{"4) Rådgivere betaler 12.000 kr."}})
+	if !out.Applied || !strings.Contains(p.Text(), "4) Rådgivere") {
+		t.Errorf("outcome %+v; %q", out, p.Text())
+	}
+}
+
+// "I § 17 indsættes før stk. 3 som nye stykker: Stk. 2. … Stk. 3. …": the labels place the new
+// subsections in front of stk. 2, which becomes stk. 4.
+func TestNewSubsectionsLabelledLowerThanTheirPlaceGoByTheirLabels(t *testing.T) {
+	p := &Provision{Number: "17", Printed: "§ 17.", Segments: []Segment{{Text: "§ 17."}, {Text: "Tilskud."}, {Text: "Stk. 2."}, {Text: "Midlerne anvendes."}, {Text: "Stk. 3."}, {Text: "Placeres i fonden."}}}
+	p.Normalise()
+	c := &Content{Order: []Node{{Provision: p}}}
+	def := "I § 17 indsættes før stk. 3 som nye stykker:"
+	out := c.Apply(Edit{Kind: EditInsertProvision, Address: ParseAddress(def), Definition: def, NewStykker: [][]Segment{{{Text: "Stk. 2."}, {Text: "Loft."}}, {{Text: "Stk. 3."}, {Text: "Koncern."}}}})
+	if !out.Applied || len(p.Stykker) != 5 {
+		t.Fatalf("outcome %+v; %q", out, p.Text())
+	}
+	if sp := p.Stykker[3].Span; !strings.Contains(SegmentsText(p.Segments[sp.From:sp.To]), "Midlerne") {
+		t.Errorf("stk. 4 = %q", SegmentsText(p.Segments[sp.From:sp.To]))
 	}
 }

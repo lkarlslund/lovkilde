@@ -8,6 +8,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/lkarlslund/retsinformation/internal/chain"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // Document is one canonical Lex Dania document.
@@ -44,6 +47,11 @@ type Document struct {
 	Sidecar string
 
 	warnings []string
+
+	// lines memoises textLines: compiling a document for the artifact reads them for its change
+	// lists and for its notes, and for a payload document each read parses the HTML again.
+	lines     []string
+	linesRead bool
 }
 
 // Load reads and parses a stored document.
@@ -92,17 +100,15 @@ func newDocument(root *Node) (*Document, error) {
 // 1,086 accession bases in the archive hold more than one accession, but 1,082 of
 // those are ft/fob parliamentary items numbering each sitting, leaving only 4 law
 // bases. "Highest suffix wins" is therefore not a valid way to find current law.
-type Status string
+//
+// It is the model's own type: the register's verdict does not depend on how the document was read.
+type Status = lexdoc.Status
 
 const (
-	StatusValid    Status = "Valid"
-	StatusHistoric Status = "Historic"
-	StatusUnknown  Status = ""
+	StatusValid    = lexdoc.StatusValid
+	StatusHistoric = lexdoc.StatusHistoric
+	StatusUnknown  = lexdoc.StatusUnknown
 )
-
-// IsHistoric reports whether the register marks the document as repealed, expired
-// or otherwise superseded.
-func (s Status) IsHistoric() bool { return s == StatusHistoric }
 
 // Reference is one resolved anchor in Meta.
 //
@@ -117,23 +123,7 @@ func (s Status) IsHistoric() bool { return s == StatusHistoric }
 // Resolving these is the single most valuable thing this package does, because the
 // anchors are the version graph: Concerns means "this document concerns that law"
 // and Change means "this later document amended me, effective Ref_Af".
-type Reference struct {
-	Kind string // anchor element name: Concerns, Change, DateOfSubmit, Sign, Sub-Sign, …
-	ID   string // the id= value
-
-	Accn      string // Ref_Accn: the accession of the referenced document
-	Effective string // Ref_Af: the date the referenced document takes effect for this one
-	Text      string // Ref_Text: the referenced document's title
-
-	StartDate string // StartDate for this anchor (period of validity)
-	EndDate   string // EndDate for this anchor
-
-	Signature string // Signature for this anchor (signing authority)
-
-	// Values holds any other value element attached to this anchor, keyed by
-	// element name, so a value we have no field for is still reachable.
-	Values map[string]string
-}
+type Reference = chain.Reference
 
 // Meta is the register metadata block, with every child element observed in the
 // corpus given a home. Fields are populated from Raw, which stays the lossless
@@ -588,3 +578,28 @@ func IsHTMLPayload(raw []byte) bool {
 }
 
 func bytesReader(data []byte) *bytes.Reader { return bytes.NewReader(data) }
+
+// removeElement drops one child from its container while preserving the rule that a
+// container holds one more run than it holds elements.
+func removeElement(p, n *Node) bool {
+	if p == nil || n == nil {
+		return false
+	}
+	i := -1
+	for k, c := range p.Elems {
+		if c == n {
+			i = k
+			break
+		}
+	}
+	if i < 0 {
+		return false
+	}
+	p.Elems = append(p.Elems[:i], p.Elems[i+1:]...)
+	drop := i + 1
+	if drop >= len(p.Runs) {
+		drop = i
+	}
+	p.Runs = append(p.Runs[:drop], p.Runs[drop+1:]...)
+	return true
+}

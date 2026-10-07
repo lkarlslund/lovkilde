@@ -7,46 +7,48 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/crawl"
+	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/store"
 )
 
-// stampAt publishes what a collection pass would have published, and returns the path.
-func stampAt(t *testing.T, root string, ts time.Time) string {
-	return stampAtWith(t, root, crawl.SweepRecord{PulledAt: ts, IssuesKnown: true})
-}
-
-func stampAtWith(t *testing.T, root string, rec crawl.SweepRecord) string {
-	path := filepath.Join(root, "sweep.stamp")
-	if err := crawl.PublishSweepRecord(path, rec); err != nil {
+// servedAfter serves the test server's library as an artifact built after a collection pass, which
+// is where a server learns how current its text is.
+func servedAfter(t *testing.T, s *Server, pass compiled.Collection) {
+	t.Helper()
+	if err := s.UseArtifact(writeFixtureArtifactAfter(t, testArchive(s), &pass), 1<<20); err != nil {
 		t.Fatal(err)
 	}
-	return path
 }
 
-func TestHorizonStatesThePublishedSweep(t *testing.T) {
+// pulledAt is a clean collection pass at ts.
+func pulledAt(ts time.Time) compiled.Collection {
+	return compiled.Collection{PulledAt: ts, IssuesKnown: true}
+}
+
+func TestHorizonStatesTheArtifactsCollectionPass(t *testing.T) {
 	s := newTestServer(t)
-	s.SweepStampPath = stampAt(t, s.archive.Root, time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC))
+	servedAfter(t, s, pulledAt(time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC)))
 	line := s.horizon().Line()
 	if !strings.Contains(line, "last pulled 2026-09-18 09:16:52") {
-		t.Errorf("horizon drops the published pull time: %q", line)
+		t.Errorf("horizon drops the artifact's pull time: %q", line)
 	}
 	if !strings.Contains(line, "nothing left unresolved") {
 		t.Errorf("a clean pass is not reported as one: %q", line)
 	}
 }
 
-func TestHorizonWithoutAStampSaysUnknown(t *testing.T) {
+func TestHorizonWithoutACollectionPassSaysUnknown(t *testing.T) {
 	s := newTestServer(t)
-	s.SweepStampPath = filepath.Join(s.archive.Root, "sweep.stamp")
+	if err := s.UseArtifact(writeFixtureArtifact(t, testArchive(s)), 1<<20); err != nil {
+		t.Fatal(err)
+	}
 	h := s.horizon()
 	if h.Known {
-		t.Fatal("a mirror that has never pulled claims to have one")
+		t.Fatal("an artifact that records no collection pass claims one")
 	}
 	line := h.Line()
 	if !strings.Contains(line, "never pulled") {
-		t.Errorf("a mirror with no collection record does not say so: %q", line)
+		t.Errorf("an artifact with no collection record does not say so: %q", line)
 	}
 	// The fallback that must never happen: filling the gap with a timestamp, which is
 	// how a mirror that has never collected anything starts claiming to be current.
@@ -55,40 +57,24 @@ func TestHorizonWithoutAStampSaysUnknown(t *testing.T) {
 	}
 }
 
-func TestHorizonIsReReadEveryCall(t *testing.T) {
-	// A server that started before tonight's collection pass has to report tonight's
-	// pass, so the stamp is read per answer rather than cached at startup.
+// A server that started before tonight's artifact has to report tonight's pass once it serves
+// that artifact, and not before: the horizon is the served text's, not the newest on disk.
+func TestHorizonFollowsTheServedArtifact(t *testing.T) {
 	s := newTestServer(t)
-	s.SweepStampPath = stampAt(t, s.archive.Root, time.Date(2026, 9, 1, 3, 4, 5, 0, time.UTC))
+	servedAfter(t, s, pulledAt(time.Date(2026, 9, 1, 3, 4, 5, 0, time.UTC)))
 	if got := s.horizon().Line(); !strings.Contains(got, "2026-09-01") {
 		t.Fatalf("first horizon wrong: %q", got)
 	}
-	if err := crawl.PublishSweepRecord(s.SweepStampPath, crawl.SweepRecord{PulledAt: time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC), IssuesKnown: true}); err != nil {
-		t.Fatal(err)
-	}
+	servedAfter(t, s, pulledAt(time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC)))
 	got := s.horizon().Line()
 	if !strings.Contains(got, "2026-09-18") || strings.Contains(got, "2026-09-01") {
-		t.Errorf("horizon cached a stamp that has been replaced: %q", got)
-	}
-}
-
-func TestHorizonRejectsAnUnparsableRecord(t *testing.T) {
-	s := newTestServer(t)
-	s.SweepStampPath = filepath.Join(s.archive.Root, "sweep.stamp")
-	if err := os.WriteFile(s.SweepStampPath, []byte("yesterday\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if h := s.horizon(); h.Known {
-		t.Fatal("an unreadable record was reported as a date")
-	}
-	if !strings.Contains(s.horizon().Line(), "unreadable") {
-		t.Errorf("unreadable record is not reported as such: %q", s.horizon().Line())
+		t.Errorf("horizon kept the replaced artifact's pass: %q", got)
 	}
 }
 
 func TestHorizonWithoutAnIndexSaysSo(t *testing.T) {
 	s := newTestServer(t)
-	s.SweepStampPath = stampAt(t, s.archive.Root, time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC))
+	servedAfter(t, s, pulledAt(time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC)))
 	line := s.horizon().Line()
 	if !strings.Contains(line, "no full-text index attached") {
 		t.Errorf("a lookup-only server reports fake index coverage: %q", line)
@@ -114,7 +100,7 @@ func TestPolicyAnchorsCurrentLawOnDates(t *testing.T) {
 func TestAnswersAnchorOnDatesNotSpeculation(t *testing.T) {
 	s := newTestServer(t)
 	s.UseIndex(mustIndex(t))
-	s.SweepStampPath = stampAt(t, s.archive.Root, time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC))
+	servedAfter(t, s, pulledAt(time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC)))
 
 	look, err := s.Lookup(LookupRequest{Document: accCanon})
 	if err != nil {
@@ -163,7 +149,7 @@ func serverWithAnchoredDoc(t *testing.T, eff string) *Server {
 		t.Fatal(err)
 	}
 	s := New(a, "https://www.retsinformation.dk", "test")
-	s.SweepStampPath = stampAt(t, root, time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC))
+	servedAfter(t, s, pulledAt(time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC)))
 	// The clock is pinned rather than read. These fixtures name absolute dates, and the answer
 	// sorts amendments against today, so a test that reads the real clock is only correct on the
 	// day it was written — which is how the tests below agreed with the code on 2026-09-18 and
@@ -255,9 +241,11 @@ func TestIncompleteChainReportsAGapNotAHedge(t *testing.T) {
 // mirror is, and the count is what tells tonight's problems from last night's.
 func TestHorizonCarriesUnresolvedWork(t *testing.T) {
 	s := newTestServer(t)
-	s.SweepStampPath = stampAtWith(t, s.archive.Root, crawl.SweepRecord{
+	servedAfter(t, s, compiled.Collection{
 		PulledAt:    time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC),
-		Issues:      store.Issues{Owed: 1, Stalled: 14, Digest: "6f2c1a9d"},
+		Owed:        1,
+		Stalled:     14,
+		Digest:      "6f2c1a9d",
 		IssuesKnown: true,
 	})
 	line := s.horizon().Line()
@@ -276,7 +264,7 @@ func TestHorizonCarriesUnresolvedWork(t *testing.T) {
 func TestHorizonDoesNotInventACleanPass(t *testing.T) {
 	s := newTestServer(t)
 	// A record from an older build counted nothing, so what was outstanding is not known.
-	s.SweepStampPath = stampAtWith(t, s.archive.Root, crawl.SweepRecord{PulledAt: time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC)})
+	servedAfter(t, s, compiled.Collection{PulledAt: time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC)})
 	line := s.horizon().Line()
 	if !strings.Contains(line, "problems not recorded") {
 		t.Errorf("an uncounted pass is not reported as uncounted: %q", line)

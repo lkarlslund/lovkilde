@@ -1,15 +1,19 @@
 package search
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"runtime"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/parallel"
 )
 
 // Index is a term-to-unit inverted index over the mirror.
@@ -25,6 +29,14 @@ import (
 type Index struct {
 	Docs  []DocMeta
 	Units []UnitMeta
+
+	// Ranking replaces DefaultRanking for this index when set: how a measurement tries a
+	// variant without touching the one the server uses.
+	Ranking *Ranking
+
+	// titleDF counts, per word, how many document titles carry it; see titleIDF.
+	titleOnce sync.Once
+	titleDF   map[string]int
 
 	// Terms is sorted, and Postings[i] belongs to Terms[i]. Both are derived from
 	// the file on load; the sorted order is what makes prefix queries a range scan.
@@ -50,6 +62,12 @@ type Index struct {
 	// reading it: a server that started a minute ago and loads a month-old index must
 	// not report its own start time as the index's age.
 	Built int64
+
+	// Source names what the index was built from: "artifact <its creation time>" for an index
+	// cut from the compiled artifact, "mirror <directory>" for one read from the XML. A server
+	// holding both files compares it with the artifact it serves, because an index and an
+	// artifact from different builds disagree about which provisions exist.
+	Source string
 
 	avgUnitLen float64
 }
@@ -101,7 +119,8 @@ const (
 	// row. The rows are positional, so an old file cannot be read as a new one: bumping the
 	// number is what turns "this index lacks the field you are filtering on" from a wrong
 	// answer into an error that names the command to run.
-	formatVersion = 3
+	// formatVersion 4 adds Source to the header: what the index was built from.
+	formatVersion = 4
 )
 
 // builder accumulates postings.
@@ -114,11 +133,11 @@ const (
 // with byte b, so flattening the shards in increasing b and sorting within a shard is
 // a global byte order — no merge step, and no dependence on Go's map iteration order.
 //
-// The old build held one map for the whole corpus, which is fine for a measured subset
-// and is the reason a full build peaks at 26.4 GB; sharding by term keeps each term in
-// exactly one map, so the parallel build costs the same memory rather than one map per
-// worker. A two-pass sort-merge build remains the known follow-up for smaller machines
-// (see the README's search section).
+// Sharding by term keeps each term in exactly one map, so the parallel build costs the
+// same memory as a serial one rather than one map per worker. What the build holds is
+// postings only: BuildStream lets each batch's text go once it is counted, and postList
+// keeps a posting in five bytes plus slack (see the README's search section for the
+// profile that drove both).
 type builder struct {
 	shards [dictShards]dictShard
 	docs   []DocMeta
@@ -133,8 +152,19 @@ const dictShards = 256
 // measured below is in the noise.
 type dictShard struct {
 	mu   sync.Mutex
-	raw  map[string]map[uint32]byte
-	fold map[string]map[uint32]byte
+	raw  map[string]*postList
+	fold map[string]*postList
+}
+
+// postList is one term's postings while the build runs: units and counts in two arrays,
+// appended in whatever order the workers reach them and sorted once at the end. A unit
+// arrives at most once per term, because each unit's terms are counted before they are
+// added, so nothing here has to look a unit up. It replaced a map from unit to count per
+// term, which spent several times the five bytes a posting holds and was a third of a full
+// build's live heap.
+type postList struct {
+	units []uint32
+	tf    []byte
 }
 
 // add records one term occurrence. key selects the shard, and the key that selects it
@@ -154,38 +184,56 @@ func (b *builder) add(key string, stream byte, unit uint32, count int) {
 	s.mu.Unlock()
 }
 
+func newBuilder(opts Options) *builder {
+	b := &builder{}
+	for i := range b.shards {
+		b.shards[i].raw = map[string]*postList{}
+		if opts.Folded {
+			b.shards[i].fold = map[string]*postList{}
+		}
+	}
+	return b
+}
+
+// addUnit counts one unit's terms and adds its postings. The folded stream takes the
+// highest count among the raw terms that fold together, as a saturating count would.
+func (b *builder) addUnit(unit uint32, text string, folded bool) {
+	tf := map[string]int{}
+	for _, tok := range Tokenize(text) {
+		tf[tok]++
+	}
+	var ftf map[string]int
+	if folded {
+		ftf = map[string]int{}
+	}
+	for term, count := range tf {
+		b.add(term, StreamRaw, unit, count)
+		if folded {
+			if f := Fold(term); f != "" && count > ftf[f] {
+				ftf[f] = count
+			}
+		}
+	}
+	for term, count := range ftf {
+		b.add(term, StreamFolded, unit, count)
+	}
+}
+
 // Build indexes units in memory, counting from workers.
 func Build(ctx context.Context, docs []DocMeta, units []Unit, opts Options) (*Index, error) {
 	if len(units) == 0 {
 		return nil, errors.New("no units to index: refusing to build an empty index")
 	}
-	b := &builder{docs: docs, units: make([]UnitMeta, len(units))}
-	for i := range b.shards {
-		b.shards[i].raw = map[string]map[uint32]byte{}
-		if opts.Folded {
-			b.shards[i].fold = map[string]map[uint32]byte{}
-		}
-	}
+	b := newBuilder(opts)
+	b.docs, b.units = docs, make([]UnitMeta, len(units))
 
 	var totalLen atomic.Uint64
-	lexdania.Parallel(ctx, len(units), func(i int) {
+	parallel.For(ctx, len(units), func(i int) {
 		u := &units[i]
-		l := len([]rune(u.Text))
+		l := utf8.RuneCountInString(u.Text)
 		b.units[i] = UnitMeta{Doc: u.Doc, Addr: u.Addr, Len: l}
 		totalLen.Add(uint64(l))
-
-		tf := map[string]int{}
-		for _, tok := range Tokenize(u.Text) {
-			tf[tok]++
-		}
-		for term, count := range tf {
-			b.add(term, StreamRaw, uint32(i), count)
-			if opts.Folded {
-				if folded := Fold(term); folded != "" {
-					b.add(folded, StreamFolded, uint32(i), count)
-				}
-			}
-		}
+		b.addUnit(uint32(i), u.Text, opts.Folded)
 	})
 
 	idx := &Index{Docs: docs, Units: b.units, Flags: opts.Flags(), B: bm25B, Built: time.Now().Unix(), avgUnitLen: float64(totalLen.Load()) / float64(len(b.units))}
@@ -193,20 +241,22 @@ func Build(ctx context.Context, docs []DocMeta, units []Unit, opts Options) (*In
 	return idx, nil
 }
 
-func addPosting(into map[string]map[uint32]byte, term string, unit uint32, count int) {
+func addPosting(into map[string]*postList, term string, unit uint32, count int) {
+	// Counts saturate at 255: a section that repeats a word 300 times is not more
+	// relevant than one that repeats it 255 times, and the ranking flattens that curve.
 	if count > 255 {
 		count = 255
 	}
-	per := into[term]
-	if per == nil {
-		per = map[uint32]byte{}
-		into[term] = per
+	pl := into[term]
+	if pl == nil {
+		pl = &postList{}
+		// A token can be a slice of the unit's text (lower-casing returns its input when
+		// there is nothing to lower), and a dictionary key that aliases it keeps the whole
+		// provision alive for the rest of the build.
+		into[strings.Clone(term)] = pl
 	}
-	// Saturating byte counts would otherwise let a 300-occurrence unit look like a
-	// 45-occurrence one; the max is the honest compression here.
-	if v := per[unit]; v < byte(count) {
-		per[unit] = byte(count)
-	}
+	pl.units = append(pl.units, unit)
+	pl.tf = append(pl.tf, byte(count))
 }
 
 // dictEntry is one (term, stream) row before the tables are assembled.
@@ -221,24 +271,24 @@ type dictEntry struct {
 func (b *builder) flatten(id byte, folded bool) []dictEntry {
 	s := &b.shards[id]
 	var out []dictEntry
-	appendStream := func(m map[string]map[uint32]byte, stream byte) {
-		for term, per := range m {
-			units := make([]uint32, 0, len(per))
-			for u := range per {
-				units = append(units, u)
+	appendStream := func(m map[string]*postList, stream byte) {
+		for term, pl := range m {
+			postings := make([]Posting, len(pl.units))
+			for i, u := range pl.units {
+				postings[i] = Posting{Unit: u, Tf: pl.tf[i]}
 			}
-			sort.Slice(units, func(i, j int) bool { return units[i] < units[j] })
-			postings := make([]Posting, 0, len(units))
-			for _, u := range units {
-				postings = append(postings, Posting{Unit: u, Tf: per[u]})
-			}
+			slices.SortFunc(postings, func(a, b Posting) int { return cmp.Compare(a.Unit, b.Unit) })
 			out = append(out, dictEntry{term: term, stream: stream, postings: postings})
+			delete(m, term)
 		}
 	}
 	appendStream(s.raw, StreamRaw)
 	if folded {
 		appendStream(s.fold, StreamFolded)
 	}
+	// The shard's maps are spent: dropping them here, shard by shard, is what keeps the
+	// builder and the finished tables from being whole at the same time.
+	s.raw, s.fold = nil, nil
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].term != out[j].term {
 			return out[i].term < out[j].term

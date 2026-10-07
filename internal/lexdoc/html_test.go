@@ -14,8 +14,14 @@ import (
 
 func TestHTMLSaysWhatPlainTextSays(t *testing.T) {
 	c := sampleLaw()
-	plain := words(c.PlainText())
-	got := words(plainTextOf(c.HTML()))
+	// The page leaves out the label the mirror names an unlabelled chapter by ("chapter 1") and
+	// writes the mirror's own headings in Danish; every word of the document's own is compared.
+	plain := words(withoutMirrorWords(c.PlainText(),
+		"chapter 1", "Entry into force and transitional provisions",
+		"Numbered in their own series: citing them as a section of the law would reach a different provision."))
+	got := words(withoutMirrorWords(plainTextOf(c.HTML()),
+		"Ikrafttrædelses- og overgangsbestemmelser",
+		"Nummereret i deres egen række: at citere dem som en paragraf i loven ville ramme en anden bestemmelse."))
 	if len(plain) == 0 || len(got) == 0 {
 		t.Fatalf("one side rendered no words at all: plain %d, html %d", len(plain), len(got))
 	}
@@ -189,4 +195,41 @@ func TestHTMLAnchorsStayUniqueWhenTheDocumentGaveNoNumbers(t *testing.T) {
 			t.Errorf("contents line for an unnumbered provision is labelled %q", line.Label)
 		}
 	}
+}
+
+// A page sets a law out as one: a subsection is a paragraph opening with its label, a condition a
+// line of its own with its label hanging, and a lettered condition inside a numbered one indented
+// once more. The provision's number, printed apart, opens its first paragraph.
+func TestHTMLSetsProvisionsOutAsALaw(t *testing.T) {
+	p := &Provision{Number: "9", Printed: "§ 9.", Segments: []Segment{
+		{Text: "§\u00a09.", Break: true}, {Text: "Der kan gives tilladelse.", Break: true},
+		{Text: "Stk. 2.", Break: true}, {Text: "Det gælder, hvis", Break: true},
+		{Text: "1)", Break: true}, {Text: "der er aftale om", Break: true},
+		{Text: "a)", Break: true}, {Text: "ansættelse,", Break: true},
+		{Text: "2)", Break: true}, {Text: "der er bopæl.", Break: true},
+		{Text: "Stk. 3.", Break: true}, {Text: "Ellers ikke.", Break: true}}}
+	p.Normalise()
+	c := &Content{Order: []Node{{Provision: p}}}
+	got := c.HTML()
+	for _, want := range []string{
+		`<p class="stk"><span class="lbl par">§` + "\u00a0" + `9.</span> Der kan gives tilladelse.`,
+		`<p class="stk"><span class="lbl stk">Stk. 2.</span> Det gælder, hvis`,
+		`<p class="item d1"><span class="lbl nr">1)</span> der er aftale om`,
+		`<p class="item d2"><span class="lbl nr">a)</span> ansættelse,`,
+		`<p class="item d1"><span class="lbl nr">2)</span> der er bopæl.`,
+		`<p class="stk"><span class="lbl stk">Stk. 3.</span> Ellers ikke.`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("page lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+// withoutMirrorWords takes out sentences the mirror writes itself, which the page writes in Danish
+// and the text forms in English.
+func withoutMirrorWords(text string, sentences ...string) string {
+	for _, sn := range sentences {
+		text = strings.Replace(text, sn, "", 1)
+	}
+	return text
 }

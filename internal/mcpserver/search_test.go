@@ -20,7 +20,7 @@ func TestSearchRefusedWithoutAnIndex(t *testing.T) {
 	if err == nil {
 		t.Fatal("Search answered without an index")
 	}
-	if !strings.Contains(err.Error(), "index build") {
+	if !strings.Contains(err.Error(), "artifact build") {
 		t.Errorf("refusal does not say how to fix it: %v", err)
 	}
 

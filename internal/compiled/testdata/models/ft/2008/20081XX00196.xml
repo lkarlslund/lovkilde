@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Dokument SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2008/10/02/SF.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>SF.L#LOKDOK28</DocumentType>
+    <Rank>A</Rank>
+    <AccessionNumber>20081XX00196</AccessionNumber>
+    <DocumentId>AU003466</DocumentId>
+    <UniqueDocumentId>122372</UniqueDocumentId>
+    <DocumentTitle>Skriftlig fremsættelse (3. december 2008) - L 83</DocumentTitle>
+    <Year>2008</Year>
+    <DiesSigni>2008-12-03</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2008-12-06</StartDate>
+    <EndDate REFid="submit_1">2008-12-06</EndDate>
+    <Status>Valid</Status>
+    <Number>L 83</Number>
+    <ParliamentarySession>1</ParliamentarySession>
+    <DateOfFirstReading>2009-01-13</DateOfFirstReading>
+    <DateOfSecondReading>2009-03-12</DateOfSecondReading>
+    <DateOfThirdReading>2009-03-17</DateOfThirdReading>
+    <NumberOfTheAct>214</NumberOfTheAct>
+    <IntroducedBy>Økonomi- og erhvervsministeren (Lene Espersen (KF)).</IntroducedBy>
+    <SpokesmenDuringFirstReading>(1.beh) Hans Christian Thoning (V), Niels Sindal (S), Colette L. Brix (DF), Ole Sohn (SF), Mike Legarth (KF), Morten Helveg Petersen (RV), Frank Aaen (udpeget af EL) (EL), Anders Samuelsen (LA).</SpokesmenDuringFirstReading>
+    <Voting>Lovforslaget vedtaget med 101 stemmer (V, S, DF, KF, RV, LA, SIU, Simon Emil Ammitzbøll (UFG) og Pia Christmas-Møller (UFG)) mod 16 (SF og EL).</Voting>
+    <SubmittedToTheFollowingStandingCommittees>Efter 1.beh henvist til Erhvervsudvalget (ERU)</SubmittedToTheFollowingStandingCommittees>
+    <Ministry>Økonomi- og Erhvervsministeriet</Ministry>
+    <Republished>Nej</Republished>
+  </Meta>
+  <DokumentHoved>
+    <Linea>
+      <Char>Skriftlig fremsættelse (3. december 2008)</Char>
+    </Linea>
+  </DokumentHoved>
+  <DokumentIndhold>
+    <SkriftligFremsaettelse>
+      <Fremsaetter>
+        <Linea>
+          <Char formaChar="Bold">Økonomi- og erhvervsministeren</Char>
+          <Char> (Lene Espersen):</Char>
+        </Linea>
+      </Fremsaetter>
+      <FremsaettelsesIndledning>
+        <Exitus>
+          <Linea>
+            <Char>Herved tillader jeg mig for Folketinget at fremsætte:</Char>
+          </Linea>
+        </Exitus>
+      </FremsaettelsesIndledning>
+      <Fremsaettelse>
+        <ForslagsTitel>
+          <Linea>
+            <Char>Forslag til lov om ændring af lov om Dansk Internationalt Skibsregister (Anvendelse af kollektive overenskomster).</Char>
+          </Linea>
+        </ForslagsTitel>
+        <ForslagsNummer>
+          <Linea>
+            <Char>(Lovforslag nr. L 83).</Char>
+          </Linea>
+        </ForslagsNummer>
+      </Fremsaettelse>
+      <FremsaettelsesTekst>
+        <Exitus>
+          <Linea>
+            <Char>Forslaget til ændring af lov om Dansk Internationalt Skibsregister (DIS) er en konsekvens af drøftelser med Kommissionen om den gældende lovs overensstemmelse med EU-retten.</Char>
+          </Linea>
+        </Exitus>
+        <Exitus>
+          <Linea>
+            <Char>I oktober 2004 sendte Kommissionen en åbningsskrivelse til den danske regering, hvori Kommissionen stillede spørgsmålstegn ved, om lov om Dansk Internationalt Skibsregister er i fuld overensstemmelse med de danske forpligtelser efter EF-traktaten, aftaler indgået af EU og den seneste udvikling af EU-retten.</Char>
+          </Linea>
+          <Linea>
+            <Char>Med forslaget præciseres lovens overensstemmelse med EU-retten, idet der i § 10, stk. 2 medtages en eksplicit henvisning til EU-retten.</Char>
+          </Linea>
+          <Linea>
+            <Char>Det fremgår nu udtrykkeligt af lovteksten, at også personer, der efter EU-retten kan sidestilles med personer, som har dansk bopæl, kan være omfattet af overenskomster, der er indgået med danske fagforeninger.</Char>
+          </Linea>
+        </Exitus>
+        <Exitus>
+          <Linea>
+            <Char>Jeg kan oplyse, at Kommissionen har meddelt, at traktatkrænkelsessagen fra 2004 vil kunne afsluttes, hvis lovændringen vedtages.</Char>
+          </Linea>
+        </Exitus>
+        <Exitus>
+          <Linea>
+            <Char>Jeg henviser i øvrigt til lovforslaget og de bemærkninger, der ledsager det, og anbefaler forslaget til Folketingets velvillige behandling.</Char>
+          </Linea>
+        </Exitus>
+      </FremsaettelsesTekst>
+    </SkriftligFremsaettelse>
+  </DokumentIndhold>
+</Dokument>

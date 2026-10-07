@@ -1,6 +1,7 @@
 package lexdoc
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -482,5 +483,102 @@ func TestWholeProvisionReplacementFromStykkerOnlySurvives(t *testing.T) {
 	}
 	if p := mustFindProvision(t, view, "§ 3"); p.Stykke(1) == nil {
 		t.Error("the new subsection is not addressable as § 3, stk. 1")
+	}
+}
+
+// An order of 2009 changes the preamble's »2008« to »2010«, drafted against the text before the
+// order of 2008 had made it 2009: its wording stands.
+func TestAStaleQuotationOfWordsAnEarlierActChangedTakesItsWording(t *testing.T) {
+	c := sampleLaw()
+	c.Preamble = []Segment{{Text: "Bekendtgørelsen gælder for finansåret 2008."}}
+	change := func(src string, y int, old, new string) Amendment {
+		def := "I indledningen ændres »" + old + "« til: »" + new + "«."
+		return Amendment{Source: src, Effective: date(y, 1, 1), Edits: []Edit{{Source: src, Kind: EditReplaceText,
+			Address: ParseAddress(def), Definition: def, Old: old, New: new}}}
+	}
+	view, out := c.AsOf([]Amendment{change("A", 2008, "2008", "2009"), change("B", 2009, "2008", "2010")}, date(2010, 6, 1))
+	if len(out.Unresolved) != 0 {
+		t.Fatalf("refused: %+v", out.Unresolved)
+	}
+	if got := SegmentsText(view.Preamble); got != "Bekendtgørelsen gælder for finansåret 2010." {
+		t.Errorf("preamble = %q", got)
+	}
+}
+
+// "I § 70, stk. 3, ændres »§ 140, stk. 8«, til: »§ 54, stk. 1«" where § 140 has six subsections
+// and § 70, stk. 3, cites "§ 140, stk. 6": the one citation of § 140 is the one meant.
+func TestACitationOfASubsectionTheProvisionLacksIsTheOneTheUnitPrints(t *testing.T) {
+	stk := func(n int) string { return fmt.Sprintf("Stk. %d. Regel %d.", n, n) }
+	var segs []Segment
+	var stykker []Stykke
+	for n := 1; n <= 6; n++ {
+		segs = append(segs, Segment{Text: stk(n)})
+		stykker = append(stykker, Stykke{Nr: n, Span: Span{From: n - 1, To: n}})
+	}
+	c := &Content{Order: []Node{
+		{Provision: &Provision{Number: "70", Printed: "§ 70.", Segments: []Segment{{Text: "§ 70. Planen efter § 140, stk. 6, revideres."}}, Stykker: []Stykke{{Nr: 1, Span: Span{From: 0, To: 1}}}}},
+		{Provision: &Provision{Number: "140", Printed: "§ 140.", Segments: segs, Stykker: stykker}},
+	}}
+	def := "I § 70, stk. 1, ændres »§ 140, stk. 8«, til: »§ 54, stk. 1«."
+	out := c.Apply(Edit{Kind: EditReplaceText, Address: ParseAddress(def), Definition: def, Old: "§ 140, stk. 8", New: "§ 54, stk. 1"})
+	if !out.Applied {
+		t.Fatalf("refused: %s", out.Reason)
+	}
+	if got := textOf(t, c, "§ 70"); got != "§ 70. Planen efter § 54, stk. 1, revideres." {
+		t.Errorf("§ 70 = %q", got)
+	}
+	// A subsection § 140 has is not read as another.
+	def = "I § 70, stk. 1, ændres »§ 54, stk. 2« til: »§ 54, stk. 3«."
+	if out := c.Apply(Edit{Kind: EditReplaceText, Address: ParseAddress(def), Definition: def, Old: "§ 54, stk. 2", New: "§ 54, stk. 3"}); out.Applied {
+		t.Errorf("applied to a provision the law lacks: %+v", out)
+	}
+}
+
+// Two acts take effect the same day, and the one with the lower number is drafted on the other:
+// its "stk. 2, ophæves" counts the subsections as they stand once the other has repealed stk. 1.
+func TestActsOfOneDayAreMadeInTheOrderTheyWereDraftedIn(t *testing.T) {
+	c := &Content{Order: []Node{{Provision: &Provision{Number: "1", Printed: "§ 1.",
+		Segments: []Segment{{Text: "§ 1. Første regel."}, {Text: "Stk. 2. Gebyr betales."}, {Text: "Stk. 3. Bonus gives."}},
+		Stykker:  []Stykke{{Nr: 1, Span: Span{From: 0, To: 1}}, {Nr: 2, Span: Span{From: 1, To: 2}}, {Nr: 3, Span: Span{From: 2, To: 3}}}}}}}
+	edit := func(src string, kind EditKind, def, old, new string) Edit {
+		return Edit{Source: src, Kind: kind, Address: ParseAddress(def), Definition: def, Old: old, New: new}
+	}
+	day := date(2022, 7, 1)
+	drafted := Amendment{Source: "A", Effective: day, Edits: []Edit{
+		edit("A", EditDeleteProvision, "§ 1, stk. 2, ophæves.", "", "")}}
+	first := Amendment{Source: "B", Effective: day, Edits: []Edit{
+		edit("B", EditDeleteProvision, "§ 1, stk. 1, ophæves.", "", ""),
+		edit("B", EditReplaceText, "I § 1, stk. 2, der bliver stk. 1, ændres »Gebyr« til: »Afgift«.", "Gebyr", "Afgift")}}
+	view, out := c.AsOf([]Amendment{drafted, first}, day)
+	if len(out.Unresolved) != 0 {
+		t.Fatalf("refused: %+v", out.Unresolved)
+	}
+	got := textOf(t, view, "§ 1")
+	if !strings.Contains(got, "Afgift betales.") || strings.Contains(got, "Bonus") || strings.Contains(got, "Første") {
+		t.Errorf("§ 1 = %q", got)
+	}
+}
+
+// TestPrintedConditionsSurviveEachOthersReplacement: when a change brings again conditions the
+// subsection prints, each printed one takes the change's wording — and replacing the first, printed
+// over two lines, moves the second. A pointer to the second kept from before cut past the end of
+// the provision and crashed the consolidation.
+func TestPrintedConditionsSurviveEachOthersReplacement(t *testing.T) {
+	a := "6) personen har modtaget meddelelse om afgørelsen fra myndigheden"
+	b := "7) personen har ikke længere bopæl eller ophold her i landet efter afgørelsen"
+	p := &Provision{Segments: []Segment{
+		{Text: "Stk. 2. Hjælpen standses, når", Break: true},
+		{Text: "6) personen har modtaget meddelelse", Break: true},
+		{Text: "om afgørelsen fra myndigheden, og", Break: false},
+		{Text: b + ".", Break: true},
+	}}
+	p.Stykker = []Stykke{{Nr: 2, Span: Span{From: 0, To: 4}, Items: []Item{
+		{Nr: 6, Span: Span{From: 1, To: 3}},
+		{Nr: 7, Span: Span{From: 3, To: 4}},
+	}}}
+	segs := []Segment{{Text: a + ", og", Break: true}, {Text: b + ".", Break: true}}
+	out, dropped, _ := withoutPrintedItems(p, &p.Stykker[0], segs)
+	if dropped != 2 || len(out) != 0 {
+		t.Errorf("dropped %d, left %d lines; want both conditions recognised as printed", dropped, len(out))
 	}
 }

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/chain"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
@@ -61,28 +61,28 @@ type BrowseItem struct {
 // carry: an empty option value would collide with "no filter chosen", which is a different
 // thing — and a reader who cannot select the unlabelled documents gets a filter that quietly
 // drops them.
-func statusFacetName(s lexdania.Status) string {
+func statusFacetName(s lexdoc.Status) string {
 	switch s {
-	case lexdania.StatusValid:
+	case lexdoc.StatusValid:
 		return "Valid"
-	case lexdania.StatusHistoric:
+	case lexdoc.StatusHistoric:
 		return "Historic"
 	}
 	return "unknown"
 }
 
 // statusFilter turns the caller's word into a predicate, or nil for "no opinion".
-func statusFilter(want string) func(lexdania.Status) bool {
+func statusFilter(want string) func(lexdoc.Status) bool {
 	switch strings.ToLower(strings.TrimSpace(want)) {
 	case "":
 		return nil
 	case "valid", "gældende", "gaeldende":
-		return func(s lexdania.Status) bool { return s == lexdania.StatusValid }
+		return func(s lexdoc.Status) bool { return s == lexdoc.StatusValid }
 	case "historic", "historisk", "ophævet", "ophaevet":
-		return func(s lexdania.Status) bool { return s == lexdania.StatusHistoric }
+		return func(s lexdoc.Status) bool { return s == lexdoc.StatusHistoric }
 	case "unknown", "ukendt":
-		return func(s lexdania.Status) bool {
-			return s != lexdania.StatusValid && s != lexdania.StatusHistoric
+		return func(s lexdoc.Status) bool {
+			return s != lexdoc.StatusValid && s != lexdoc.StatusHistoric
 		}
 	}
 	return nil
@@ -143,12 +143,12 @@ func (s *Server) Browse(req BrowseRequest) *BrowseResult {
 	needle := strings.ToLower(strings.TrimSpace(req.Title))
 	res := &BrowseResult{Offset: max(req.Offset, 0), Limit: limit, Kind: req.Kind, Year: req.Year, Title: req.Title, Status: req.Status, TypeCode: req.TypeCode}
 
-	var matches []lexdania.Entry
+	var matches []chain.Entry
 	kindCounts := map[string]int{}
 	yearCounts := map[string]int{}
 	statusCounts := map[string]int{}
 	wantStatus := statusFilter(req.Status)
-	for _, e := range s.archive.Entries() {
+	for _, e := range s.lib().Entries() {
 		kindCounts[e.Kind]++
 		statusCounts[statusFacetName(e.Status)]++
 		if req.Kind != "" && e.Kind != req.Kind {
@@ -217,7 +217,7 @@ type RelatedItem struct {
 // marked with whether the mirror actually holds it, which is a different claim from the
 // register naming it.
 func (s *Server) Related(ref string) ([]RelatedGroup, error) {
-	entry, err := s.find(ref)
+	entry, err := s.find(ref, true)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,7 @@ func (s *Server) relatedFrom(_ string, cites []lexdoc.Cite) []RelatedItem {
 	var items []RelatedItem
 	for _, c := range cites {
 		item := RelatedItem{Title: c.Title, Effective: dateOrEmpty(c.Effective)}
-		if _, ok := s.archive.Find(c.Accession); ok {
+		if _, ok := s.lib().Find(c.Accession); ok {
 			item.Reference, item.Held = c.Accession, true
 		}
 		items = append(items, item)
@@ -253,7 +253,7 @@ func (s *Server) relatedFrom(_ string, cites []lexdoc.Cite) []RelatedItem {
 // archiveVersions lists the chain from the archive rather than the model, because the chain is
 // what tells a reader which version they are reading and which came after.
 func (s *Server) archiveVersions(accession string) []RelatedItem {
-	versions, err := s.archive.Versions(accession)
+	versions, err := s.lib().Versions(accession)
 	if err != nil {
 		return nil
 	}

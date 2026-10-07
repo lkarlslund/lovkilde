@@ -103,7 +103,7 @@ func takeLeadingParagraphNumber(n *Node) string {
 // number with a non-breaking space, which is why the classes are not just \s. Whether what follows
 // makes this the provision's own number is cutParagraphNumber's decision, because the two shapes
 // that matter differ in what comes next rather than in what comes first.
-var rePrintedParagraphNumber = regexp.MustCompile(`^[\s\x{00a0}]*§[\s\x{00a0}]*(\d{1,4})([\s\x{00a0}]?[a-zæøå]?)`)
+var rePrintedParagraphNumber = regexp.MustCompile(`^[\s\x{00a0}]*§[\s\x{00a0}]*(\d{1,4})([\s\x{00a0}]?[a-zæøåA-ZÆØÅ]?)`)
 
 // cutParagraphNumber splits a leading printed number from the text that follows it. Two shapes
 // prove the number is the provision's own:

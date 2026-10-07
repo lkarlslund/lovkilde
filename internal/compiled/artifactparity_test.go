@@ -13,7 +13,6 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
-	"github.com/lkarlslund/retsinformation/internal/search"
 )
 
 // TestArtifactAnswersWhatTheParseAnswers is the gate that lets serving read the artifact instead of
@@ -97,7 +96,7 @@ func TestArtifactAnswersWhatTheParseAnswers(t *testing.T) {
 		// the forms that actually reach a lookup: sections the index cites, and nothing the index
 		// cannot name.
 		for _, section := range parsed[i].Sections() {
-			addr := search.AddressOf(section)
+			addr := lexdania.AddressOf(section)
 			if addr == "" {
 				continue
 			}

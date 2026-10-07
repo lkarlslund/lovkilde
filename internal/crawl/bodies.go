@@ -262,7 +262,9 @@ func (c *Crawler) FetchBodies(ctx context.Context, opt FetchOptions) error {
 			}
 			attempted++
 
-			if c.archive.HasExt(row.ELIURL, JSONExt) {
+			// A held payload closes without a request unless the document was reported
+			// changed since: then the payload on disk is the older text.
+			if c.archive.HasExt(row.ELIURL, JSONExt) && row.State != store.StateStale {
 				if err := c.closeBodyWithoutFetch(ctx, row); err != nil {
 					return err
 				}

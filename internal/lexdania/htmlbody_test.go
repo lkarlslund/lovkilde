@@ -654,3 +654,43 @@ func TestTableSectionsStayTransparentToRows(t *testing.T) {
 		t.Errorf("%d elements have no name, want 0\ntree:\n%s", n, dumpNode(body.Root, ""))
 	}
 }
+
+func TestParseHTMLBodyWordEndnoteReachesTitle(t *testing.T) {
+	// B20050010005 prints its title note as Word exported it: a MsoFootnoteText paragraph under
+	// "Officielle noter", linked by a bare <a href="#FN501">. Read as a paragraph, the EU
+	// directives it names were nowhere near the title, and every change to them was refused.
+	src := `<p class="Titel">Bekendtgørelse om indførsel af planter<A HREF="#FN501" NAME="_FN501"><SUP>1)</SUP></A></p>` +
+		`<div class="bjelke">Officielle noter</div><DIV CLASS=PARA ID="NOTER">` +
+		`<P class="MsoFootnoteText"><A NAME="FN501" HREF="#_FN501"><SUP>1)</SUP></A> Bekendtgørelsen gennemfører direktiv 2004/102/EF.</P></DIV>`
+	body := parseBodyFixture(t, src)
+	var anchored *Node
+	body.Root.Descendants(func(c *Node) {
+		if c.Name == "Nota" && strings.Contains(docText(c), "2004/102/EF") {
+			anchored = c
+		}
+	})
+	if anchored == nil || body.RelocatedNotes() != 1 {
+		t.Fatalf("note text not moved to the title's marker (relocated %d): %s", body.RelocatedNotes(), dumpNode(body.Root, ""))
+	}
+}
+
+func TestParseHTMLBodyUnwrappedAnnexStandsApart(t *testing.T) {
+	// A20070044229 prints "Bilag 1" as bare text before <p class="BilagsOverskrift">, with no
+	// <div class="bilag"> around it. Its list of activities was read as part of the last provision.
+	src := `<div class="Kapitel"><p class="Paragrafnummer">§ 23</p><p class="Stk">Stk. 4. (Udeladt)</p>` +
+		`<p class="MsoNormal">&nbsp;</p> Bilag 1 <p class="BilagsOverskrift">&nbsp;</p>` +
+		`<p class="Nummer">1. Modtagelse af indlån.</p><p class="Nummer">2. Udlånsvirksomhed.</p></div>`
+	body := parseBodyFixture(t, src)
+	var annex *Node
+	for _, c := range body.Root.Elems {
+		if c.Name == "Bilag" {
+			annex = c
+		}
+	}
+	if annex == nil {
+		t.Fatalf("no annex at the top of the body: %s", dumpNode(body.Root, ""))
+	}
+	if got := docText(annex); !strings.Contains(got, "Bilag 1") || !strings.Contains(got, "Udlånsvirksomhed") {
+		t.Errorf("annex = %q", got)
+	}
+}

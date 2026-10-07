@@ -446,7 +446,7 @@ func TestSiteWithoutAnIndexStillBrowses(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("search page status = %d", code)
 	}
-	if !strings.Contains(body, "index build") {
+	if !strings.Contains(body, "artifact build") {
 		t.Errorf("search page does not say how to get search:\n%s", body)
 	}
 	body, code = get(t, site, "/browse")

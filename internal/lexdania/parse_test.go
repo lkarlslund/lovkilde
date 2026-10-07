@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 func TestParseIdentity(t *testing.T) {
@@ -279,10 +281,8 @@ func TestBillInChainIsNotApplied(t *testing.T) {
 	if v.SkippedBills == 0 {
 		t.Fatalf("the bill should have been skipped as a proposal; unresolved = %+v", v.Unresolved)
 	}
-	for _, s := range v.Sections() {
-		if strings.Contains(s.Display(), "søge om tilladelse før") {
-			t.Fatal("a bill's proposed text was applied to the consolidated law")
-		}
+	if strings.Contains(v.Text(), "søge om tilladelse før") {
+		t.Fatal("a bill's proposed text was applied to the consolidated law")
 	}
 }
 
@@ -455,5 +455,24 @@ func TestEncodingRoundTrip(t *testing.T) {
 	}
 	if std.Meta.AccessionNumber != doc.Meta.Accession {
 		t.Errorf("standard decoder sees %q, we see %q", std.Meta.AccessionNumber, doc.Meta.Accession)
+	}
+}
+
+// A number is its document's within the year; the date an act cites with it is sometimes the day of
+// publication or a slip, and the change is still the document's. A number from another year, or a
+// date months away, is another document.
+func TestATargetsDateSlipIsTolerated(t *testing.T) {
+	order := Meta{Number: 1398, DiesSigni: "2013-12-12"}
+	near := lexdoc.ParseTarget("I bekendtgørelse nr. 1398 af 1. december 2013 om udlægning af områder foretages følgende ændringer:")
+	if !targetsLaw(near, order, AccessionInfo{}) {
+		t.Error("the order's own change rejected over a date eleven days off")
+	}
+	far := lexdoc.ParseTarget("I bekendtgørelse nr. 1398 af 1. juni 2013 om noget andet foretages følgende ændringer:")
+	if targetsLaw(far, order, AccessionInfo{}) {
+		t.Error("a date six months away taken for the same document")
+	}
+	other := lexdoc.ParseTarget("I bekendtgørelse nr. 1398 af 12. december 2012 om noget andet foretages følgende ændringer:")
+	if targetsLaw(other, order, AccessionInfo{}) {
+		t.Error("the same number from another year taken for the same document")
 	}
 }

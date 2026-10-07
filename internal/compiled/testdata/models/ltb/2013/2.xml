@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Dokument>
+  <Meta>
+    <DocumentType>Lovtidende B dokument</DocumentType>
+    <Rank>A</Rank>
+    <AccessionNumber>A20130000230</AccessionNumber>
+    <DocumentId>AE002010</DocumentId>
+    <UniqueDocumentId>161037</UniqueDocumentId>
+    <DocumentTitle>Finanslov for finansåret 2014</DocumentTitle>
+    <Year>2013</Year>
+    <DiesSigni>2013-12-26</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2013-12-27</StartDate>
+    <EndDate REFid="submit_1">2018-05-17</EndDate>
+    <Status>Historic</Status>
+    <Number>2</Number>
+    <PopularTitle>Finansloven</PopularTitle>
+    <AnnouncedIn>Lovtidende B</AnnouncedIn>
+    <DiesEdicti>2018-05-16</DiesEdicti>
+    <DateOfHistoricMark>2018-05-16</DateOfHistoricMark>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">MARGRETHE R.</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Bjarne Corydon</Signature>
+    <PlaceOfSignature>Givet på Marselisborg Slot</PlaceOfSignature>
+    <JournalNumber>Finansmin., j.nr. 13/01578</JournalNumber>
+    <Ministry>Finansministeriet</Ministry>
+  </Meta>
+</Dokument>

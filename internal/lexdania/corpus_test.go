@@ -1,10 +1,12 @@
 package lexdania
 
 import (
+	"context"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 )
@@ -26,6 +28,20 @@ func corpusDir(t *testing.T) string {
 		t.Skipf("no archive at %s; set RETSIN_TEST_DATA to run against real documents", dir)
 	}
 	return dir
+}
+
+// corpusArchive is the archive scanned once for every real-data test of the package: each scanning
+// it again, and parsing the same acts again behind its caches, cost most of the suite's time.
+func corpusArchive(t *testing.T) (*Archive, error) {
+	dir := corpusDir(t)
+	sharedScan.once.Do(func() { sharedScan.a, sharedScan.err = Scan(context.Background(), dir) })
+	return sharedScan.a, sharedScan.err
+}
+
+var sharedScan struct {
+	once sync.Once
+	a    *Archive
+	err  error
 }
 
 // recentLawEntries orders archive entries so a test that needs a modern amending-act
@@ -212,8 +228,7 @@ func TestCorpusAmendmentCoverage(t *testing.T) {
 // own consolidation as ground truth — but it does assert that nothing crashes, that
 // nothing mutates the base, and that incompleteness is reported rather than hidden.
 func TestCorpusChainWalksRealDocuments(t *testing.T) {
-	dir := corpusDir(t)
-	a, err := Scan(t.Context(), dir)
+	a, err := corpusArchive(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,8 +284,8 @@ func TestCorpusChainWalksRealDocuments(t *testing.T) {
 			t.Fatal(err)
 		}
 		viewed++
-		if err := view.Doc.Root.checkInvariant(""); err != nil {
-			t.Errorf("%s: derived tree broken: %v", e.Accession, err)
+		if err := view.Content.Validate(); err != nil {
+			t.Errorf("%s: derived content broken: %v", e.Accession, err)
 		}
 		if view.Trustworthy() && len(view.Unresolved) > 0 {
 			t.Errorf("%s: Trustworthy() true with unresolved edits", e.Accession)
@@ -304,8 +319,7 @@ func TestCorpusChainWalksRealDocuments(t *testing.T) {
 // TestCorpusBaseNotMutatedOnRealData repeats the no-mutation guarantee on real
 // documents, which are large enough that a shallow copy could hide a shared subtree.
 func TestCorpusBaseNotMutatedOnRealData(t *testing.T) {
-	dir := corpusDir(t)
-	a, err := Scan(t.Context(), dir)
+	a, err := corpusArchive(t)
 	if err != nil {
 		t.Fatal(err)
 	}

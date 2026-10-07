@@ -1,0 +1,911 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="id62e367ef-36e5-41d5-8dc4-beae518ef5f0" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2022/05/17/BEKH.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="id36725416-1ac1-4022-8d86-fd824ee2a771">
+    <DocumentType>BEK H#LOKDOK04</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20240163005</AccessionNumber>
+    <DocumentId>AA014562</DocumentId>
+    <UniqueDocumentId>247395</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om Advokatnævnets virksomhed ved behandling af klager over advokater m.v.</DocumentTitle>
+    <Year>2024</Year>
+    <DiesSigni>2024-12-19</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2024-12-20</StartDate>
+    <EndDate REFid="submit_1">2025-11-15</EndDate>
+    <Status>Valid</Status>
+    <Number>1630</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2024-12-20</DiesEdicti>
+    <Concerns id="concerns_1" />
+    <Ref_Accn REFid="concerns_1">A20250129829</Ref_Accn>
+    <Ref_Af REFid="concerns_1">2025-11-07</Ref_Af>
+    <Ref_Text REFid="concerns_1">Bekendtgørelse af lov om rettens pleje</Ref_Text>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Peter Hummelgaard</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Troels Sten Nielsen</Signature>
+    <PlaceOfSignature>Justitsministeriet</PlaceOfSignature>
+    <JournalNumber>Justitsmin., j.nr. 2024-14443</JournalNumber>
+    <Ministry>Justitsministeriet</Ministry>
+  </Meta>
+  <TitelGruppe id="idbf617e05-6f38-4167-922c-33e238c5c527">
+    <Titel id="id58ab69dd-4714-4249-b028-50fc853ba846">
+      <Linea>
+        <Char>Bekendtgørelse om Advokatnævnets virksomhed ved behandling af klager over advokater m.v.</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="id486691c7-e05c-4f90-92ea-633876328112">
+    <Indledning id="idbac66938-d4a9-4c89-9798-36b0d11b318f">
+      <Exitus>
+        <Linea>
+          <Char>I medfør af § 144, stk. 3, § 147 c, stk. 7, og § 147 h, stk. 4, i lov om rettens pleje, jf. lovbekendtgørelse nr. 1160 af 5. november 2024, som ændret ved lov nr. 1464 af 10. december 2024, fastsættes:</Char>
+        </Linea>
+      </Exitus>
+    </Indledning>
+    <Afsnit id="id1984ddf8-07af-4071-9b22-c624f64af65e" localId="1">
+      <Kapitel id="idd684efee-5739-4049-84ce-468095bbefa3" localId="1">
+        <Explicatus>Kapitel 1</Explicatus>
+        <Rubrica id="id38c93a79-ab50-4b31-8726-c24cb3ce43fd">
+          <Linea>
+            <Char formaChar="Italic">Advokatnævnet</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id6256ba17-8d44-4163-a69b-452f82930ca3" localId="1">
+            <Explicatus>§ 1.</Explicatus>
+            <Stk id="idadb47844-be38-4f96-9117-3ccef5b86491">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet har til opgave at behandle klager over, at en advokat har tilsidesat god advokatskik (disciplinærsager), klager, der vedrører det vederlag, som en advokat har forlangt for sit arbejde (salærklager), sager om ophævelse af en frakendelse efter retsplejelovens § 147 f og sager om valgbarhed efter retsplejelovens § 147 h.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id08b99dcb-d56b-499d-86b0-501ec8804294">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Reglerne i denne bekendtgørelse finder tilsvarende anvendelse ved klager over fællesskaber af advokater og advokatselskaber og ved klager over personer, der er nævnt i retsplejelovens § 124 c, stk. 1, nr. 2, og som ejer aktier eller anparter i et advokatselskab.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id9d165db6-4cf0-4ebc-9c82-77cbad3026b1" localId="2">
+            <Explicatus>§ 2.</Explicatus>
+            <Stk id="idda881a22-4f36-455e-b253-b5f2ea3788a7">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan virke samlet eller i afdelinger.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id0eb3a0e5-63eb-4ce1-b815-f64403b3381b">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Hver afdeling består af 7 medlemmer.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id4fa3305a-0b58-445c-95c8-dd349099c8ef" localId="3">
+            <Explicatus>§ 3.</Explicatus>
+            <Stk id="idf495ca11-5e0b-46f0-90a3-5cb94288fbe8">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets formand fordeler sagerne mellem det samlede nævn og afdelingerne.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id8a2bda18-dd6d-4c16-9862-ef23361e5a51">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Sager af principiel karakter, sager, hvor der kan opstå spørgsmål om frakendelse efter retsplejelovens § 147 c, stk. 8 eller 9, og sager om ophævelse af en frakendelse efter retsplejelovens § 147 f, skal så vidt muligt behandles af det samlede nævn.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idf16949c7-929f-4339-b375-c9b901efe6f4" localId="4">
+            <Explicatus>§ 4.</Explicatus>
+            <Stk id="idbfa7e831-17eb-42ff-9ad6-0b179860469e">
+              <Exitus>
+                <Linea>
+                  <Char>Det samlede Advokatnævn er beslutningsdygtigt, når mindst 11 medlemmer eller stedfortrædere er til stede, heraf 1 medlem af formandskabet, 5 af de medlemmer, der er udpeget af justitsministeren, og 5 af de medlemmer, der er valgt af Advokatsamfundet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id978e5ad5-0bc9-4c32-885d-a1d53faa5f38">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>En afdeling er beslutningsdygtig, når mindst 3 medlemmer eller stedfortrædere er til stede, heraf 1 medlem af formandskabet, 1 af de medlemmer, der er udpeget af justitsministeren, og 1 af de medlemmer, der er valgt af Advokatsamfundet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc649e5ee-a8a2-43df-aac2-a81b2660535e">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Vedkommende formand træffer afgørelse om, hvorvidt der ved et medlems forfald skal indkaldes en stedfortræder.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id92ea032e-cd5a-4f5e-ba62-77184d7d0ac9" localId="5">
+            <Explicatus>§ 5.</Explicatus>
+            <Stk id="id9d292785-5cf1-4706-85ee-6b75cebf2a28">
+              <Exitus>
+                <Linea>
+                  <Char>Meddelelser til og fra Advokatnævnet kan sendes som digital kommunikation.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idafd71cea-5ef1-479e-80bd-1008b3cbe6b0" localId="6">
+            <Explicatus>§ 6.</Explicatus>
+            <Stk id="id67db5026-da9c-45d3-afa0-06114c103fe9">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet fastsætter en forretningsorden, der bl.a. indeholder nærmere frister for sagsbehandlingsskridt og en målsætning for, hvor lang sagsbehandlingstiden samlet set bør være.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idc9be0852-8315-4fd9-aabf-ac8906ad2e69" localId="7">
+            <Explicatus>§ 7.</Explicatus>
+            <Stk id="id463b36d9-33f4-4bb9-9a59-752e255dad14">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet afgiver en årlig beretning om sin virksomhed til justitsministeren.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnet offentliggør beretningen på sin hjemmeside.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="ida83a2712-884c-4175-8ec1-7761ead95367" localId="2">
+        <Explicatus>Kapitel 2</Explicatus>
+        <Rubrica id="ideaa4e5c7-e43c-4c40-9820-74570c3312ab">
+          <Linea>
+            <Char formaChar="Italic">Inhabilitet</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id83ce8696-90d1-4bf5-87ca-694c84b223c1" localId="8">
+            <Explicatus>§ 8.</Explicatus>
+            <Stk id="idaa6b8df4-5795-441a-8bdc-81bb122ee77c">
+              <Exitus>
+                <Linea>
+                  <Char>Intet medlem af Advokatnævnet må deltage i behandlingen af en sag, hvis</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id88bd4c7c-30d5-4017-a182-3ab29b9851b9">
+                <Index>
+                  <Indentatio id="idfed6fa23-26d3-4201-bb5a-a437d078f052" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>vedkommende selv har en særlig personlig eller økonomisk interesse i sagens udfald eller er eller tidligere i samme sag har været repræsentant for nogen, der har en sådan interesse,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id3a5d9e97-4bc1-4c5a-80c0-ce9e5b31bc1c" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>vedkommendes ægtefælle, beslægtede eller besvogrede i op- eller nedstigende linje eller i sidelinjen så nær som søskendebørn eller andre nærtstående har en særlig personlig eller økonomisk interesse i sagens udfald eller er repræsentant for nogen, der har en sådan interesse,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idc899101d-b535-4d1f-a57b-36a0a0401ae3" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>vedkommende deltager i ledelsen af eller i øvrigt har en nær tilknytning til et selskab, en forening eller en anden juridisk person, der har en særlig interesse i sagens udfald, eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id897b45b9-d749-46d9-80f8-2e3a0d51a0e4" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>der i øvrigt foreligger omstændigheder, som er egnede til at vække tvivl om vedkommendes upartiskhed.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="id220fc072-256b-4323-b4ae-23392664e8bc">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ethvert medlem skal straks underrette nævnets formand, hvis der foreligger forhold som nævnt i stk. 1.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnet træffer den endelige administrative afgørelse af, om et medlem kan deltage i en sags behandling.</Char>
+                </Linea>
+                <Linea>
+                  <Char>I behandlingen og afgørelsen af dette spørgsmål deltager det pågældende medlem ikke.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="idd74bf923-95cb-466a-abf3-f6fabe077dde" localId="3">
+        <Explicatus>Kapitel 3</Explicatus>
+        <Rubrica id="id2a29f6a5-f91d-4ec2-8b82-8ec63b6fba93">
+          <Linea>
+            <Char formaChar="Italic">Indbringelse af sager for Advokatnævnet</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id1c6bc434-0e4a-4328-9216-97fe98c23c7a" localId="9">
+            <Explicatus>§ 9.</Explicatus>
+            <Stk id="id94ba8ddb-b3c9-4208-b795-5fcfbb91d4f7">
+              <Exitus>
+                <Linea>
+                  <Char>Enhver, der har en retlig interesse heri, kan indbringe en sag for Advokatnævnet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Endvidere kan Advokatrådet indbringe en sag for nævnet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Kun Advokatrådet kan indbringe en sag om valgbarhed efter retsplejelovens § 147 h for nævnet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="ide3fa5d72-af26-4437-bf22-abd942d79c78">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Med klagen eller klagers begæring om genoptagelse, jf. § 24, skal følge et gebyr på 500 kr. Gebyret skal betales for hver advokat, der klages over, og dækker både klage over en advokats adfærd og samme advokats salær.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnets sekretariat kan fastsætte en frist for betaling af gebyret.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Behandlingen af en klage eller en anmodning om genoptagelse påbegyndes ikke, før gebyret er betalt.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Sekretariatet kan afvise klagen, hvis betaling af gebyret ikke er sket ved fristens udløb.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idb6f324ef-8079-4212-99f3-b59e8885bb80">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>For klager eller anmodninger om genoptagelse indbragt af offentlige myndigheder, domstolene eller Advokatrådet betales ikke gebyr.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id661b5e38-5030-4c77-b281-704356d79a8b">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Gebyret tilbagebetales, hvis klager får helt eller delvis medhold, hvis klagen afvises på grund af formelle mangler, eller hvis begæringen om genoptagelse imødekommes.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Endvidere tilbagebetales gebyret, hvis klagen trækkes tilbage, inden Advokatnævnet træffer afgørelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id1104c77d-c864-4c6e-bd21-90b4aa35cd31">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Skønnes en sag, der er indbragt for nævnet, at kunne medføre frakendelse efter retsplejelovens § 147 c, stk. 8 eller 9, kan sagen forelægges Advokatrådet til afgørelse af, om Advokatrådet vil indtræde i sagen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idab6b1d0a-0ff9-4113-969d-ecb5f614de05">
+              <Explicatus>Stk. 6.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Såfremt der for nævnet indbringes en disciplinærklage over en advokat eller en klage over en person, der er nævnt i retsplejelovens § 124 c, stk. 1, nr. 2, og som ejer aktier eller anparter i et advokatselskab, og den pågældende i forvejen er underlagt en afgørelse om betinget frakendelse, jf. retsplejelovens § 147 c, stk. 3 eller 4, skal nævnet forelægge sagen for Advokatrådet til afgørelse af, om Advokatrådet vil indtræde i sagen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id3c49a909-a48a-4c64-a9f3-bd4812c533c1" localId="10">
+            <Explicatus>§ 10.</Explicatus>
+            <Stk id="idaea5e818-4ed3-4fe4-b8f6-3d2f66a6ca3e">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan afvise en klage, der er indgivet for sent, når fristoverskridelsen ikke findes rimeligt begrundet, og en klage fra en person, der ikke har retlig interesse i det forhold, klagen angår.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det samme gælder en klage, der efter dens beskaffenhed ikke kan påkendes af nævnet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Ethvert nævnsmedlem kan anmode om behandling af sagen på et møde.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc93336a8-eb46-40da-a220-58aa3ddf8022">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan afvise en klage, der skønnes åbenbart grundløs.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det samme gælder en begæring om at genoptage behandlingen af en klage, hvis der ikke er særlige grunde, der taler herfor.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Ethvert nævnsmedlem kan anmode om behandling af sagen på et møde.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="ide5fce85b-07af-4e77-86fe-4433571d7c80" localId="11">
+            <Explicatus>§ 11.</Explicatus>
+            <Stk id="id553e02b7-cb01-4289-8f6c-7a2eb5803923">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets sekretariat vejleder om reglerne for nævnets behandling af klager.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc10b9c4e-7a15-49d9-a56e-2f8fd567c262">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Fristen for at indgive klage er 1 år.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Ved klager over en advokats adfærd regnes fristen fra det tidspunkt, hvor klageren er blevet bekendt med det forhold, som klagen vedrører.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Ved klager over en advokats salær regnes fristen fra det tidspunkt, hvor klageren er blevet bekendt med den endelige afregning i den pågældende sag.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="ida5961c21-42ec-4e75-ba16-f5faa7078555">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan behandle en klage, der er indgivet for sent, når fristoverskridelsen findes rimeligt begrundet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id200bad35-5c68-4e7b-89d8-d3e46fa97ec2" localId="4">
+        <Explicatus>Kapitel 4</Explicatus>
+        <Rubrica id="idb31bf5f1-7c13-467f-845f-bfe905d806c6">
+          <Linea>
+            <Char formaChar="Italic">Klagesagens forberedelse</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id6bd8c743-1fbe-4569-bf20-fa37f7f3ff59" localId="12">
+            <Explicatus>§ 12.</Explicatus>
+            <Stk id="id0e79a3cf-5b99-41ff-b96e-16fa778fbca6">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets sekretariatsopgaver varetages af Advokatsamfundets sekretariat.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id0084faf4-fa38-432a-be15-e893cb49a4dd">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Nævnet udarbejder en vejledning om behandling af sager med personligt fremmøde og en vejledning om sager om frakendelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Vejledningerne offentliggøres på nævnets hjemmeside.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id37974c9f-89ca-4ede-899e-81529f2f0ef1" localId="13">
+            <Explicatus>§ 13.</Explicatus>
+            <Stk id="id1edef2bf-764b-45e9-a534-5e977e0821fe">
+              <Exitus>
+                <Linea>
+                  <Char>Sekretariatet bistår Advokatnævnet ved forberedelse af sager, der skal behandles af nævnet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idd9f30b85-253b-4835-9206-d292d5bd5897">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Sekretariatet sørger for, at de nødvendige oplysninger til sagens behandling foreligger, og at de nødvendige undersøgelser er foretaget.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id24739476-7b8b-4fe7-87bc-719d1a3f5e04">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Sekretariatet kan i en sag, der skønnes at blive afvist af nævnet i henhold til § 10 eller § 19, stk. 6, undlade at anmode advokaten om en udtalelse og indstille til nævnet, at klagen afvises.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id0c92a6dc-19ed-4b94-a6fc-0a9187934dc7" localId="14">
+            <Explicatus>§ 14.</Explicatus>
+            <Stk id="idba6ca96e-e8c1-4695-be67-584db37f16c1">
+              <Exitus>
+                <Linea>
+                  <Char>Hvis sagen skønnes egnet hertil, kan sekretariatet opfordre parterne til at søge sagen forligt og deltage i mægling eller mediation, og sekretariatet kan inddrage ekstern bistand til mæglingen eller mediationen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id20ea466e-b605-4177-8d98-bb71cd874cec" localId="15">
+            <Explicatus>§ 15.</Explicatus>
+            <Stk id="id464cb604-af60-4f68-bc10-bb5d4bb943b2">
+              <Exitus>
+                <Linea>
+                  <Char>Advokater er forpligtede til at forsyne Advokatnævnet med dokumenter og oplysninger, som nævnet finder er af betydning for afgørelsen af en sag.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Advokater er forpligtede til at fremkomme med udtalelser og at give møde for nævnet for at afgive forklaring om forhold, som nævnet finder er af betydning for afgørelsen af sagen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idea362b02-6003-458f-9646-e4faeeb4e8bf">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatens forpligtelse efter stk. 1 begrænses i overensstemmelse med retsplejelovens regler om vidnefritagelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idd6d09e01-3e36-474e-a946-b3b82994a1c7">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Hvis der er konkret mistanke om, at en advokat har begået en lovovertrædelse, der kan medføre straf, gælder advokatens forpligtelse efter stk. 1 ikke, medmindre det kan udelukkes, at de oplysninger, der søges tilvejebragt, kan have betydning for bedømmelsen af den formodede lovovertrædelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id1a2060c8-9c95-4a90-b068-592cb29b728f" localId="16">
+            <Explicatus>§ 16.</Explicatus>
+            <Stk id="id99b297d7-7ab0-4913-943e-7febc89c34c7">
+              <Exitus>
+                <Linea>
+                  <Char>Når Advokatrådet indgiver klage, kan rådet udpege en advokat til at virke som anklager.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id45aa223c-3e79-458c-905f-e3111e757e67">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>I sager, hvor der kan opstå spørgsmål om at frakende en advokat retten til at udøve advokatvirksomhed, jf. retsplejelovens § 147 c, stk. 8, eller frakende en af de i retsplejelovens § 124 c, stk. 1, nr. 2, nævnte personer retten til at eje aktier eller anparter i et advokatselskab, jf. retsplejelovens § 147 c, stk. 9, udpeger Advokatnævnet en forsvarer, såfremt den indklagede ikke selv har valgt en forsvarer.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Hvis det findes ubetænkeligt, kan Advokatnævnet tillade, at en indklaget advokat varetager sin egen sag uden udpegning af forsvarer.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc928d206-b107-4f59-afb0-dcd0086332fc">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>I andre disciplinærsager kan Advokatnævnet udpege en forsvarer.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id64e24961-ba82-4cc1-a9a4-21adb7d0095c">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan udpege en advokat til at varetage klagerens interesser, når der findes at være behov herfor.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id1a2293b8-ca7c-4804-81cc-2d6889041e47">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Udgifterne til honorarer m.v. til advokater udpeget i medfør af stk. 2-4 eller § 18, stk. 2, fastsættes af Advokatnævnet og afholdes af Advokatsamfundet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Indklagede skal dog tilbagebetale de afholdte udgifter til den udpegede forsvarer til Advokatsamfundet i sager, hvor Advokatnævnet træffer afgørelse om frakendelse efter retsplejelovens § 147 c, stk. 8 eller 9, medmindre nævnets afgørelse om frakendelse efterfølgende ændres af domstolene.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id8ddd45f7-a6ae-4c48-a233-6105dc2e650b" localId="17">
+            <Explicatus>§ 17.</Explicatus>
+            <Stk id="idf1320907-580d-42b2-81fe-a182cc54989c">
+              <Exitus>
+                <Linea>
+                  <Char>Vedkommende formand kan bestemme, at parter eller vidner skal afhøres ved byretten på det sted, hvor de bor.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id8b42efb2-a27a-41d0-afd5-256d705daae4" localId="5">
+        <Explicatus>Kapitel 5</Explicatus>
+        <Rubrica id="id2c961188-b37b-4aab-aa47-60660ef188f9">
+          <Linea>
+            <Char formaChar="Italic">Advokatnævnets behandling af sager om midlertidig frakendelse</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="ide2eec0a8-7caf-4ee2-9a7a-6c2ae047238e" localId="18">
+            <Explicatus>§ 18.</Explicatus>
+            <Stk id="idfbd342ca-9039-4981-8507-dfd75d4ee58d">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan under nævnets behandling af en frakendelsessag efter retsplejelovens § 147 c, stk. 8 eller 9, træffe afgørelse om midlertidig frakendelse, jf. retsplejelovens § 147 c, stk. 5 og 6.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id3a70467a-6f5f-45d5-8eae-f6f5cddce297">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den indklagede, jf. retsplejelovens § 147 c, stk. 8 eller 9, skal inden for 7 dage fra modtagelsen af Advokatrådets anklageskrift fra Advokatnævnet vælge en forsvarer.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Såfremt den indklagede ikke vælger en forsvarer inden for denne frist, udpeger Advokatnævnet en forsvarer for den pågældende.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id55980e10-bb85-432e-97e9-e51ff421b1ae">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den indklagede, jf. retsplejelovens § 147 c, stk. 8 eller 9, kan kun skifte forsvarer, hvis Advokatnævnet skønner, at dette ikke vil forsinke afgørelsen om midlertidig frakendelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idda0cb5b6-4f37-4f2c-89ba-5f3c4270e2df">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den indklagede, jf. retsplejelovens § 147 c, stk. 8 eller 9, skal inden for 3 uger efter valg eller udpegning af forsvarer komme med sine bemærkninger til Advokatrådets anklageskrift om midlertidig frakendelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Hvis Advokatnævnet ikke modtager bemærkninger inden for fristen, træffes afgørelsen på det foreliggende grundlag.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Adgangen til at komme med yderligere indlæg om spørgsmålet om midlertidig frakendelse afskæres, jf. dog stk. 6.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idaf3b869a-2df8-4640-bc95-a5c490263058">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets formand kan beslutte, at der undtagelsesvist er adgang til at give personligt fremmøde.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="ida9098e1c-2ccf-479a-aa56-c22fc1ef9db4">
+              <Explicatus>Stk. 6.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Såfremt Advokatnævnet vurderer, at der ikke kan træffes afgørelse på det foreliggende grundlag, kan nævnet tillade, at der foretages yderligere høring eller fristudsættelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Advokatnævnet kan i forbindelse hermed fastsætte en ufravigelig frist for indlæg.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id03a6ef7c-82bc-453c-8ff2-7bc208d8f6ad">
+              <Explicatus>Stk. 7.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet træffer så vidt muligt afgørelse senest 2 uger efter, at det fuldstændige materiale er tilvejebragt.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id805db8b2-c351-4172-b230-8167dd814531">
+              <Explicatus>Stk. 8.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Afgørelsen om midlertidig frakendelse træffes så vidt muligt af en samlet afdeling i nævnet bestående af 7 medlemmer.</Char>
+                </Linea>
+                <Linea>
+                  <Char>De pågældende medlemmer kan ikke deltage i behandlingen af den efterfølgende frakendelsessag.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id9284aed1-33eb-478f-beaf-9641a7050d7e" localId="6">
+        <Explicatus>Kapitel 6</Explicatus>
+        <Rubrica id="idde15e486-ff6c-4fce-99d1-c57abdf8c69f">
+          <Linea>
+            <Char formaChar="Italic">Advokatnævnets behandling af sager om valgbarhed</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id5f1f3d37-c389-46b7-a7ac-e0c5af8c33ee" localId="19">
+            <Explicatus>§ 19.</Explicatus>
+            <Stk id="id2d167803-019b-4ef4-84a9-5eb8aa7c6fa0">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan træffe afgørelse om advokaters valgbarhed efter retsplejelovens § 147 h, stk. 2.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idd7b387dd-6948-4056-bf58-eb457ca2c617">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>En sag om valgbarhed indbringes af Advokatrådet, men Advokatrådet er ikke part i sagen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id60eb6943-f8cf-4064-b464-8fea4467c0fd">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den advokat, hvis valgbarhed er under prøvelse, skal inden for en frist på 2 uger efter Advokatnævnets anmodning herom komme med sine bemærkninger til sagen.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Hvis Advokatnævnet ikke modtager bemærkninger inden for fristen, træffes afgørelsen om valgbarhed på det foreliggende grundlag.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Adgangen til at komme med yderligere indlæg om spørgsmålet om valgbarhed afskæres, jf. dog stk. 4.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc073a0af-0ae0-4534-91f4-b112c9a0b8b3">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Såfremt Advokatnævnet vurderer, at der ikke kan træffes afgørelse på det foreliggende grundlag, kan nævnet tillade, at der foretages yderligere høring eller fristudsættelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Advokatnævnet kan i forbindelse hermed fastsætte en ufravigelig frist for indlæg.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id759ebbb7-fea7-4727-97f0-3a13a9adc070">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet træffer så vidt muligt afgørelse senest 4 uger efter, at det fuldstændige materiale er tilvejebragt.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id4ac13ccf-4878-4cb7-a570-8ed6ea7d7ef8">
+              <Explicatus>Stk. 6.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Hvis den advokat, hvis valgbarhed er under prøvelse, nedlægger sit mandat, afvises sagen på grund af manglende retlig interesse i sagens afgørelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idafbf8a37-aae5-4d58-a20e-773ca5c84373">
+              <Explicatus>Stk. 7.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den advokat, hvis valgbarhed er under prøvelse, har ret til at give møde for nævnet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id1ccb13a6-a6b5-43cb-97a6-d6b2caf826b0">
+              <Explicatus>Stk. 8.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Den advokat, hvis valgbarhed er under prøvelse, kan kræve, at offentligheden får adgang til at overvære sagens behandling, i det omfang dette ikke vil kunne tilføje nogen en unødig krænkelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnets votering er ikke offentlig.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id649c1c1f-1d53-4101-b2a7-ec6203b7245f" localId="7">
+        <Explicatus>Kapitel 7</Explicatus>
+        <Rubrica id="id9a4b8550-74ba-4e7c-87bd-bc3c29992aa3">
+          <Linea>
+            <Char formaChar="Italic">Sagens afgørelse</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id277ba45b-aac6-4793-9f4e-fcb16aaf366a" localId="20">
+            <Explicatus>§ 20.</Explicatus>
+            <Stk id="id24ada248-f87f-457a-8959-d411ebbf423e">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet behandler sagerne på møder eller på skriftligt eller elektronisk grundlag.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id88959054-50ea-46fb-9be3-e358b3e5e6dc">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Vedkommende formand kan af egen drift eller efter anmodning fra sagens parter indkalde sagens parter til at give møde for nævnet og afgive forklaring.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnet fastsætter tidspunktet herfor.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="ida3a147c9-d6d9-4757-bbf7-2705e9325dcd">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>I disciplinærsager har parterne ret til at give møde for nævnet, medmindre der er tale om en sag i medfør af § 10.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idc9ecc9a6-126e-4393-b1c6-086e9931c157" localId="21">
+            <Explicatus>§ 21.</Explicatus>
+            <Stk id="id48e9c8de-524c-4e7f-9666-e8e38512bffb">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets møder er ikke offentlige.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id5a565b14-3144-49da-9cf2-82d4c6e02e2e">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>I en disciplinærsag kan den indklagede advokat kræve, at offentligheden får adgang til at overvære sagens behandling, i det omfang dette ikke vil kunne tilføje nogen en unødig krænkelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnet kan endvidere tillade adgang for offentligheden, når en sag findes at have offentlig interesse, og offentlighedens adgang ikke vil kunne tilføje nogen en unødig krænkelse.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnets votering er ikke offentlig.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idf64837d5-c1d1-4058-a260-badd00fee234" localId="22">
+            <Explicatus>§ 22.</Explicatus>
+            <Stk id="id5a9aedcd-2c14-4bdc-8257-e4b77fa9ddc3">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets afgørelser træffes ved simpelt flertal.</Char>
+                </Linea>
+                <Linea>
+                  <Char>I tilfælde af stemmelighed er formandens stemme udslagsgivende.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idddd8ea54-3b13-4852-8ed0-18fa768aba76" localId="23">
+            <Explicatus>§ 23.</Explicatus>
+            <Stk id="idae55ef46-9231-4b66-a1c3-e65946645422">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets afgørelse kan ikke indbringes for anden administrativ myndighed.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id0abd2a00-5cd0-4b23-8e4b-9ef48452b2d0">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets afgørelse i disciplinærsager kan af vedkommende advokat indbringes eller begæres indbragt for retten i overensstemmelse med retsplejelovens § 147 d, § 147 e og § 147 g.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="iddc8a9597-e78d-4fad-8a97-ffc459d54b75">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets afgørelse i en sag om valgbarhed kan af vedkommende advokat indbringes for retten i overensstemmelse med retsplejelovens § 147 i.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idfdf47ebc-a064-4eeb-9206-ef529dcf8d9c" localId="24">
+            <Explicatus>§ 24.</Explicatus>
+            <Stk id="id8351daf6-6f18-443c-8a76-9b9cd2f7e4fc">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnets afgørelser skal være skriftlige og ledsaget af en begrundelse.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="ide783a3dd-8f96-4692-b898-9dd44c855e24">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>En afgørelse skal indeholde oplysninger om en eventuel dissens under afstemningen, dog uden angivelse af vedkommende medlemmers navne.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Samtidig angives stemmefordelingen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id12a8f207-8986-43a0-9512-d8fbf783990b">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Nævnets afgørelser i disciplinærsager og i sager om valgbarhed skal indeholde oplysning om adgangen til domstolsprøvelse og fristen herfor.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="ide27a7431-4c3e-4ea5-a297-6bf05f270265">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Nævnets afgørelser sendes til sagens parter.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnets kendelser sendes desuden til Advokatrådet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Nævnets afgørelse i disciplinærsager, hvor advokaten pålægges en sanktion, sendes endvidere til Civilstyrelsen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idc52ad887-2ae5-484a-b9cc-85c4e4a0fbef" localId="25">
+            <Explicatus>§ 25.</Explicatus>
+            <Stk id="idfea7ca86-3d02-4228-a203-6155c2e7b406">
+              <Exitus>
+                <Linea>
+                  <Char>Advokatnævnet kan af egen drift eller på begæring beslutte at genoptage behandlingen af en sag, hvis særlige grunde taler herfor, herunder særligt hvis der fremkommer nye, væsentlige oplysninger, der forventes at kunne føre til et andet resultat.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id796fd9a3-5668-40b6-a718-1f12d689dee2">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Sekretariatet kan i en sag, der skønnes ikke at blive genoptaget, undlade at anmode modparten i klagesagen om en udtalelse og indstille til nævnet, at genoptagelsesanmodningen afvises.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+      <Kapitel id="id33335bb1-e67e-468a-ae39-003937ca2cbe" localId="8">
+        <Explicatus>Kapitel 8</Explicatus>
+        <Rubrica id="idddb7303b-afa1-4d07-a60f-55c1dbc5da25">
+          <Linea>
+            <Char formaChar="Italic">Ikrafttræden m.v.</Char>
+          </Linea>
+        </Rubrica>
+        <ParagrafGruppe>
+          <Paragraf id="id65ba8f69-9bf5-4618-b424-ad9c2723c81b" localId="26">
+            <Explicatus>§ 26.</Explicatus>
+            <Stk id="ida5a95155-c008-4ee5-9713-8de64e483ef3">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen træder i kraft den 1. januar 2025.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id54e1450c-a4f1-4707-84e3-e095f3edaee4">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelse nr. 548 af 28. april 2020 om Advokatnævnets og kredsbestyrelsernes virksomhed ved behandling af klager over advokater m.v. ophæves.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+    </Afsnit>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="id6b4b995a-91d7-4c42-ba2c-79b318fce55a">
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

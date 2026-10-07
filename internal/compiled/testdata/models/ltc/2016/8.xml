@@ -1,0 +1,625 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="id3b765f30-204a-43d1-886b-0ac93a8ebf98" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2015/06/22/BKIT3.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="id18b356c4-c004-4de3-b2db-a227b3291ec3">
+    <DocumentType>BKI#LOKDOK54</DocumentType>
+    <Rank>L</Rank>
+    <AccessionNumber>L20160000864</AccessionNumber>
+    <DocumentId>AS001622</DocumentId>
+    <UniqueDocumentId>180280</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse af protokol nr. 2 af 4. november 1993 til den europæiske konvention af 26. november 1987 til forebyggelse af tortur og umenneskelig eller vanærende behandling eller straf</DocumentTitle>
+    <Year>2016</Year>
+    <DiesSigni>2016-06-02</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2016-06-04</StartDate>
+    <EndDate REFid="submit_1">2016-06-04</EndDate>
+    <Status>Valid</Status>
+    <Number>8</Number>
+    <AnnouncedIn>Lovtidende C</AnnouncedIn>
+    <DiesEdicti>2016-06-04</DiesEdicti>
+    <Subject>Menneskerettigheder og frihedsrettigheder</Subject>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Kristian Jensen</Signature>
+    <PlaceOfSignature>Udenrigsministeriet</PlaceOfSignature>
+    <JournalNumber>Udenrigsmin., JTFM, j.nr. 2016-21432</JournalNumber>
+    <Ministry>Udenrigsministeriet</Ministry>
+  </Meta>
+  <TitelGruppe id="id4a02bca9-9853-45a4-b77e-2c1ec7236fb4">
+    <Titel id="id8a5f065b-9d89-45c6-869e-d61b11a7e88f">
+      <Linea>
+        <Char>Bekendtgørelse af protokol nr. 2 af 4. november 1993 til den europæiske konvention af 26. november 1987 til forebyggelse af tortur og umenneskelig eller vanærende behandling eller straf</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="idda5088d7-5949-4006-8671-41793eba6bbe">
+    <Indledning id="id69bcaf67-3ae1-4486-9351-ed8c04aae170">
+      <Exitus>
+        <Linea>
+          <Char>Danmark har i henhold til kongelig resolution af 6. april 1994 ratificeret Europarådets protokol nr. 2 af 4. november 1993 til den europæiske konvention af 26. november 1987 til forebyggelse af tortur og umenneskelig eller vanærende behandling eller straf, jf. Udenrigsministeriets bekendtgørelse nr. 57 af 16. maj 1991.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char>Konventionen har følgende ordlyd:</Char>
+        </Linea>
+      </Exitus>
+    </Indledning>
+    <Traktat id="iddd7ce1ca-69ba-4ba0-a697-cc2638281a75">
+      <TekstGruppe id="id47233ef8-29a5-4ac2-8fb0-4506057b52a3">
+        <Exitus>
+          <Table width="681" cellpadding="0cm,0cm,0cm,0cm" style="column-width: 247pt 17pt 247pt;border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000; grid-H: 1pt none #000000; grid-V: 1pt none #000000;">
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Right">
+                  <Linea>
+                    <Char>Oversættelse</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Protocol No.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char formaChar="Bold">2 to the European Convention for the Prevention of Torture and Inhuman or Degrading Treatment or Punishment</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Protokol nr. 2 af 4. november 1993 til den europæiske konvention til forebyggelse af tortur og umenneskelig eller vanærende behandling eller straf</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>The States, signatories to this Protocol to the European Convention for the Prevention of Torture and Inhuman or Degrading Treatment or Punishment, signed at Strasbourg on 26 November 1987 (hereinafter referred to as "the Convention"),</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>De deltagende stater i denne protokol til den europæiske konvention til forebyggelse af tortur og umenneskelig eller vanærende behandling eller straf, der blev undertegnet i Strasbourg den 26. november 1987 (herefter kaldet “konventionen”),</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>Convinced of the advisibility of enabling members of the European Committee for the Prevention of Torture and Inhuman and Degrading Treatment (hereinafter referred to as "the Committee") to be re-elected twice;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>som er overbeviste om, at medlemmer af Den Europæiske Komité til Forebyggelse af Tortur og Umenneskelig eller Vanærende Behandling eller Straf (herefter kaldet “Komiteen”) bør have mulighed for at blive genvalgt to gange;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>Also considering the need to guarantee an orderly renewal of the membership of the Committee,</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>samt i betragtning af, at der er brug for at sikre en passende udskiftning af Komiteens medlemmer,</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>Have agreed as follows:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>er blevet enige om følgende:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Article 1</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Artikel 1</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>1 In Article 5, paragraph 3, the second sentence shall read as follows:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>1 I artikel 5, stk. 3, skal 2. punktum lyde som følger:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>"They may be re-elected twice."</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>“De kan genvælges to gange</Char>
+                    <Char formaChar="Bold Subscript">·</Char>
+                    <Char>”</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>2 Article 5 of the Convention shall be supplemented by the following paragraphs 4 and 5:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>2 Konventionens artikel 5 suppleres med følgende stk. 4 og 5:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>"4 In order to ensure that, as far as possible, one half of the membership of the Committee shall be renewed every two years, the Committee of Ministers may decide, before proceeding to any subsequent election, that the term or terms of office of one or more members to be elected shall be for a period other than four years but not more than six and not less than two years.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>“4 For at sikre, at halvdelen af Komiteens medlemmer i videst muligt omfang udskiftes hvert andet år, kan Ministerudvalget bestemme, inden et efterfølgende valg finder sted, at funktionstiden for et eller flere medlemmer, der skal vælges, skal være andet end fire år, dog således at den højst kan være seks år og mindst to år.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>5 In cases where more than one term of office is involved and the Committee of Ministers applies the preceding paragraph, the allocation of the terms of office shall be effected by the drawing of lots by the Secretary General, immediately after the election."</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>5 Såfremt der er tale om mere end én funktionstid og Ministerudvalget tager stk. 4 i anvendelse, skal tildelingen af funktionstid ske ved lodtrækning, der foretages af generalsekretæren umiddelbart efter valget.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>”</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Article 2</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Artikel 2</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>1 This Protocol shall be open for signature by States signatories to the Convention or acceding thereto, which may express their consent to be bound by:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>1 Denne protokol står åben for undertegnelse af de stater, der har undertegnet eller tiltrådt konventionen, og som kan afgive tilsagn om at blive forpligtet af protokollen ved:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>a signature without reservation as to ratification, acceptance or approval;</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>or</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>a undertegnelse uden forbehold med hensyn til ratifikation, accept eller godkendelse;</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>eller</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>b signature subject to ratification, acceptance or approval, followed by ratification, acceptance or approval.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>b undertegnelse med forbehold af ratifikation, accept eller godkendelse og efterfølgende ratifikation, accept eller godkendelse.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>2 Instruments of ratification, acceptance or approval shall be deposited with the Secretary General of the Council of Europe.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>2 Ratifikations-, accept- eller godkendelsesinstrumenter skal deponeres hos Europarådets generalsekretær.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Article 3</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Artikel 3</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>This Protocol shall enter into force on the first day of the month following the expiration of a period of three months after the date on which all Parties to the Convention have expressed their consent to be bound by the Protocol, in accordance with the provisions of Article 2.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>Denne protokol træder i kraft den første dag i måneden efter udløbet af et tidsrum på tre måneder fra den dato, hvor alle parter i konventionen har afgivet tilsagn om at blive forpligtet af protokollen i henhold til bestemmelserne i artikel 2.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Article 4</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst" formaEx="Center">
+                  <Linea>
+                    <Char formaChar="Bold">Artikel 4</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>The Secretary General of the Council of Europe shall notify the member States of the Council of Europe and non-member States Parties to the Convention of:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>Europarådets generalsekretær skal underrette Europarådets medlemsstater og ikke-medlemsstater af Europarådet, som deltager i konventionen, om:</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>a any signature;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>a enhver undertegnelse;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>b the deposit of any instrument of ratification, acceptance or approval;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>b deponering af ratifikations-, accept- eller godkendelsesinstrumenter;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>c the date of entry into force of this Protocol, in accordance with Article 3;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>c enhver ikrafttrædelsesdato for denne protokol i henhold til artikel 3;</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>d any other act, notification or communication relating to this Protocol.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="NormalInd">
+                  <Linea>
+                    <Char>d enhver anden handling, underretning eller meddelelse, der vedrører denne protokol.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>In witness whereof, the undersigned, being duly authorised thereto, have signed this Protocol.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>Til bekræftelse heraf har undertegnede, der er behørigt bemyndiget dertil, underskrevet denne protokol.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+            </Tr>
+            <Tr>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>Done at Strasbourg, this 4th day of November 1993, in English and French, both texts being equally authentic, in a single copy which shall be deposited in the archives of the Council of Europe.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>The Secretary General of the Council of Europe shall transmit certified copies to each member State of the Council of Europe.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;" />
+              <Td valign="top" style="border-top: 1pt none #000000; border-left: 1pt none #000000; border-bottom: 1pt none #000000; border-right: 1pt none #000000;">
+                <Exitus formaForma="TabelTekst">
+                  <Linea>
+                    <Char>Udfærdiget i Strasbourg den 4. november 1993 på engelsk og fransk, idet begge tekster skal have samme gyldighed, i ét eksemplar, der skal deponeres i Europarådets arkiv.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Europarådets generalsekretær skal fremsende bekræftede genparter til hver af Europarådets medlemsstater.</Char>
+                  </Linea>
+                </Exitus>
+              </Td>
+            </Tr>
+          </Table>
+        </Exitus>
+      </TekstGruppe>
+    </Traktat>
+    <Afslutning id="id45b2f866-914a-463d-945e-8b5262469e30">
+      <Exitus>
+        <Linea>
+          <Char>Danmarks ratifikationsinstrument deponeredes hos Europarådets generalsekretær den 26. april 1994, og protokollen trådte i medfør af artikel 3 i kraft den 1. marts 2002.</Char>
+        </Linea>
+      </Exitus>
+    </Afslutning>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="id9d4b41c9-1c1f-4d4d-8866-23054174cab1">
+    <UnderskriftStedDato id="ida2dbcfe8-5ae6-4eb8-aa23-d8ea0d9ddcca" />
+    <Underskriver id="idd3237d10-1786-4131-9aeb-d8ebd8e61642" />
+  </UnderskriftGruppe>
+</Dokument>

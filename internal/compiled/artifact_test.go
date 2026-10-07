@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/lkarlslund/retsinformation/internal/compiled/dictionary"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
@@ -133,7 +134,7 @@ func TestFrameSizeGuardMatchesTheSeekTablesSizes(t *testing.T) {
 // about the corpus, and the last band is the one that says how many documents the old bound made
 // impossible.
 func TestSizeDistributionCountsDocumentsInTheirBands(t *testing.T) {
-	wr, err := newWriter(io.Discard, "test", artifactVersion)
+	wr, err := newWriter(io.Discard, "test", artifactVersion, dictionary.Current, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +224,7 @@ func TestArtifactRefusesWhatItCannotRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wr, err := newWriter(f, "/mirror", artifactVersion+1)
+	wr, err := newWriter(f, "/mirror", artifactVersion+1, dictionary.Current, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,6 +233,7 @@ func TestArtifactRefusesWhatItCannotRead(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	wr.SetCatalogue([]byte("[]")) // no archive: an empty catalogue
 	if err := wr.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -275,25 +277,33 @@ func TestArtifactRefusesWhatItCannotRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The header frame carries the build stamp, so a difference is expected inside that one frame
-	// and nowhere else. Prove where it is rather than tolerating drift: the document table and the
-	// document frames must be byte-identical, because a build that is not reproducible cannot be
-	// diffed between nights.
+	// The header carries the build's random stamp, which compresses to a length of its own, so
+	// everything after it may sit a few bytes further along — and the document table, which holds
+	// absolute offsets, may differ by exactly that. What must not differ is each document's frame:
+	// that is what lets a new version of the published file re-use the old one's bytes.
+	a1, err := OpenArtifact(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a1.Close()
 	a2, err := OpenArtifact(twice)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer a2.Close()
-	ref, _ := a2.Ref("A20260000001")
-	if ref.Offset == 0 || ref.Offset >= uint64(len(first)) {
-		t.Fatalf("first document at offset %d of a %d byte file", ref.Offset, len(first))
+	for _, acc := range a1.Documents() {
+		r1, _ := a1.Ref(acc)
+		r2, ok := a2.Ref(acc)
+		if !ok || r1.Length != r2.Length {
+			t.Fatalf("%s: frame lengths %d and %d", acc, r1.Length, r2.Length)
+		}
+		f1, f2 := first[r1.Offset:r1.Offset+r1.Length], second[r2.Offset:r2.Offset+r2.Length]
+		if !bytes.Equal(f1, f2) {
+			t.Errorf("%s: its frame differs between two builds of the same documents, first at byte %d", acc, firstDiffByte(f1, f2))
+		}
 	}
-	if !bytes.Equal(first[ref.Offset:], second[ref.Offset:]) {
-		t.Errorf("everything after the header frame differs between two builds of the same documents, first at byte %d",
-			firstDiffByte(first[ref.Offset:], second[ref.Offset:]))
-	}
-	if a2.Header.Created.Equal(a.Header.Created) {
-		t.Log("both builds carry the same stamp, so the byte comparison above proved less than it looks like")
+	if a1.Header.Stamp == "" || a1.Header.Stamp == a2.Header.Stamp {
+		t.Errorf("two builds carry stamps %q and %q: every build must have its own", a1.Header.Stamp, a2.Header.Stamp)
 	}
 }
 
@@ -520,19 +530,20 @@ func TestArtifactOnCorpus(t *testing.T) {
 	fmt.Fprintf(&b, "  xml parse today:      %v total, %v per document\n", parse.Round(time.Millisecond), (parse / time.Duration(len(models))).Round(time.Microsecond))
 	fmt.Fprintf(&b, "  ratio: %.1fx faster per lookup\n\n", float64(parse)/float64(decode))
 
-	// The container must still be a plain zstd stream: one decode of the content frames has to
-	// produce the header, every document and the document table, in order. That is what makes the
-	// seek table an addition rather than a private format, and it is checked rather than asserted.
+	// The container must still be a zstd stream: one decode of the content frames, given the
+	// dictionary, has to produce the header, the dictionary, every document and the document
+	// table, in order. That is what makes the seek table an addition rather than a private format,
+	// and it is checked rather than asserted.
 	plain, err := decodeStream(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plain) != jsonBytes+len(mustMarshalHeader(t, a.Header))+len(mustMarshalRefs(t, a)) {
-		t.Errorf("the whole stream is %d bytes, the frames add up to %d", len(plain),
-			jsonBytes+len(mustMarshalHeader(t, a.Header))+len(mustMarshalRefs(t, a)))
+	wantBytes := jsonBytes + len(mustMarshalHeader(t, a.Header)) + len(dictionary.Current) + len(mustMarshalRefs(t, a))
+	if len(plain) != wantBytes {
+		t.Errorf("the whole stream is %d bytes, the frames add up to %d", len(plain), wantBytes)
 	} else {
-		fmt.Fprintf(&b, "## container\n  %d content frames decode as one plain zstd stream to %d bytes, matching the frames exactly\n",
-			len(models)+2, len(plain))
+		fmt.Fprintf(&b, "## container\n  %d content frames decode as one zstd stream (with the dictionary) to %d bytes, matching the frames exactly\n",
+			len(models)+3, len(plain))
 	}
 
 	report := filepath.Join("testdata", "artifact-"+time.Now().Format("20060102")+".txt")
@@ -562,7 +573,8 @@ func decodeStream(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	dec, err := zstd.NewReader(nil)
+	// The document frames need the dictionary, as `zstd -d -D <dictionary>` would.
+	dec, err := zstd.NewReader(nil, zstd.WithDecoderDicts(dictionary.Current))
 	if err != nil {
 		return nil, err
 	}

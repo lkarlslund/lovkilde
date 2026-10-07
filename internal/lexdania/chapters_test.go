@@ -1,6 +1,8 @@
 package lexdania
 
 import (
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+
 	"strings"
 	"testing"
 	"time"
@@ -99,62 +101,71 @@ func TestSectionsDescendIntoChapters(t *testing.T) {
 }
 
 // TestHeadingEditsLeaveProvisionAlone guards the conflation of a heading with the
-// provision under it. "Overskriften før § 3 ophæves" removes the Rubrica, not § 3,
+// provision under it. "Overskriften før § 3 ophæves" removes the rubric, not § 3,
 // and deleting the provision instead made the act's following "§ 3 ophæves" fail.
 func TestHeadingEditsLeaveProvisionAlone(t *testing.T) {
 	doc := mustParse(t, fixtureChapteredLaw)
 	// § 3 is the only provision in the second chapter's group, headed
 	// "Straffebestemmelser"; § 1 and § 2 sit under "Definitioner".
-	if !deleteHeading(sec(doc, "§ 3")) {
-		t.Fatal("the heading before § 3 should be deletable")
+	c, out := applyToModel(doc, Edit{Kind: EditDeleteProvision, Address: ParseAddress("Overskriften før § 3 ophæves.")})
+	if !out.Applied {
+		t.Fatalf("the heading before § 3 should be deletable: %s", out.Reason)
 	}
-	if sec(doc, "§ 3").Display() == "" {
-		t.Fatal("deleting a heading must leave the provision's text intact")
-	}
-	if got := sec(doc, "§ 3").Display(); !strings.Contains(got, "fængsel") {
+	if got := provisionText(t, c, "§ 3"); !strings.Contains(got, "fængsel") {
 		t.Errorf("§ 3 text after heading deletion = %q", got)
 	}
-	if !strings.Contains(doc.Root.PlainText(), "Definitioner") {
+	if !strings.Contains(c.PlainText(), "Definitioner") {
 		t.Error("the other heading should still be present")
 	}
-	if strings.Contains(doc.Root.PlainText(), "Straffebestemmelser") {
+	if strings.Contains(c.PlainText(), "Straffebestemmelser") {
 		t.Error("the deleted heading is still in the text")
 	}
 
 	// Replacing a heading leaves the provisions under it alone.
-	if !setHeadingText(mustHeading(t, doc, "1"), "Bøder og strafansvar") {
-		t.Fatal("heading replacement failed")
+	if out := c.Apply(modelEdits([]Edit{{Kind: EditReplaceProvision, Address: ParseAddress("Overskriften for § 1 ændres"), New: "Bøder og strafansvar"}})[0]); !out.Applied {
+		t.Fatalf("heading replacement failed: %s", out.Reason)
 	}
-	if !strings.Contains(doc.Root.PlainText(), "Bøder og strafansvar") {
+	if !strings.Contains(c.PlainText(), "Bøder og strafansvar") {
 		t.Error("new heading text is missing")
 	}
-	if strings.Contains(doc.Root.PlainText(), "Definitioner") {
+	if strings.Contains(c.PlainText(), "Definitioner") {
 		t.Error("the old heading text survived the replacement")
 	}
-	if got := sec(doc, "§ 1").Display(); !strings.Contains(got, "forebygge smitte") {
+	if got := provisionText(t, c, "§ 1"); !strings.Contains(got, "forebygge smitte") {
 		t.Errorf("the provision under a replaced heading must be untouched, got %q", got)
 	}
-	if err := doc.Root.checkInvariant(""); err != nil {
-		t.Errorf("synthesised heading broke the tree: %v", err)
+	if err := c.Validate(); err != nil {
+		t.Error(err)
 	}
+}
+
+// applyToModel carries out one change against a parsed document's model, as consolidation would.
+func applyToModel(doc *Document, e Edit) (*lexdoc.Content, lexdoc.Outcome) {
+	c := doc.Model().Content
+	return &c, c.Apply(modelEdits([]Edit{e})[0])
+}
+
+// provisionText is the text an address resolves to in the model, failing the test when it
+// resolves to nothing.
+func provisionText(t *testing.T, c *lexdoc.Content, addr string) string {
+	t.Helper()
+	loc, ok := c.Find(lexdoc.ParseAddress(addr))
+	if !ok || loc.Provision == nil {
+		t.Fatalf("%s not found", addr)
+	}
+	switch {
+	case loc.Item != nil:
+		return Squeeze(loc.Provision.SpanText(loc.Item.Span))
+	case loc.Stykke != nil:
+		return Squeeze(loc.Provision.SpanText(loc.Stykke.Span))
+	}
+	return Squeeze(loc.Provision.Text())
 }
 
 // sec resolves an address inside a document, mirroring View.Section for documents
 // that were never put through a consolidation.
 func sec(doc *Document, addr string) *Section {
 	return Find(doc.Sections(), ParseAddress(addr))
-}
-
-func mustHeading(t *testing.T, doc *Document, number string) *Node {
-	s := sec(doc, "§ "+number)
-	if s == nil {
-		t.Fatalf("§ %s is not addressable", number)
-	}
-	h, _ := headingFor(s.Container, s.Node)
-	if h == nil {
-		t.Fatalf("no heading before § %s", number)
-	}
-	return h
 }
 
 // TestLitraAndNumberedItems covers the two numbering shapes that made most deep
@@ -381,7 +392,7 @@ func TestUdgaarIsRecognised(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(v.Doc.Root.PlainText(), "anmode om tilladelse før") {
+	if strings.Contains(v.Content.PlainText(), "anmode om tilladelse før") {
 		t.Error("the udgår passage is still in the consolidated text")
 	}
 }
@@ -432,13 +443,11 @@ const fixtureChapterAmender = `<?xml version="1.0" encoding="UTF-8"?>
   </DokumentIndhold>
 </Dokument>`
 
-// TestHeadingReplaceWiring drives the replace-provision branch of applyOne directly:
-// the chain-level fixture has no realistic single-quote heading rewrite, so without
-// this the wiring between Address.Heading and setHeadingText would be unguarded.
+// TestHeadingReplaceWiring drives a heading rewrite through one change directly: the
+// chain-level fixture has no realistic single-quote heading rewrite, so without this the wiring
+// between Address.Heading and the heading edit would be unguarded.
 func TestHeadingReplaceWiring(t *testing.T) {
 	base := mustParse(t, fixtureChapteredLaw)
-	v := &View{Doc: base.Clone()}
-	v.Doc.Meta = base.Meta
 	e := Edit{
 		Number:  "1.",
 		Kind:    EditReplaceProvision,
@@ -448,22 +457,22 @@ func TestHeadingReplaceWiring(t *testing.T) {
 	if !e.Address.Heading {
 		t.Fatal("the address should be flagged as a heading edit")
 	}
-	v.applyOne(e)
-	if len(v.Unresolved) != 0 {
-		t.Fatalf("heading replacement should apply: %+v", v.Unresolved)
+	c, out := applyToModel(base, e)
+	if !out.Applied {
+		t.Fatalf("heading replacement should apply: %s", out.Reason)
 	}
-	text := v.Doc.Root.PlainText()
+	text := c.PlainText()
 	if !strings.Contains(text, "Bøder og strafansvar") {
 		t.Error("the new heading is missing")
 	}
 	if strings.Contains(text, "Straffebestemmelser") {
 		t.Error("the old heading survived the replacement")
 	}
-	if v.Section("§ 3") == nil || !strings.Contains(v.Section("§ 3").Display(), "fængsel") {
+	if got := provisionText(t, c, "§ 3"); !strings.Contains(got, "fængsel") {
 		t.Error("the provision under the heading must be untouched")
 	}
-	if err := v.Doc.Root.checkInvariant(""); err != nil {
-		t.Errorf("derived tree broken: %v", err)
+	if err := c.Validate(); err != nil {
+		t.Errorf("derived content broken: %v", err)
 	}
 }
 
@@ -485,13 +494,13 @@ func TestHeadingRepealThenProvisionRepeal(t *testing.T) {
 	if len(v.Applied) != 3 {
 		t.Fatalf("applied = %d, want 3", len(v.Applied))
 	}
-	if v.Section("§ 3") != nil {
+	if _, ok := v.ProvisionText("§ 3"); ok {
 		t.Error("§ 3 should be repealed")
 	}
-	if v.Section("§ 1") == nil {
+	if _, ok := v.ProvisionText("§ 1"); !ok {
 		t.Fatal("§ 1 must survive")
 	}
-	text := v.Doc.Root.PlainText()
+	text := v.Content.PlainText()
 	if strings.Contains(text, "Straffebestemmelser") {
 		t.Error("the repealed heading is still present")
 	}
@@ -501,7 +510,7 @@ func TestHeadingRepealThenProvisionRepeal(t *testing.T) {
 	if strings.Contains(text, "forebygge smitte") {
 		t.Error("the udgår passage is still present")
 	}
-	if err := v.Doc.Root.checkInvariant(""); err != nil {
-		t.Errorf("derived tree broken: %v", err)
+	if err := v.Content.Validate(); err != nil {
+		t.Errorf("derived content broken: %v", err)
 	}
 }

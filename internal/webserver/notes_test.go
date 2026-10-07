@@ -47,3 +47,27 @@ func TestNotesAreInThePagesLanguage(t *testing.T) {
 		}
 	}
 }
+
+// The page is Danish throughout, the engine's reasons for leaving a change out included: each
+// class is named in Danish with its place, and a reason without a class still gets Danish.
+func TestRefusalReasonsAreDanish(t *testing.T) {
+	for reason, want := range map[string]string{
+		"quoted passage not present in § 5, stk. 1":                    "den citerede tekst står ikke i § 5, stk. 1",
+		`address "§ 7, stk. 15" not found in the current text`:         "§ 7, stk. 15 findes ikke i teksten",
+		"a reason nobody has written a class for yet":                  "ændringen kunne ikke placeres automatisk i teksten",
+		`bilag 1 does not print "3.6" at the head of exactly one line`: "bilag 1 viser ikke det punkt, ændringen placeres ved",
+	} {
+		if got := refusalReasonDA(reason); got != want {
+			t.Errorf("%q: got %q, want %q", reason, got, want)
+		}
+	}
+}
+
+// A provision a refused change names carries a note at its head linking to the change.
+func TestARefusedChangeIsMarkedAtItsProvision(t *testing.T) {
+	body := `<section id="p-5"><p class="stk">§ 5. Tekst.</p></section>`
+	got := markRefusedHTML(body, map[string][]string{"p-5": {"ikke-indarbejdet-1"}})
+	if !strings.Contains(got, `<section id="p-5"><p class="refused-mark">En ændring af denne bestemmelse er ikke indarbejdet (se <a href="#ikke-indarbejdet-1">nr. 1</a>`) {
+		t.Errorf("provision not marked:\n%s", got)
+	}
+}

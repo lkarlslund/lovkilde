@@ -18,16 +18,32 @@ import (
 type Address struct {
 	Raw string
 
-	Chapter   int
-	Afsnit    int    // for "afsnit II", written in roman numerals in the older collections
-	Paragraph string // number, possibly with a litra suffix: "267", "8a"
-	RangeTo   string // for "§§ 259-266"
-	Stk       int
-	StkTo     int // for "stk. 1-3"
-	Nr        int
-	Litra     string
-	Bilag     int
-	Heading   bool // "overskriften for § 12" / "rubrikaen"
+	Chapter int
+	// ChapterLitra is the letter of an inserted chapter: "kapitel 3 e" is not kapitel 3, and
+	// reading it as one aimed "Kapitel 3 e ophæves" at the wrong chapter.
+	ChapterLitra string
+	Afsnit       int    // for "afsnit II", written in roman numerals in the older collections
+	AfsnitTo     int    // "tredje og fjerde afsnit": the last of a run
+	Book         int    // "fjerde bog": retsplejelovens books, which hold its afsnit
+	Paragraph    string // number, possibly with a litra suffix: "267", "8a"
+	RangeTo      string // for "§§ 259-266"
+	Stk          int
+	StkTo        int // for "stk. 1-3"
+	Nr           int
+	NrSuffix     string // "nr. 5 a": an item inserted after nr. 5
+	Litra        string
+	Bilag        int
+	BilagLitra   string // "bilag 2 a": an annex inserted after bilag 2
+	Heading      bool   // "overskriften for § 12" / "rubrikaen"
+
+	// Sentence is the punktum a change names inside its unit: "§ 7, stk. 8, 3. pkt.". SentenceTo
+	// closes a run: "1. og 2. pkt.", "2.-4. pkt.". Zero when the address names a whole unit.
+	Sentence, SentenceTo int
+	// SentenceList says Sentence and SentenceTo are two sentences ("1. og 4. pkt."), not a range.
+	SentenceList bool
+	// SentenceBecomes says Sentence is the number in the text as the act has left it ("der bliver
+	// 2. pkt."), not the number from before the act.
+	SentenceBecomes bool
 
 	// Steps is the same reference as the path a resolver walks: every level the sentence
 	// names, in the order it names them, with its number exactly as printed. The fields above
@@ -50,8 +66,15 @@ type Address struct {
 	EntryIntoForce bool
 	Preamble       bool // "indledningen affattes således"
 	DocTitle       bool // "lovens titel affattes således"
-	Everywhere     bool // "overalt i loven ændres »X« til: »Y«" — no address at all
-	Recognised     bool
+	// Footnote is "fodnoten til lovens titel": the note printed under the title, which is where
+	// Danish law names the EU directives it implements. "Fodnoten" on its own means the same note.
+	Footnote   bool
+	Everywhere bool // "overalt i loven ændres »X« til: »Y«" — no address at all
+	// Continued says Bilag was named by the change before, not by this one: "1. Bilag 1, punkt
+	// 2.1 affattes således: …", "2. Som nyt punkt 2.6 indsættes: …". The change's own words say
+	// where in the annex, and nothing is placed at its end for want of them.
+	Continued  bool
+	Recognised bool
 }
 
 // Step is one level of an address path. Kind is the mirror's own word for the level, Number is
@@ -98,15 +121,27 @@ func (a Address) String() string {
 	var b strings.Builder
 	if a.Chapter != 0 {
 		fmt.Fprintf(&b, "kapitel %d", a.Chapter)
+		if a.ChapterLitra != "" {
+			b.WriteString(" " + a.ChapterLitra)
+		}
 	}
 	if a.Bilag != 0 {
 		fmt.Fprintf(&b, "bilag %d", a.Bilag)
+		if a.BilagLitra != "" {
+			b.WriteString(" " + a.BilagLitra)
+		}
+	}
+	if a.Book != 0 {
+		fmt.Fprintf(&b, "bog %d, ", a.Book)
 	}
 	if a.Afsnit != 0 {
 		fmt.Fprintf(&b, "afsnit %s", RomanOf(a.Afsnit))
 	}
 	if a.Preamble {
 		b.WriteString("indledning")
+	}
+	if a.Footnote {
+		b.WriteString("fodnoten til ")
 	}
 	if a.DocTitle {
 		b.WriteString("titel")
@@ -128,9 +163,19 @@ func (a Address) String() string {
 	}
 	if a.Nr != 0 {
 		fmt.Fprintf(&b, ", nr. %d", a.Nr)
+		if a.NrSuffix != "" {
+			b.WriteString(" " + a.NrSuffix)
+		}
 	}
 	if a.Litra != "" {
 		fmt.Fprintf(&b, ", litra %s", a.Litra)
+	}
+	if a.Sentence != 0 {
+		fmt.Fprintf(&b, ", %d.", a.Sentence)
+		if a.SentenceTo != 0 {
+			fmt.Fprintf(&b, "-%d.", a.SentenceTo)
+		}
+		b.WriteString(" pkt.")
 	}
 	if a.EntryIntoForce {
 		// Printed after the number, because that is the only position ParseAddress accepts: an
@@ -154,23 +199,42 @@ var (
 	reParagraph = regexp.MustCompile(`(?i)§+\s*([0-9]+)(?:\s*-\s*([0-9]+))?`)
 	// reParaLitra accepts a litra only when the single letter is followed by a non-letter
 	// or the end of the text, so "§ 8 og 9" does not read as "§ 8o".
-	reParaLitra = regexp.MustCompile(`^\s*([a-z])(?:[^a-z]|$)`)
-	reKapitel   = regexp.MustCompile(`(?i)\bkapitlet\s*([0-9]+)|\bkapitel\s*([0-9]+)`)
-	reBilag     = regexp.MustCompile(`(?i)\bbilag(?:et)?\s*([0-9]+)`)
-	reStk       = regexp.MustCompile(`(?i)\bstk\.?\s*([0-9]+)\s*(?:-\s*([0-9]+))?`)
-	reNr        = regexp.MustCompile(`(?i)\bnr\.?\s*([0-9]+)`)
-	reLitra     = regexp.MustCompile(`(?i)\blitra\s*([a-z])`)
-	reHeading   = regexp.MustCompile(`(?i)\b(overskrift|rubrik|rubrika|hovedoverskrift)`)
+	// "§ 30 mm" is the provision put between § 30 m and § 30 n: two letters, the same one twice.
+	reParaLitra = regexp.MustCompile(`^[\s\x{a0}]*([a-zæøåA-ZÆØÅ]{1,2})(?:[^\p{L}]|$)`)
+	// reInLaw is "§ 5 i lov om …": the i is a preposition, not § 5 i.
+	reInLaw    = regexp.MustCompile(`(?i)^[\s\x{a0}]*i[\s\x{a0}]+(?:lov|bekendtgørelse|forordning|anordning|cirkulære|regulativ|reglement|vedtægt|kapitel|bilag|afsnit|denne|dette|den\b|det\b|de\b|samme|nævnte|stk|nr|litra|tekst|overskrift|indledning)`)
+	reKapitel  = regexp.MustCompile(`(?i)\bkapitlet\s*([0-9]+)|\bkapitel\s*([0-9]+)|\b([0-9]+)\.\s*kapitel\b`)
+	reBilag    = regexp.MustCompile(`(?i)\bbilag(?:et)?\s*([0-9]+)`)
+	reTheAnnex = regexp.MustCompile(`(?i)\bbilag(?:et|ets)\b`)
+	// reStkComma is "stk, 1": a comma typed for the full stop, which the register prints.
+	reStkComma = regexp.MustCompile(`(?i)\bstk\.?,\s*([0-9])`)
+	// reMissingSign is "I 9 h, stk. 1": the § left out in front of a provision number that a
+	// subsection follows.
+	reMissingSign = regexp.MustCompile(`(?i)^(\s*i\s+)([0-9]+(?:\s*[a-zæøå])?\s*,\s*stk\.)`)
+	// reGluedStk is "§ 4stk. 1": the comma and space before the subsection left out.
+	reGluedStk = regexp.MustCompile(`(?i)([0-9])(stk\.)`)
+	// rePktSpace is "2. pkt . ,": a space typed before the abbreviation's stop.
+	rePktSpace = regexp.MustCompile(`(?i)\bpkt\s+\.`)
+	// rePktComma is "stk. 5, 1, pkt.": a comma typed for the full stop after a sentence number.
+	rePktComma = regexp.MustCompile(`(?i)(\b(?:stk|nr)\.\s*[0-9]+\s*,\s*[0-9]+),\s*(pkt\.|punktum)`)
+	reStk      = regexp.MustCompile(`(?i)\bstk\.?\s*([0-9]+)\s*(?:-\s*([0-9]+))?`)
+	reNr       = regexp.MustCompile(`(?i)\bnr\.?\s*([0-9]+)`)
+	reLitra    = regexp.MustCompile(`(?i)\blitra\s*([a-z])`)
+	// rePunktum reads "3. pkt.", "1. og 2. pkt.", "2.-4. pkt." and the spelled-out "punktum".
+	reSentenceBecomes = regexp.MustCompile(`(?i)der\s+bliver\s+([0-9]+)\.\s*(?:pkt|punktum)`)
+	rePunktum         = regexp.MustCompile(`(?i)(?:^|[^0-9])([0-9]+)\.\s*(?:(?:,\s*[0-9]+\.\s*)*(?:og|-|–)\s*([0-9]+)\.\s*)?(?:pkt|punktum)`)
+	reHeading         = regexp.MustCompile(`(?i)\b(overskrift|rubrik|rubrika|hovedoverskrift)|\btit(?:el|len)\s+(?:til|for)\s+(?:kapitel|afsnit|bilag)`)
 	// reAfsnit accepts both spellings of the number: "afsnit 2" and "afsnit XXIV".
 	reAfsnit = regexp.MustCompile(`(?i)\bafsnit(?:et)?\s+([0-9]+|[ivxlcdm]+)\b`)
 	// reEverywhere is a replace that spans the whole act. It deliberately has no provision
 	// in it, and the § that often appears inside the quoted passage must not be read as
 	// its address.
-	reEverywhere = regexp.MustCompile(`(?i)\boveralt i\s+(?:hele\s+)?(?:loven|bekendtgørelsen|cirkulæret|denne)\b`)
+	reEverywhere = regexp.MustCompile(`(?i)\boveralt\s+i\s+(?:hele\s+)?(?:loven|lovbekendtgørelsen|bekendtgørelsen|cirkulæret|forordningen|anordningen|regulativet|reglementet|vedtægten|vedtægterne|reglerne|denne|dette)\b`)
 	// rePreamble and reDocTitle name the two parts of a document that are not provisions:
 	// the preamble and the document's own title.
 	rePreamble = regexp.MustCompile(`(?i)\bindledning(?:en|s)?\b`)
-	reDocTitle = regexp.MustCompile(`(?i)\btitel(?:en)?\b`)
+	reDocTitle = regexp.MustCompile(`(?i)\b(?:titel(?:en)?|titlen)\b`)
+	reFootnote = regexp.MustCompile(`(?i)\bfodnote(?:n)?\b|\btitelnote(?:n)?\b|^\s*(?:i\s+)?noten\b|^\s*note\s+1\b`)
 	// reChangeVerb is the verbs that mean "this text is being rewritten", and its boundary
 	// is written by hand: Go's \b is ASCII-only, so `\bændres` can never match — "æ" is not
 	// an ASCII word character — and the whole document-title branch behind it sat dead
@@ -231,7 +295,11 @@ func parseSteps(s string) []Step {
 			add(KindBilag, text(1))
 			inAnnex = true
 		case 2:
-			add(KindKapitel, text(2))
+			number := text(2)
+			// The same litra rule as a § and as the Chapter field: "kapitel 3 e" is its own
+			// chapter.
+			number += litraAt(s[m[5]:])
+			add(KindKapitel, number)
 		case 3:
 			// A dotted number is how an annex numbers its own chapters, and only an annex does
 			// it: outside one, a bare decimal is a figure in prose ("1.3" inside a quotation
@@ -248,9 +316,7 @@ func parseSteps(s string) []Step {
 			// fields use, so the two representations cannot disagree about which provision is
 			// meant: a lone letter counts only when a non-letter follows, which is what keeps
 			// "§ 8 og 9" from reading as "§ 8o".
-			if lm := reParaLitra.FindStringSubmatch(s[m[11]:]); lm != nil {
-				number += lm[1]
-			}
+			number += litraAt(s[m[11]:])
 			add(KindParagraf, number)
 		case 6:
 			add(KindStykke, text(6))
@@ -335,7 +401,11 @@ func prevIsColon(runes []rune, i int) bool {
 	return false
 }
 
+// TheAnnex is Address.Bilag for "bilaget": the document's only annex, whatever its number.
+const TheAnnex = -1
+
 func ParseAddress(s string) Address {
+	s = fixTypos(s)
 	a := Address{Raw: Squeeze(s)}
 	// The quoted passage a change reproduces is not an address. "I § 119 a, stk. 1, ændres
 	// »nr. 8« til: »nr. 9«" addresses § 119 a, stk. 1 and talks about the words "nr. 8"; if the
@@ -356,7 +426,17 @@ func ParseAddress(s string) Address {
 		a.Recognised = true
 		return a
 	}
-	if m := reAfsnit.FindStringSubmatch(s); m != nil {
+	if m := reBookAfsnit.FindStringSubmatch(s); m != nil {
+		// "Fjerde bog, tredje og fjerde afsnit": a book, and the afsnit of it, numbered in words.
+		a.Book = DanishOrdinals[strings.ToLower(m[1])]
+		if m[2] != "" {
+			a.Afsnit = DanishOrdinals[strings.ToLower(m[2])]
+		}
+		if m[3] != "" {
+			a.AfsnitTo = DanishOrdinals[strings.ToLower(m[3])]
+		}
+		a.Recognised = a.Book != 0
+	} else if m := reAfsnit.FindStringSubmatch(s); m != nil {
 		if n := Atoi(m[1]); n > 0 {
 			a.Afsnit = n
 		} else if r := RomanToNumber(m[1]); r != "" {
@@ -373,17 +453,33 @@ func ParseAddress(s string) Address {
 	// "Fodnoten til lovens titel affattes således" is about a footnote, not about the
 	// title. Rewriting the title in its place would be a confident corruption of the wrong
 	// text, so the title is only claimed when no footnote is mentioned.
-	if reDocTitle.MatchString(s) && reChangeVerb.MatchString(s) &&
+	if reDocTitle.MatchString(s) && reChangeVerb.MatchString(s) && !a.Heading &&
 		!strings.Contains(strings.ToLower(s), "fodnote") {
 		a.DocTitle = true
 		a.Recognised = true
 	}
+	if reFootnote.MatchString(s) && !reParagraph.MatchString(s) && !reBilag.MatchString(s) {
+		// The footnote, not the title it hangs from: rewriting the title in its place would be a
+		// confident corruption of the wrong text.
+		a.Footnote, a.DocTitle, a.Recognised = true, true, true
+	}
 	if m := reBilag.FindStringSubmatch(s); len(m) > 0 {
 		a.Bilag = Atoi(m[1])
 		a.Recognised = true
+	} else if reTheAnnex.MatchString(s) && !reParagraph.MatchString(s) {
+		// "I bilaget ændres …": the definite form names the document's one annex.
+		a.Bilag = TheAnnex
+		a.Recognised = true
 	}
-	if m := reKapitel.FindStringSubmatch(s); len(m) > 0 {
-		a.Chapter = Atoi(firstNonEmpty(m[1], m[2]))
+	if m := reKapitel.FindStringSubmatchIndex(s); m != nil {
+		g := 2 // "kapitlet 3", "kapitel 3" or the older "7. kapitel": whichever group matched
+		for g < len(m) && m[g] < 0 {
+			g += 2
+		}
+		a.Chapter = Atoi(s[m[g]:m[g+1]])
+		if g < 6 {
+			a.ChapterLitra = litraAt(s[m[g+1]:])
+		}
 		a.Recognised = true
 	}
 	if m := reParagraph.FindStringSubmatchIndex(s); m != nil {
@@ -394,9 +490,7 @@ func ParseAddress(s string) Address {
 		// A litra hugs the number ("§ 8a") or sits beside it ("§ 8 a"), and both spellings
 		// occur in the corpus. Resolving it here rather than in the pattern is what keeps
 		// "§ 8 og 9" from reading as "§ 8o".
-		if lm := reParaLitra.FindStringSubmatch(s[m[3]:]); lm != nil {
-			a.Paragraph += lm[1]
-		}
+		a.Paragraph += litraAt(s[m[3]:])
 		a.Recognised = true
 	}
 	if m := reParagraph.FindStringSubmatchIndex(s); m != nil && reIkraftMarker.MatchString(s[m[3]:]) {
@@ -411,8 +505,34 @@ func ParseAddress(s string) Address {
 		a.Stk = Atoi(m[1])
 		a.StkTo = Atoi(m[2])
 	}
-	if m := reNr.FindStringSubmatch(s); len(m) > 0 {
-		a.Nr = Atoi(m[1])
+	if m := reNr.FindStringSubmatchIndex(s); m != nil {
+		a.Nr = Atoi(s[m[2]:m[3]])
+		a.NrSuffix = litraAt(s[m[3]:])
+	}
+	// A sentence named after a quoted passage belongs to a later operation of the same change: in
+	// "I § 17, stk. 5, ændres »A« til: »B«, og som 2. pkt. indsættes:" the replacement is aimed at
+	// the subsection, and reading it as aimed at a second sentence that does not exist yet refused it.
+	sentenceScope := s
+	if q := strings.IndexAny(s, "»“"); q > 0 && reAddressEnd.MatchString(s[:q]) {
+		sentenceScope = s[:q]
+	}
+	if m := rePunktum.FindStringSubmatch(sentenceScope); m != nil {
+		a.Sentence, a.SentenceTo = Atoi(m[1]), Atoi(m[2])
+		a.SentenceList = a.SentenceTo != 0 && strings.Contains(strings.ToLower(m[0]), "og") && a.SentenceTo != a.Sentence+1
+		if ns := reSentenceNumbers.FindAllString(m[0], -1); len(ns) > 2 {
+			// "2., 3. og 4. pkt.": the sentences from the first to the last, when they follow on.
+			a.SentenceList = false
+			for i := 1; i < len(ns); i++ {
+				if Atoi(ns[i]) != Atoi(ns[i-1])+1 {
+					a.SentenceList = true
+				}
+			}
+		}
+		// "1. pkt., der bliver 2. pkt.": the act has already put a sentence in front, and the
+		// sentence is the second one in the text the change meets.
+		if b := reSentenceBecomes.FindStringSubmatch(sentenceScope); b != nil {
+			a.Sentence, a.SentenceTo, a.SentenceBecomes = Atoi(b[1]), 0, true
+		}
 	}
 	if m := reLitra.FindStringSubmatch(s); len(m) > 0 {
 		a.Litra = m[1]
@@ -424,15 +544,30 @@ func ParseAddress(s string) Address {
 // ItemMarker reads the marker a numbered sub-item prints: "1)" gives a number, "a)" gives
 // a litra.
 func ItemMarker(s string) (num int, litra string) {
-	m := reItemMarker.FindStringSubmatch(strings.TrimSpace(s))
+	num, litra, _ = ItemMarkerSuffix(s)
+	return num, litra
+}
+
+// ItemMarkerSuffix also reads a numbered item's letter: "5 a)" is item 5 a, inserted between 5
+// and 6. Read as "not a marker", it was numbered by position, and every item after it answered to
+// the number of the one before: "nr. 6" resolved to "5 a)".
+func ItemMarkerSuffix(s string) (num int, litra, suffix string) {
+	t := strings.TrimSpace(s)
+	if m := reItemSuffixMarker.FindStringSubmatch(t); m != nil {
+		return Atoi(m[1]), "", strings.ToLower(m[2])
+	}
+	m := reItemMarker.FindStringSubmatch(t)
 	if m == nil {
-		return 0, ""
+		return 0, "", ""
 	}
 	if r, _ := utf8.DecodeRuneInString(m[1]); unicode.IsLetter(r) {
-		return 0, strings.ToLower(m[1])
+		return 0, strings.ToLower(m[1]), ""
 	}
-	return Atoi(m[1]), ""
+	return Atoi(m[1]), "", ""
 }
+
+// reItemSuffixMarker is a numbered item with a letter: "5 a)", "5a)", "12 b.".
+var reItemSuffixMarker = regexp.MustCompile(`^([0-9]+)[\s\x{a0}]*([a-zæøå])[\).]`)
 
 // reIkraftMarker matches the words that name the effectivity series in an address. Both halves
 // of the printed heading are accepted, since the corpus writes "ikrafttrædelsesbestemmelse" and
@@ -453,10 +588,7 @@ func ParaLitra(raw string) string {
 	if i == nil {
 		return ""
 	}
-	if m := reParaLitra.FindStringSubmatch(raw[i[1]:]); m != nil {
-		return strings.ToLower(m[1])
-	}
-	return ""
+	return litraAt(Squeeze(raw[i[1]:]))
 }
 
 // PrintedRoman returns the arabic form of a roman number printed beside a heading, or "".
@@ -540,6 +672,19 @@ var digitRun = regexp.MustCompile(`[0-9]+`)
 
 // FirstNumber extracts the first integer from text, e.g. "§ 267." -> "267". Empty when
 // there is none, which is how callers distinguish "no number" from "number zero".
+// NumberWithLitra reads a unit number together with a letter glued or spaced onto it: "7a" and
+// "7 a" both give "7a". Chapters are numbered this way when inserted between two others, and
+// keeping only the digits gave chapter 7 and chapter 7 a the same number.
+func NumberWithLitra(s string) string {
+	loc := digitRun.FindStringIndex(s)
+	if loc == nil {
+		return ""
+	}
+	n := s[loc[0]:loc[1]]
+	n += litraAt(Squeeze(s[loc[1]:]))
+	return n
+}
+
 func FirstNumber(s string) string {
 	if m := digitRun.FindString(s); m != "" {
 		return m
@@ -564,3 +709,293 @@ func firstNonEmpty(vals ...string) string {
 	}
 	return ""
 }
+
+// reAddressToken reads the parts of an address list in order: a §, a subsection, an item, a
+// litra, a sentence, or a bare number continuing the level before it ("stk. 2 og 3").
+var reAddressToken = regexp.MustCompile(`(?i)(§+)\s*([0-9]+(?:\s*[a-zæøå](?:[^\p{L}]|$))?)|\b(stk|nr|litra)\.?\s*([0-9]+|[a-zæøå](?:[^\p{L}]|$))|([0-9]+)\.\s*(?:og\s+[0-9]+\.\s*)?(?:pkt|punktum)|(?:,|\bog\b|\bsamt\b)\s*([0-9]+)(?:[^0-9.)]|$)`)
+
+// reBecomesClause is the new number a change gives the unit it names: ", der bliver stk. 2",
+// ", som bliver 6. pkt.", ", der bliver til stk. 3, nr. 1".
+var reBecomesClause = regexp.MustCompile(`(?i),?\s*(?:der|som)\s+bliver\s+(?:til\s+)?(?:(?:stk\.?|nr\.?)\s*[0-9]+(?:\s*[a-zæøå](?:[^\p{L}]|$))?(?:\s*(?:,|og|-|–)\s*[0-9]+(?:[^0-9.\p{L}]|$))*|[0-9]+\.\s*(?:og\s+[0-9]+\.\s*)?pkt\.?)(?:\s*,\s*(?:nr\.?\s*[0-9]+|[0-9]+\.\s*(?:og\s+[0-9]+\.\s*)?pkt\.?))*`)
+
+// fixTypos repairs the slips of punctuation change sentences print in their addresses, which a
+// reader of the act passes over without noticing.
+func fixTypos(s string) string {
+	s = strings.NewReplacer("\u200b", "", "\u200c", "", "\u200d", "", "\ufeff", "", "§ §", "§§").Replace(s)
+	s = reStkComma.ReplaceAllString(s, "stk. $1")
+	s = rePktSpace.ReplaceAllString(s, "pkt.")
+	s = reGluedStk.ReplaceAllString(s, "$1, $2")
+	s = reMissingSign.ReplaceAllString(s, "$1§ $2")
+	s = rePktNoStop.ReplaceAllString(s, "$1. og $2. pkt")
+	s = rePktListComma.ReplaceAllString(s, "$1$2.$3")
+	s = reCommaLetter.ReplaceAllString(s, "§ $1 $2$3")
+	s = reSplitBilag.ReplaceAllString(s, "${1}ilag")
+	s = rePktNoOrdinal.ReplaceAllString(s, "som $1. $2")
+	return rePktComma.ReplaceAllString(s, "$1. $2")
+}
+
+// reSentenceNumbers are the numbers a sentence list prints.
+var reSentenceNumbers = regexp.MustCompile(`[0-9]+`)
+
+// reTrailingPkt is the abbreviation ending a sentence reference.
+var reTrailingPkt = regexp.MustCompile(`(?i)\s*(?:pkt|punktum)\.?\s*$`)
+
+// reLitraList is a list of letters after one "litra": "litra a og b", "litra a, b og c".
+var reLitraList = regexp.MustCompile(`(?i)\blitra\s+([a-zæøå])(\s*(?:,|og)\s*)([a-zæøå])\b`)
+
+// rePktListComma is "stk. 5, 2, og 5. pkt.": a comma typed for the stop after the first sentence of
+// a list, which read "2" as stk. 2.
+var rePktListComma = regexp.MustCompile(`(?i)(\bstk\.\s*[0-9]+\s*,\s*)([0-9]+),(\s*og\s+[0-9]+\.\s*pkt)`)
+
+// rePktNoOrdinal is "indsættes som 4 pkt.": the stop after the sentence number left out.
+var rePktNoOrdinal = regexp.MustCompile(`(?i)\bsom\s+([0-9]+)\s+(pkt|punktum)\b`)
+
+// reSplitBilag is "I b ilag 1": the word broken by a space.
+var reSplitBilag = regexp.MustCompile(`(?i)\b(b)\s+ilag\b`)
+
+// reCommaLetter is "§ 25, A, stk. 2": a comma typed between a provision's number and its capital
+// letter, which read the letter as nothing and the change as one for § 25.
+var reCommaLetter = regexp.MustCompile(`§\s*([0-9]+)\s*,\s*([A-ZÆØÅ])(\s*,)`)
+
+// rePktNoStop is "2. og 3 pkt.": the stop after the second sentence number left out, which read
+// "3" as a subsection continuing the list.
+var rePktNoStop = regexp.MustCompile(`(?i)\b([0-9]+)\.\s*og\s+([0-9]+)\s+pkt`)
+
+// reBecomesTail is the second half of a becomes-clause that renames two units at once: "stk. 6
+// og stk. 7, der bliver stk. 3 og stk. 4".
+var reBecomesTail = regexp.MustCompile(`(?i)^\s*,?\s*og\s+(?:stk\.?|nr\.?)\s*[0-9]+(?:\s*,\s*[0-9]+\.\s*pkt\.?)?`)
+
+// dropBecomes removes the becomes-clauses from an address list. A clause after two units joined
+// by "og" renames both, so its own "og stk. 4" is the second new number; after one unit, an "og"
+// that follows names the next place.
+func dropBecomes(s string) string {
+	var b strings.Builder
+	prev := 0
+	for _, m := range reBecomesClause.FindAllStringIndex(s, -1) {
+		if m[0] < prev {
+			continue
+		}
+		b.WriteString(s[prev:m[0]])
+		end := m[1]
+		before := s[prev:m[0]]
+		if k := strings.LastIndex(before, "§"); k >= 0 {
+			before = before[k:]
+		}
+		if strings.Contains(before, " og ") {
+			if t := reBecomesTail.FindStringIndex(s[end:]); t != nil {
+				end += t[1]
+			}
+		}
+		prev = end
+	}
+	b.WriteString(s[prev:])
+	return b.String()
+}
+
+// reCountAfter is a count of places following a number: "14 steder", "1 sted".
+var reCountAfter = regexp.MustCompile(`(?i)^\W*\s*sted`)
+
+// reAddressEnd is where the address part of a change sentence ends: its verb, or the first
+// quotation.
+var reAddressEnd = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(affattes|ændres|ophæves|indsættes|tilføjes|udgår|erstattes|bliver)(?:$|[^\p{L}])|»`)
+
+// ParseAddresses reads every place a change sentence names, in order: "I § 132, § 133, stk. 1,
+// § 136, stk. 3, og stk. 4, 1. pkt., … udgår »X«" names six. Each later part inherits the levels
+// above it from the part before ("og stk. 4" is still § 136), and a bare number continues the
+// deepest level written ("stk. 2 og 3"). A sentence naming one place returns that one address;
+// ranges stay ranges, because ParseAddress already reads them.
+func ParseAddresses(definition string) []Address {
+	if units := unitList(definition); len(units) > 0 {
+		return units
+	}
+	if m := reAnnexPair.FindStringSubmatch(Squeeze(definition)); m != nil {
+		// "I bilag 4 og bilag 5 indsættes efter nr. 3.3. …": the same change in both annexes.
+		return []Address{{Recognised: true, Bilag: Atoi(m[1])}, {Recognised: true, Bilag: Atoi(m[2])}}
+	}
+	s := blankQuoted(Squeeze(fixTypos(definition)))
+	for {
+		// "nr. 2, litra a og b" names both letters: each is written out as a letter of its own.
+		t := reLitraList.ReplaceAllString(s, "litra $1${2}litra $3")
+		if t == s {
+			break
+		}
+		s = t
+	}
+	// "stk. 3, der bliver stk. 2, stk. 5, nr. 1, der bliver stk. 4, nr. 1": the act's numbers are
+	// the ones before it, which is what the engine resolves, so the new numbers are read past
+	// rather than taken as the end of the address.
+	s = dropBecomes(s)
+	if m := reAddressEnd.FindStringIndex(s); m != nil {
+		s = s[:m[0]]
+	}
+	if strings.Contains(s, "-") || strings.Contains(s, "–") {
+		return nil // a range is one address of its own
+	}
+	type part struct{ para, stk, nr, litra, pkt string }
+	var parts []part
+	var cur part
+	deepest := ""
+	have := false
+	emit := func() {
+		if have {
+			parts = append(parts, cur)
+		}
+	}
+	for _, m := range reAddressToken.FindAllStringSubmatch(s, -1) {
+		switch {
+		case m[1] != "":
+			emit()
+			cur, have, deepest = part{para: strings.ReplaceAll(strings.TrimRight(m[2], ",.;: "), " ", "")}, true, "para"
+		case m[3] != "":
+			level := strings.ToLower(m[3])
+			n := strings.TrimRight(m[4], ",.;: ")
+			if !have {
+				return nil // a subsection with no § in front of it is the running subject's business
+			}
+			next := cur
+			switch level {
+			case "stk":
+				if cur.stk != "" {
+					emit()
+				}
+				next = part{para: cur.para, stk: n}
+			case "nr":
+				if cur.nr != "" {
+					emit()
+				}
+				next = part{para: cur.para, stk: cur.stk, nr: n}
+			case "litra":
+				if cur.litra != "" {
+					emit()
+				}
+				next = part{para: cur.para, stk: cur.stk, nr: cur.nr, litra: n}
+			}
+			cur, deepest = next, level
+		case m[5] != "":
+			if !have {
+				return nil
+			}
+			if cur.pkt != "" {
+				emit()
+				cur = part{para: cur.para, stk: cur.stk, nr: cur.nr, litra: cur.litra}
+			}
+			// "2. og 3. pkt." names both sentences.
+			cur.pkt = strings.TrimSuffix(strings.TrimSpace(reTrailingPkt.ReplaceAllString(m[0], "")), ".")
+		case m[6] != "":
+			if !have || reCountAfter.MatchString(s[strings.Index(s, m[0])+len(m[0])-1:]) {
+				continue // "og 14 steder i bilag 1" counts places, it is not stk. 14
+			}
+			emit()
+			if at := strings.Index(s, m[0]); deepest != "para" && strings.Contains(s, "§§") && reCommaOg.MatchString(s[:at+len(m[0])-len(m[6])]) {
+				// "§§ 121, 513, nr. 6, og 514": in a list of provisions, ", og" closes the
+				// conditions of § 513 and names the next provision.
+				cur, deepest = part{para: m[6] + litraAt(s[at+len(m[0])-1:])}, "para"
+				continue
+			}
+			if l := litraAt(s[strings.Index(s, m[0])+len(m[0])-1:]); l != "" && deepest != "nr" {
+				// "§ 15 a, stk. 1, og 15 c, stk. 1": a subsection has no letter, so a bare
+				// number with one is the next §, printed without its sign.
+				cur, deepest = part{para: m[6] + l}, "para"
+				continue
+			}
+			next := part{para: cur.para}
+			switch deepest {
+			case "para":
+				next = part{para: m[6]}
+			case "stk":
+				next.stk = m[6]
+			case "nr":
+				next.stk, next.nr = cur.stk, m[6]
+			default:
+				continue
+			}
+			cur = next
+		}
+	}
+	emit()
+	if len(parts) < 2 {
+		return nil
+	}
+	out := make([]Address, 0, len(parts))
+	for _, p := range parts {
+		text := "§ " + p.para
+		if p.stk != "" {
+			text += ", stk. " + p.stk
+		}
+		if p.nr != "" {
+			text += ", nr. " + p.nr
+		}
+		if p.litra != "" {
+			text += ", litra " + p.litra
+		}
+		if p.pkt != "" {
+			text += ", " + p.pkt + ". pkt."
+		}
+		out = append(out, ParseAddress(text))
+	}
+	return out
+}
+
+// reCommaOg is a list going back up a level: "…, nr. 6, og".
+var reCommaOg = regexp.MustCompile(`,\s*og\s*$`)
+
+// litraAt reads the letter printed right after a number: "§ 8 a", "§ 34 A", "§\u00a029\u00a0a.".
+// The letter has to stand alone, which keeps "§ 8 og 9" from reading as "§ 8o", and "i" followed
+// by "lov om …" is the preposition: "§ 5 i lov om noget" is § 5 of that law, not § 5 i.
+func litraAt(rest string) string {
+	m := reParaLitra.FindStringSubmatch(rest)
+	if m == nil || reInLaw.MatchString(rest) {
+		return ""
+	}
+	if r := []rune(strings.ToLower(m[1])); len(r) == 2 && r[0] != r[1] {
+		return "" // "§ 8 og 9": a word, not a letter
+	}
+	return strings.ToLower(m[1])
+}
+
+// reUnitList is a repeal of several whole annexes or chapters: "Bilag 4, 5 og 7 ophæves",
+// "Bilag 13 og bilag 14 ophæves", "Kapitel 2 B og 2 C ophæves".
+var (
+	reUnitList  = regexp.MustCompile(`(?i)^\s*(bilag(?:ene)?|kapit(?:el|lerne))\s+([0-9][0-9a-zæøå ,]*?)\s*,?\s*(?:ophæves|udgår)(?:[^\p{L}]|$)`)
+	reAnnexPair = regexp.MustCompile(`(?i)^\s*I\s+bilag\s+([0-9]+)\s+og\s+bilag\s+([0-9]+)\s*,?\s+(?:indsættes|ændres)\b`)
+	reUnitSplit = regexp.MustCompile(`(?i)\s*(?:,|\bog\b)\s*(?:bilag\s+|kapitel\s+)?`)
+	reUnitOne   = regexp.MustCompile(`(?i)^([0-9]+)(?:\s*([a-zæøå]))?$`)
+)
+
+// unitList reads a repeal of several whole annexes or chapters as one address for each. It reads
+// nothing unless every listed unit is a plain number, with a letter at most.
+func unitList(definition string) []Address {
+	m := reUnitList.FindStringSubmatch(Squeeze(definition))
+	if m == nil {
+		return nil
+	}
+	pieces := reUnitSplit.Split(" "+m[2], -1)
+	var out []Address
+	for _, p := range pieces {
+		if p = strings.TrimSpace(p); p == "" {
+			continue
+		}
+		u := reUnitOne.FindStringSubmatch(p)
+		if u == nil {
+			return nil
+		}
+		a := Address{Recognised: true}
+		if strings.HasPrefix(strings.ToLower(m[1]), "bilag") {
+			if u[2] != "" {
+				return nil
+			}
+			a.Bilag = Atoi(u[1])
+		} else {
+			a.Chapter, a.ChapterLitra = Atoi(u[1]), strings.ToLower(u[2])
+		}
+		out = append(out, a)
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
+}
+
+// reBookAfsnit is a book of a law, and the afsnit of it, numbered in words: "fjerde bog, andet
+// afsnit", "Fjerde bog, tredje og fjerde afsnit".
+var reBookAfsnit = regexp.MustCompile(`(?i)\b(første|anden|tredje|fjerde|femte|sjette|syvende|ottende|niende|tiende)\s+bog\b(?:\s*,\s*(første|andet|tredje|fjerde|femte|sjette|syvende|ottende|niende|tiende|ellevte|tolvte)(?:\s+og\s+(andet|tredje|fjerde|femte|sjette|syvende|ottende|niende|tiende|ellevte|tolvte))?\s+afsnit\b)?`)

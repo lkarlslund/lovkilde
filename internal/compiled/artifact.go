@@ -1,7 +1,10 @@
 package compiled
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,12 +12,14 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/lkarlslund/retsinformation/internal/compiled/dictionary"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 // The artifact is the mirror's own compiled form: internal/lexdoc documents as JSON, one
 // independently decodable zstd frame per document, in the Zstandard Seekable Format so the
-// result is still a plain zstd stream that standard tools read.
+// result is still a zstd stream that standard tools read: `zstd -d -D <dictionary>`, with the
+// dictionary the second frame holds (version 2; see the dictionary package).
 //
 // It exists because the serving path re-parses the publisher's XML for every lookup and again for
 // every search snippet. The codec bench (codec_bench_test.go, testdata/codec-bench-20260918.txt)
@@ -36,7 +41,12 @@ const (
 	// artifactVersion is the format pin. A file from another build is refused rather than
 	// misread: the frame layout is self-describing only up to a point, and a shifted read of a
 	// document table produces offsets that look entirely plausible.
-	artifactVersion = 1
+	// Version 2 compresses documents against a zstd dictionary carried in the file (see the
+	// dictionary package): header, dictionary, documents, document table.
+	// Version 3 adds the catalogue frame before the table, and amending acts' Changes in their
+	// models: what a server needs to resolve amendment chains without the XML. A version 2 file
+	// has neither, and read as version 3 would answer every as-of question with no amendments.
+	artifactVersion = 3
 
 	// maxFrameBytes is the boundary the container itself enforces: the seek table records each
 	// frame's compressed and uncompressed size as a uint32, so a frame of 4 GiB or more cannot be
@@ -76,7 +86,13 @@ var documentSizeBands = []int{1 << 13, 1 << 16, 1 << 20, 8 << 20, 64 << 20}
 // that can disagree with the table. What the header owns is the format pin and the provenance of
 // the build.
 type ArtifactHeader struct {
-	Version     int       `json:"version"`
+	Version int `json:"version"`
+
+	// Stamp is this build's own name: 128 random bits, different for every build even of the same
+	// corpus. What is derived from the artifact — the search index — records it, and a server
+	// rebuilds a derived file whose stamp is not the artifact's.
+	Stamp string `json:"stamp"`
+
 	Codec       string    `json:"codec"`
 	Compression string    `json:"compression"`
 	Created     time.Time `json:"created"`
@@ -87,6 +103,57 @@ type ArtifactHeader struct {
 	// struct with yesterday's meaning: see build.go.
 	Build    string `json:"build,omitempty"`
 	Modified bool   `json:"modified,omitempty"`
+
+	// Model is the document model the payload is in (ModelVersion). It is what a server checks:
+	// the build above says where the file came from, the model whether this server can read it.
+	// Zero in files written before it was recorded.
+	Model int `json:"model,omitempty"`
+
+	// Dictionary describes the zstd dictionary in the frame after the header, which every
+	// document frame is compressed against: its zstd dictionary ID, its size and its SHA-256, so
+	// a reader can check it got the dictionary the documents need.
+	Dictionary DictionaryInfo `json:"dictionary"`
+
+	// Collection is the collection pass the archive had last completed when this was built: how
+	// current the text is. It travels in the artifact because the artifact is what is served,
+	// possibly far from the machine that collected it, and a pass that ran after the build is not
+	// in the text. Nil when the build had no record of a pass.
+	Collection *Collection `json:"collection,omitempty"`
+}
+
+// Collection is what a collection pass recorded about itself: when it pulled, and what it could
+// not get. IssuesKnown is false for a record written before problems were counted, where
+// "unknown" is the truth and "clean" would be a claim.
+type Collection struct {
+	PulledAt    time.Time `json:"pulled_at"`
+	IssuesKnown bool      `json:"issues_known,omitempty"`
+	Owed        int64     `json:"owed,omitempty"`
+	Stalled     int64     `json:"stalled,omitempty"`
+	Digest      string    `json:"digest,omitempty"`
+}
+
+// DictionaryInfo identifies the dictionary an artifact's documents are compressed against.
+type DictionaryInfo struct {
+	ID     uint32 `json:"id"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+// newStamp is 128 random bits in hex: a name no other build will have.
+func newStamp() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err) // crypto/rand does not fail on supported platforms
+	}
+	return hex.EncodeToString(b[:])
+}
+
+func describeDictionary(d []byte) (DictionaryInfo, error) {
+	if len(d) < 8 || binary.LittleEndian.Uint32(d) != 0xEC30A437 {
+		return DictionaryInfo{}, errors.New("not a zstd dictionary (no dictionary magic)")
+	}
+	sum := sha256.Sum256(d)
+	return DictionaryInfo{ID: binary.LittleEndian.Uint32(d[4:]), Bytes: len(d), SHA256: hex.EncodeToString(sum[:])}, nil
 }
 
 // DocRef is where one document sits in the artifact.
@@ -103,12 +170,18 @@ type DocRef struct {
 // documents: 191,393 models is gigabytes, while the frames leave one at a time. The writer keeps
 // only the sizes it needs for the seek table and the document table.
 type Writer struct {
-	w       *countingWriter
-	enc     *zstd.Encoder
-	header  ArtifactHeader
-	sizes   [][2]uint32
-	refs    []DocRef
-	scratch []byte
+	w *countingWriter
+	// enc compresses documents against the dictionary; plain compresses the header, the
+	// dictionary itself and the table, which a reader has to open before it has the dictionary.
+	enc   *zstd.Encoder
+	plain *zstd.Encoder
+
+	// catalogue is the catalogue frame's payload, written at Close before the table.
+	catalogue []byte
+	header    ArtifactHeader
+	sizes     [][2]uint32
+	refs      []DocRef
+	scratch   []byte
 
 	// Size accounting for the build report: what the documents cost to hold decompressed, how that
 	// is distributed, and the largest one. See documentSizeBands.
@@ -121,29 +194,53 @@ type Writer struct {
 
 // NewWriter writes the header frame and returns the writer.
 func NewWriter(w io.Writer, source string) (*Writer, error) {
-	return newWriter(w, source, artifactVersion)
+	return newWriter(w, source, artifactVersion, dictionary.Current, nil)
 }
 
-// newWriter takes the version explicitly so a test can write an artifact from another build and
-// prove the reader refuses it. Callers get NewWriter, which pins it.
-func newWriter(w io.Writer, source string, version int) (*Writer, error) {
+// NewWriterAfter is NewWriter for an artifact built from an archive whose last collection pass
+// is known: the header records it (ArtifactHeader.Collection).
+func NewWriterAfter(w io.Writer, source string, pass *Collection) (*Writer, error) {
+	return newWriter(w, source, artifactVersion, dictionary.Current, pass)
+}
+
+// newWriter takes the version and dictionary explicitly so a test can write an artifact from
+// another build and prove the reader refuses it, or one with another dictionary and prove the
+// reader uses the file's own. Callers get NewWriter, which pins both.
+func newWriter(w io.Writer, source string, version int, dict []byte, pass *Collection) (*Writer, error) {
+	info, err := describeDictionary(dict)
+	if err != nil {
+		return nil, err
+	}
 	// EncodeAll rather than a streaming writer, because the frame boundary is the layout: Flush
 	// ends a block and keeps the frame open, so a "frame" per document measured with Flush is
 	// really one frame with n blocks, which cannot be sought to or decoded on its own. EncodeAll
 	// writes a complete frame per call, which is what the seek table describes.
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
+	//
+	// The "better" level with the dictionary: −21 % against the old default level without one,
+	// measured on documents the dictionary never saw (see the dictionary package).
+	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression), zstd.WithEncoderDict(dict))
 	if err != nil {
 		return nil, err
 	}
+	plain, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
+	if err != nil {
+		enc.Close()
+		return nil, err
+	}
 	wr := &Writer{
-		w:   &countingWriter{w: w},
-		enc: enc,
+		w:     &countingWriter{w: w},
+		enc:   enc,
+		plain: plain,
 		header: ArtifactHeader{
 			Version:     version,
+			Stamp:       newStamp(),
 			Codec:       "encoding/json of internal/lexdoc.Document",
-			Compression: "zstd level 3, one frame per document",
+			Compression: "zstd, one frame per document, against the dictionary in frame 1",
 			Created:     time.Now().UTC().Truncate(time.Second),
 			Source:      source,
+			Model:       ModelVersion,
+			Dictionary:  info,
+			Collection:  pass,
 		},
 	}
 	if stamp, ok := CurrentBuild(); ok {
@@ -151,14 +248,26 @@ func newWriter(w io.Writer, source string, version int) (*Writer, error) {
 	}
 	payload, err := json.Marshal(wr.header)
 	if err != nil {
-		enc.Close()
+		wr.closeEncoders()
 		return nil, err
 	}
 	if _, _, err := wr.frame(payload); err != nil {
-		enc.Close()
+		wr.closeEncoders()
+		return nil, err
+	}
+	if _, _, err := wr.frame(dict); err != nil {
+		wr.closeEncoders()
 		return nil, err
 	}
 	return wr, nil
+}
+
+func (wr *Writer) closeEncoders() error {
+	err := wr.enc.Close()
+	if perr := wr.plain.Close(); err == nil {
+		err = perr
+	}
+	return err
 }
 
 // CompiledFrame is one document prepared for the file: the model's JSON and the zstd
@@ -169,8 +278,11 @@ func newWriter(w io.Writer, source string, version int) (*Writer, error) {
 // sequential byte stream. Compiling touches no writer state, so it runs on workers;
 // writing keeps the order the seek table describes.
 type CompiledFrame struct {
-	Accession  string
-	JSON       []byte
+	Accession string
+	// Raw is how many bytes of JSON the frame decodes to. The JSON itself is not kept: the
+	// table needs its length, and holding the uncompressed bytes of every frame in flight
+	// until it is written was memory spent on nothing.
+	Raw        int
 	Compressed []byte
 }
 
@@ -202,7 +314,7 @@ func (wr *Writer) Compile(accession string, doc *lexdoc.Document) (CompiledFrame
 	if err := frameSizeFits("compressed", len(compressed)); err != nil {
 		return CompiledFrame{}, err
 	}
-	return CompiledFrame{Accession: accession, JSON: payload, Compressed: compressed}, nil
+	return CompiledFrame{Accession: accession, Raw: len(payload), Compressed: compressed}, nil
 }
 
 // WriteFrame appends one compiled frame at the writer's current position and records it
@@ -211,7 +323,7 @@ func (wr *Writer) WriteFrame(f CompiledFrame) error {
 	if wr.done {
 		return errors.New("artifact writer is already closed")
 	}
-	if len(f.JSON) == 0 {
+	if f.Raw == 0 {
 		return fmt.Errorf("%s: refusing to write a frame with no payload", f.Accession)
 	}
 	start := wr.w.n
@@ -219,9 +331,9 @@ func (wr *Writer) WriteFrame(f CompiledFrame) error {
 		return err
 	}
 	compressed := wr.w.n - start
-	wr.sizes = append(wr.sizes, [2]uint32{uint32(compressed), uint32(len(f.JSON))})
-	wr.recordSize(len(f.JSON))
-	wr.refs = append(wr.refs, DocRef{Accession: f.Accession, Offset: start, Length: compressed, Raw: uint64(len(f.JSON))})
+	wr.sizes = append(wr.sizes, [2]uint32{uint32(compressed), uint32(f.Raw)})
+	wr.recordSize(f.Raw)
+	wr.refs = append(wr.refs, DocRef{Accession: f.Accession, Offset: start, Length: compressed, Raw: uint64(f.Raw)})
 	return nil
 }
 
@@ -270,6 +382,10 @@ func (wr *Writer) SizeDistribution() (bands []int, counts []int64, largest int, 
 	return documentSizeBands, counts, wr.largest, wr.rawBytes
 }
 
+// SetCatalogue gives the writer the catalogue frame's payload, written when the artifact is closed.
+// It is required: an artifact without one cannot resolve amendment chains.
+func (wr *Writer) SetCatalogue(payload []byte) { wr.catalogue = payload }
+
 // Documents is how many documents the writer has taken so far, for progress reporting.
 func (wr *Writer) Documents() int { return len(wr.refs) }
 
@@ -283,12 +399,29 @@ func (wr *Writer) Close() error {
 	if len(wr.refs) == 0 {
 		// An empty artifact is how a build with a broken source path would quietly claim the whole
 		// mirror. Refusing is the only answer that cannot be mistaken for coverage.
-		wr.enc.Close()
+		wr.closeEncoders()
 		return errors.New("no documents compiled: refusing to finish an empty artifact")
 	}
+	if len(wr.catalogue) == 0 {
+		wr.closeEncoders()
+		return errors.New("no catalogue: refusing to finish an artifact that cannot resolve amendment chains")
+	}
+	// The catalogue is compressed against the dictionary like the documents: it is the bulk of
+	// what a server reads at startup.
+	if err := frameSizeFits("uncompressed", len(wr.catalogue)); err != nil {
+		wr.closeEncoders()
+		return err
+	}
+	start := wr.w.n
+	compressed := wr.enc.EncodeAll(wr.catalogue, nil)
+	if _, err := wr.w.Write(compressed); err != nil {
+		wr.closeEncoders()
+		return err
+	}
+	wr.sizes = append(wr.sizes, [2]uint32{uint32(wr.w.n - start), uint32(len(wr.catalogue))})
 	table, err := json.Marshal(wr.refs)
 	if err != nil {
-		wr.enc.Close()
+		wr.closeEncoders()
 		return err
 	}
 	// The table is bounded by frame()'s own limit rather than a second number of its own: it grows
@@ -298,10 +431,10 @@ func (wr *Writer) Close() error {
 	// document's size was, which is how a whole-mirror artifact turned out never to have been
 	// buildable at all.
 	if _, _, err := wr.frame(table); err != nil {
-		wr.enc.Close()
+		wr.closeEncoders()
 		return err
 	}
-	if err := wr.enc.Close(); err != nil {
+	if err := wr.closeEncoders(); err != nil {
 		return err
 	}
 	return writeSeekTable(wr.w, wr.sizes)
@@ -316,7 +449,7 @@ func (wr *Writer) frame(payload []byte) (start, compressed uint64, err error) {
 		return 0, 0, err
 	}
 	start = wr.w.n
-	wr.scratch = wr.enc.EncodeAll(payload, wr.scratch[:0])
+	wr.scratch = wr.plain.EncodeAll(payload, wr.scratch[:0])
 	if _, err = wr.w.Write(wr.scratch); err != nil {
 		return 0, 0, err
 	}
@@ -355,7 +488,7 @@ type ArtifactDoc struct {
 // record where documents are without reading the file back. It exists for tests and small builds;
 // a whole-corpus build streams through Writer, because the documents do not fit in memory.
 func Build(w io.Writer, source string, docs []ArtifactDoc) (*ArtifactHeader, []DocRef, error) {
-	wr, err := newWriter(w, source, artifactVersion)
+	wr, err := NewWriter(w, source)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -364,6 +497,9 @@ func Build(w io.Writer, source string, docs []ArtifactDoc) (*ArtifactHeader, []D
 			return nil, nil, err
 		}
 	}
+	// A small build has no archive to catalogue: an empty catalogue says so, and a library read
+	// from it knows only the documents' models.
+	wr.SetCatalogue([]byte("[]"))
 	if err := wr.Close(); err != nil {
 		return nil, nil, err
 	}

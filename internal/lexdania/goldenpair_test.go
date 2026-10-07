@@ -23,15 +23,14 @@ import (
 // its own before the successor arrived. Without it the highest-overlap pairs are same-year
 // corrections of unamended orders, which compare one document with itself and assert nothing.
 //
-// The bounds are measured, not guessed, and the three digits-only cases are recorded debt. They
-// are not decoration: in B19950050705 -> B19950082405 the ministry's own later order cites
-// "§ 2, stk. 5, 7 og 8" where our consolidation of the base still cites "stk. 5, 6 og 7". A
-// stykke went into § 2 and the cross-reference moved with it, so the stale citation in a
-// published document is what an unexecuted renumber clause looks like from outside our code
-// (M024). Lower these numbers as the defect is fixed; a new one is a regression found by someone
-// else's text, which is the point.
+// The bounds are measured, not guessed. There used to be three digits-only cases, recorded as
+// debt: in B19950050705 -> B19950082405 the ministry's own later order cites "§ 2, stk. 5, 7 og
+// 8" where our consolidation of the base cited "stk. 5, 6 og 7". They were the base's chain read
+// with its stykker misnumbered, and they became copies of our amended state once each act's
+// citations were read against the numbering before that act and the act's prose changes were read
+// at all. A new digits-only case is a regression found by someone else's text, which is the point.
 func TestGoldenPairAgainstPromulgatedSuccessors(t *testing.T) {
-	a, err := Scan(t.Context(), corpusDir(t))
+	a, err := corpusArchive(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,21 +40,20 @@ func TestGoldenPairAgainstPromulgatedSuccessors(t *testing.T) {
 	}{
 		{"B19960106705", "B19970063305", "93% re-enacted, the best pair in the archive"},
 		{"B19910088105", "B19920113905", "92% re-enacted"},
-		{"B19970101205", "B19980024805", "91% re-enacted, one stale cross-reference"},
+		{"B19970101205", "B19980024805", "91% re-enacted, one cross-reference the chain renumbers"},
 		{"B19910011605", "B19930055505", "88% re-enacted"},
 		{"C19910019309", "C19950007609", "88% re-enacted, a circular rather than an order"},
-		{"B19950050705", "B19950082405", "87% re-enacted, two stale cross-references after a stykke insertion"},
+		{"B19950050705", "B19950082405", "87% re-enacted, two cross-references renumbered by a stykke insertion"},
 		{"B19920051705", "B19960014405", "86% re-enacted over 63 provisions, the largest pair"},
 		{"B19890062605", "B19920056305", "85% re-enacted after two earlier changes"},
 	}
 
-	// Measured over these eight pairs: 271 successor provisions, 238 accounted for as copies,
-	// 0 copies of the amended state we failed to build, 3 differing only in their digits, 30
-	// matching neither. copies is the number a chain must not lose: every provision a successor
+	// Measured over these eight pairs: 271 successor provisions, 241 accounted for as copies (3 of
+	// them copies of the amended state), 0 differing only in their digits, 30 matching neither. copies is the number a chain must not lose: every provision a successor
 	// copied stops counting as a copy the moment our reconstruction corrupts it.
 	const (
-		copiesBound     = 238
-		digitsOnlyBound = 3
+		copiesBound     = 241
+		digitsOnlyBound = 0
 		changedBound    = 30
 		minProvisions   = 10
 	)

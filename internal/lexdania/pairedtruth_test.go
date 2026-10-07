@@ -4,7 +4,7 @@
 // The pilot established that the reader can be measured; it could not say which
 // residual class is worth fixing first, because 51 documents chosen by hand are an
 // anecdote about a distribution. This run says that, and it is gated rather than
-// always-on because its corpus (data/paired-truth, written by `retsin sample
+// always-on because its corpus (data/paired-truth, written by `retsin-update sample
 // --fetch`) is 60 MB of fetched payloads that are not in git.
 //
 //	RETSIN_PAIRED_TRUTH=../../data/paired-truth \
@@ -34,7 +34,7 @@ func pairedTruthDir(t *testing.T) string {
 	t.Helper()
 	dir := os.Getenv(pairedTruthEnv)
 	if dir == "" {
-		t.Skipf("set %s to a directory of sampled payloads (retsin sample --fetch) to run the corpus measurement", pairedTruthEnv)
+		t.Skipf("set %s to a directory of sampled payloads (retsin-update sample --fetch) to run the corpus measurement", pairedTruthEnv)
 	}
 	if _, err := os.Stat(dir); err != nil {
 		t.Skipf("no paired-truth corpus at %s: %v", dir, err)

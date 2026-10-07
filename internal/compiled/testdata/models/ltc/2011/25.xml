@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Dokument SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2011/09/26/BKIT1.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>BKI1#LOKDOK16</DocumentType>
+    <Rank>L</Rank>
+    <AccessionNumber>L20110002564</AccessionNumber>
+    <DocumentId>AS001284</DocumentId>
+    <UniqueDocumentId>138672</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om protokoller af 26. oktober 2004 og 27. maj 2008 til aftale af 21. juni 1999 mellem Det Europæiske Fællesskab, dets medlemsstater og Schweiz om fri bevægelighed for personer som følge af en række landes tiltrædelse af Den Europæiske Union</DocumentTitle>
+    <Year>2011</Year>
+    <DiesSigni>2011-10-10</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2011-10-18</StartDate>
+    <EndDate REFid="submit_1">2012-02-11</EndDate>
+    <Status>Valid</Status>
+    <Number>25</Number>
+    <AnnouncedIn>Lovtidende C</AnnouncedIn>
+    <DiesEdicti>2012-02-11</DiesEdicti>
+    <Subject>Europæiske Fællesskabers aftaler med tredjelande</Subject>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Villy Søvndal</Signature>
+    <PlaceOfSignature>Udenrigsministeriet</PlaceOfSignature>
+    <JournalNumber>Udenrigsmin., JTF j.nr. 400.E.4.Schweiz</JournalNumber>
+    <Ministry>Udenrigsministeriet</Ministry>
+  </Meta>
+  <TitelGruppe>
+    <Titel>
+      <Linea>
+        <Char>Bekendtgørelse om protokoller af 26. oktober 2004 og 27. maj 2008 til aftale af 21. juni 1999 mellem Det Europæiske Fællesskab, dets medlemsstater og Schweiz om fri bevægelighed for personer som følge af en række landes tiltrædelse af Den Europæiske Union</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold>
+    <TekstGruppe>
+      <Exitus formaForma="Tekst">
+        <Linea>
+          <Char>Den 26. oktober 2004 undertegnedes i Luxembourg af Den Europæiske Union - på vegne af medlemsstaterne - protokollen til aftalen af 21. juni 1999 mellem Det Europæiske Fællesskab og dets medlemsstater på den ene side og Det Schweiziske Forbund på den anden side om fri bevægelighed for personer som følge af Den Tjekkiske Republiks, Republikken Estlands, Republikken Cyperns, Republikken Letlands, Republikken Litauens, Republikken Ungarns, Republikken Maltas, Republikken Polens, Republikken Sloveniens og Den Slovakiske Republiks deltagelse som kontraherende parter i medfør af deres tiltrædelse af Den Europæiske Union.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Tekst">
+        <Linea>
+          <Char>Den 27. maj 2008 undertegnedes i Bruxelles af Den Europæiske Union – på vegne af medlemsstaterne - protokollen til aftalen af 21. juni 1999 mellem Det Europæiske Fællesskab og dets medlemsstater på den ene side og Det Schweiziske Forbund på den anden side om fri bevægelighed for personer i forbindelse med Republikken Bulgariens og Rumæniens deltagelse som kontraherende parter i medfør af deres tiltrædelse af Den Europæiske Union.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Tekst">
+        <Linea>
+          <Char>Protokollerne sikrer, at aftalen af 21. juni 1999 mellem Det Europæiske Fællesskab og Schweiz, jf. Udenrigsministeriets bekendtgørelse nr. 6 af 30. januar 2003, Lovtidende C, også finder anvendelse på forholdet mellem Schweiz og de medlemsstater, der tiltrådte den Europæiske Union henholdsvis den 1. maj 2004 og den 1. januar 2007.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Tekst">
+        <Linea>
+          <Char>Den 27. februar 2006 ratificerede Den Europæiske Union på vegne af medlemsstaterne protokollen af 26. oktober 2004.</Char>
+        </Linea>
+        <Linea>
+          <Char>Denne protokol, som ikke gælder for Færøerne og Grønland, trådte i kraft den 1. april 2006 og er offentliggjort i Den Europæiske Unions Tidende nr. L 89 af 28. marts 2006, side 30 ff., som kan ses på adressen</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Tekst">
+        <Linea>
+          <Char>http://eur-lex.europa.eu/LexUriServ/LexUriServ.do?uri=OJ:L:2006:089:0030:0044:DA:PDF.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Tekst">
+        <Linea>
+          <Char>Den 5. maj 2009 ratificerede Den Europæiske Union på vegne af medlemsstaterne protokollen af 27. maj 2008.</Char>
+        </Linea>
+        <Linea>
+          <Char>Denne protokol, som ikke gælder for Færøerne og Grønland, trådte i kraft den 1. juni 2009 og er offentliggjort i Den Europæiske Unions Tidende nr. L 124 af 20. maj 2009, side 53 ff., som kan ses på adressen</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Tekst">
+        <Linea>
+          <Char>http://eur-lex.europa.eu/LexUriServ/LexUriServ.do?uri=OJ:L:2009:124:0053:0062:DA:PDF.</Char>
+        </Linea>
+      </Exitus>
+    </TekstGruppe>
+  </DokumentIndhold>
+  <UnderskriftGruppe>
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

@@ -7,13 +7,15 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/lkarlslund/retsinformation/internal/chain"
 	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/retsinformation/internal/library"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
 
@@ -21,31 +23,24 @@ import (
 // no store, no writer, no client. If it can be changed through this server, it is not
 // a mirror any more.
 type Server struct {
-	archive  *lexdania.Archive
-	byELI    map[string][]lexdania.Entry
-	kinds    countByKind
+	// base is the catalogue of the library the server was made with, or nil when it answers from
+	// an artifact alone, which brings its own (see corpus). A server is made without one; a test
+	// passes one, to serve fixtures without building an artifact.
+	base     *catalogueView
 	siteBase string
 	version  string
 	started  time.Time
 
 	// index is the built full-text index, or nil. Search is not advertised when it is
 	// nil, because a tool that cannot answer is worse than no tool.
-	index *search.Index
+	indexBuilding atomic.Bool
 
-	// docs is the compiled artifact the document text is read from, when one was given. Without it
-	// every lookup re-parses the publisher's XML, which answers correctly and slowly, so the
-	// status line says which of the two a client is being served from rather than leaving it to be
-	// guessed from how long the answer took.
-	docs *compiled.Cache
+	// served is the artifact and index answered from, swapped whole (SwapCorpus).
+	served atomic.Pointer[corpus]
 
 	// MaxChars caps every answer when the request does not ask for a different cap.
 	// Zero keeps the package default.
 	MaxChars int
-
-	// SweepStampPath is the file the collection pass publishes its horizon to. Empty
-	// means the server says its horizon is unknown rather than inventing one from
-	// file mtimes, which a bulk crawl makes meaningless.
-	SweepStampPath string
 
 	// nowFunc answers "what time is it" for the horizon. It is a field rather than a call to
 	// time.Now so a test can pin the clock: several of this package's claims are about a date
@@ -67,20 +62,31 @@ func (s *Server) clock() time.Time {
 	return time.Now()
 }
 
-// New indexes the archive for serving. Scanning 191,393 documents takes about a second
-// warm, so the index is rebuilt at startup rather than cached: the archive's own rule
-// is that its index is derived from the files and can be thrown away at any time, and
-// a cache would be a second answer to "what is in the mirror".
-func New(a *lexdania.Archive, siteBase, version string) *Server {
+// New makes a server. It answers once it is given an artifact (UseArtifact); a library passed here
+// answers until then, and is what tests serve fixtures from.
+func New(a chain.Library, siteBase, version string) *Server {
 	s := &Server{
-		archive:  a,
-		byELI:    make(map[string][]lexdania.Entry, a.Len()),
-		kinds:    countByKind{},
 		siteBase: strings.TrimSuffix(siteBase, "/"),
 		version:  version,
 		started:  time.Now(),
 	}
-	for _, e := range a.Entries() {
+	if a != nil {
+		s.base = newCatalogueView(a)
+	}
+	return s
+}
+
+// catalogueView is a library with the lookups a server needs over its catalogue, built once per
+// library: documents by ELI path, and the count by medium the status line prints.
+type catalogueView struct {
+	lib   chain.Library
+	byELI map[string][]chain.Entry
+	kinds countByKind
+}
+
+func newCatalogueView(lib chain.Library) *catalogueView {
+	c := &catalogueView{lib: lib, byELI: make(map[string][]chain.Entry, lib.Len()), kinds: countByKind{}}
+	for _, e := range lib.Entries() {
 		// Keyed without the eli/ segment, which is how callers write the path after
 		// copying it from a URL; find() strips whichever form it was given.
 		//
@@ -90,21 +96,53 @@ func New(a *lexdania.Archive, siteBase, version string) *Server {
 		// 20201BB00054 are all eli/ft/2020/54, with different text. A map of one entry
 		// per ELI would silently answer for whichever file was scanned last.
 		key := strings.TrimPrefix(e.ELIPath(), "eli/")
-		s.byELI[key] = append(s.byELI[key], e)
-		s.kinds.add(e.Kind)
+		c.byELI[key] = append(c.byELI[key], e)
+		c.kinds.add(e.Kind)
 	}
-	for _, es := range s.byELI {
+	for _, es := range c.byELI {
 		// Deterministic order, so an ambiguous path lists its candidates the same way
 		// on every run rather than in map order.
 		sort.Slice(es, func(i, j int) bool { return es[i].Accession < es[j].Accession })
 	}
-	return s
+	return c
 }
+
+// cat is the catalogue answered from: the artifact's when one is served, else the library's the
+// server was made with.
+func (s *Server) cat() *catalogueView {
+	if c := s.served.Load(); c != nil && c.cat != nil {
+		return c.cat
+	}
+	if s.base != nil {
+		return s.base
+	}
+	return emptyCatalogue
+}
+
+// lib is the library answered from; see cat.
+func (s *Server) lib() chain.Library { return s.cat().lib }
+
+// emptyCatalogue answers for a server that has been given nothing to serve yet.
+var emptyCatalogue = newCatalogueView(emptyLibrary{})
+
+type emptyLibrary struct{}
+
+func (emptyLibrary) Len() int                        { return 0 }
+func (emptyLibrary) Entries() []chain.Entry          { return nil }
+func (emptyLibrary) Location() string                { return "nothing" }
+func (emptyLibrary) Find(string) (chain.Entry, bool) { return chain.Entry{}, false }
+func (emptyLibrary) Versions(a string) ([]chain.Version, error) {
+	return nil, fmt.Errorf("%s is not in the library", a)
+}
+func (emptyLibrary) LawAsOf(a string, _ time.Time) (*chain.View, error) {
+	return nil, fmt.Errorf("%s is not in the library", a)
+}
+func (emptyLibrary) Model(string) (*lexdoc.Document, string, bool) { return nil, "", false }
 
 // ambiguous reports every document stored under the same ELI path, and says whether
 // the path actually identifies one document.
-func (s *Server) ambiguous(eli string) []lexdania.Entry {
-	es := s.byELI[strings.TrimPrefix(eli, "eli/")]
+func (s *Server) ambiguous(eli string) []chain.Entry {
+	es := s.cat().byELI[strings.TrimPrefix(eli, "eli/")]
 	if len(es) < 2 {
 		return nil
 	}
@@ -114,23 +152,49 @@ func (s *Server) ambiguous(eli string) []lexdania.Entry {
 // Status is what the server knows about the mirror it is serving, for the initialize
 // instructions and for the lookup header.
 func (s *Server) Status() string {
-	built := "undated"
-	if s.index != nil && s.index.Built > 0 {
-		built = time.Unix(s.index.Built, 0).Format(time.RFC3339)
+	index := "no search index"
+	switch ix := s.idx(); {
+	case ix != nil && ix.Built > 0:
+		index = "index built " + time.Unix(ix.Built, 0).Format(time.RFC3339)
+	case ix != nil:
+		index = "index built at an unrecorded time"
+	case s.SearchPending():
+		index = "search index being built"
 	}
-	return fmt.Sprintf("%d documents in %s (media: %s), index built %s, %s",
-		s.archive.Len(), s.archive.Root, s.kinds, built, s.textSource())
+	return fmt.Sprintf("%d documents in %s (media: %s), %s, %s",
+		s.lib().Len(), s.lib().Location(), s.cat().kinds, index, s.textSource())
+}
+
+// StatusDA is Status for the Danish reading pages.
+func (s *Server) StatusDA() string {
+	index := "intet søgeindeks"
+	switch ix := s.idx(); {
+	case ix != nil && ix.Built > 0:
+		index = "søgeindeks bygget " + time.Unix(ix.Built, 0).Format("2006-01-02 15:04")
+	case ix != nil:
+		index = "søgeindeks uden byggetidspunkt"
+	case s.SearchPending():
+		index = "søgeindekset bygges"
+	}
+	return fmt.Sprintf("%d dokumenter i spejlet (typer: %s), %s, %s",
+		s.lib().Len(), s.cat().kinds, index, s.textSourceDA())
+}
+
+// textSourceDA is textSource in Danish.
+func (s *Server) textSourceDA() string {
+	if s.cache() == nil {
+		return "teksten læses fra " + s.lib().Location()
+	}
+	return fmt.Sprintf("teksten læses fra den kompilerede fil (bygget %s)", s.cache().Artifact().Header.Created.Local().Format("2006-01-02 15:04"))
 }
 
 // textSource names where a document's text is read from, in the words an operator reads in a log
-// line and a client reads in a search answer. Serving by parse is allowed but not invisible: it is
-// the difference between a lookup costing a seek and a decompression and one costing an XML parse,
-// and a server that said nothing about it would be a server people run slowly for years.
+// line and a client reads in a search answer.
 func (s *Server) textSource() string {
-	if s.docs == nil {
-		return "text by parsing XML (run `retsin artifact build` and restart to serve from the compiled artifact)"
+	if s.cache() == nil {
+		return "text from " + s.lib().Location()
 	}
-	art := s.docs.Artifact()
+	art := s.cache().Artifact()
 	return fmt.Sprintf("text from the compiled artifact at %s (built %s)", art.Path(), art.Header.Created.Format("2006-01-02 15:04:05Z07:00"))
 }
 
@@ -139,8 +203,8 @@ func (s *Server) textSource() string {
 // budget is arithmetic rather than a guess about struct widths.
 const DefaultArtifactCacheBytes = 64 << 20
 
-// UseArtifact serves document text out of a compiled artifact instead of parsing the publisher's
-// XML per read.
+// UseArtifact serves a compiled artifact: its catalogue, its documents' models and its acts'
+// changes are everything an answer is made from.
 //
 // The artifact has to be this build's own. Its payload is the JSON form of the model's Go types, so
 // a file from another revision decodes into today's struct with yesterday's meaning and answers
@@ -148,56 +212,133 @@ const DefaultArtifactCacheBytes = 64 << 20
 // which side is stale, since the operator can rebuild either one and only the artifact's timestamp
 // says which needs it.
 func (s *Server) UseArtifact(path string, cacheBytes int64) error {
+	p, err := s.PrepareArtifact(path, cacheBytes)
+	if err != nil {
+		return err
+	}
+	s.SwapCorpus(p, s.idx())
+	return nil
+}
+
+// PrepareArtifact opens an artifact and makes the checks serving it needs, without serving it:
+// the document model must be this build's. A server that is answering from one artifact prepares
+// the next this way.
+func (s *Server) PrepareArtifact(path string, cacheBytes int64) (*Prepared, error) {
 	if cacheBytes <= 0 {
 		cacheBytes = DefaultArtifactCacheBytes
 	}
 	c, err := compiled.OpenCached(path, cacheBytes)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := c.Artifact().CheckCurrentBuild(); err != nil {
+	if err := c.Artifact().CheckModel(); err != nil {
 		c.Close()
-		return err
+		return nil, err
 	}
-	// The other way an artifact can be wrong: right build, old data. The collection pass publishes
-	// when it last pulled, so a server that booted against an artifact from before that would be
-	// answering from a corpus that no longer exists.
-	if h := s.horizon(); h.Known {
-		if err := c.Artifact().CheckNotOlderThan(h.PulledAt, "the last recorded collection pass"); err != nil {
-			c.Close()
-			return err
-		}
+	// The artifact's catalogue is the library answers come from: lookups, browsing and laws as of
+	// a date. An artifact whose catalogue is empty — a test's small build — leaves the catalogue to
+	// the library the server was made with.
+	lib, err := library.Open(c)
+	if err != nil {
+		c.Close()
+		return nil, err
 	}
-	s.docs = c
+	p := &Prepared{Cache: c}
+	switch {
+	case lib.Len() > 0:
+		p.cat = newCatalogueView(lib)
+	case s.base == nil:
+		c.Close()
+		return nil, fmt.Errorf("%s has no catalogue, so there is nothing to look a document up in: rebuild it with `retsin-update artifact build`", path)
+	}
+	return p, nil
+}
+
+// corpus is what the server answers from: the artifact text is read from and the index cut from
+// it. It is replaced whole, so no request sees one artifact's text with another's index.
+type corpus struct {
+	docs  *compiled.Cache
+	index *search.Index
+	cat   *catalogueView // the artifact's catalogue, or nil to answer from the server's library
+}
+
+// Prepared is an artifact opened and checked for serving: its document cache and the library its
+// catalogue makes.
+type Prepared struct {
+	Cache *compiled.Cache
+	cat   *catalogueView
+}
+
+// Artifact is the prepared artifact itself.
+func (p *Prepared) Artifact() *compiled.Artifact { return p.Cache.Artifact() }
+
+// Close releases a prepared artifact that will not be served after all.
+func (p *Prepared) Close() error { return p.Cache.Close() }
+
+// SwapCorpus makes an artifact, its catalogue and its index the ones served, together. The
+// artifact replaced is closed a minute later, when the requests that were reading it have finished.
+func (s *Server) SwapCorpus(p *Prepared, index *search.Index) {
+	old := s.served.Swap(&corpus{docs: p.Cache, index: index, cat: p.cat})
+	if old != nil && old.docs != nil && old.docs != p.Cache {
+		retired := old.docs
+		time.AfterFunc(time.Minute, func() { retired.Close() })
+	}
+}
+
+// cache is the artifact text is served from, or nil before one is given.
+func (s *Server) cache() *compiled.Cache {
+	if c := s.served.Load(); c != nil {
+		return c.docs
+	}
 	return nil
 }
 
-// artifactStaleness is the same check as the one at startup, re-asked per answer: a server that
-// booted against a current artifact will still be running tomorrow night when the crawl finishes,
-// and from that moment its compiled text describes a mirror it no longer holds. That is not a
-// reason to stop answering — the text it holds is still the register's text for the documents it
-// holds — but it is a reason to say so in the answer that is affected rather than in a log line
-// nobody reads.
-func (s *Server) artifactStaleness() string {
-	if s.docs == nil {
+// ArtifactIdentity names the artifact text is served from (compiled.Artifact.Identity), or "" before
+// one is given: what an index built for this server must record as its source.
+func (s *Server) ArtifactIdentity() string {
+	if s.cache() == nil {
 		return ""
 	}
-	art := s.docs.Artifact()
-	h := s.horizon()
-	if !h.Known || !art.Header.Created.Before(h.PulledAt) {
-		return ""
-	}
-	return fmt.Sprintf("the compiled text this answer is read from was built %s, before the last collection pass (%s), so documents that arrived since are not in it; rebuild the artifact with `retsin artifact build`",
-		art.Header.Created.Format("2006-01-02 15:04:05Z07:00"), h.PulledAt.Format("2006-01-02 15:04:05Z07:00"))
+	return s.cache().Artifact().Identity()
 }
 
-// unitSource is where a search hit's text comes from: the artifact when serving has one, and the
-// XML reader otherwise. The index itself stores no text either way.
-func (s *Server) unitSource() search.Documents {
-	if s.docs != nil {
-		return artifactDocs{cache: s.docs}
+// indexMismatch says when the search index was built from a different artifact than the one
+// serving text. The two then disagree about which provisions exist: a hit can name an address
+// the served text no longer has, or miss one it does. Answers still come, with this said.
+func (s *Server) indexMismatch(danish bool) string {
+	if s.cache() == nil || s.idx() == nil || !strings.HasPrefix(s.idx().Source, "artifact ") {
+		return ""
 	}
-	return search.XMLDocuments{}
+	art := s.cache().Artifact()
+	if s.idx().Source == search.SourceFor(art.Identity()) {
+		return ""
+	}
+	if danish {
+		return fmt.Sprintf("søgeindekset er bygget fra en anden kompileret fil (%s) end den, teksten læses fra (%s): byg indekset igen med `retsin index build`",
+			strings.TrimPrefix(s.idx().Source, "artifact "), art.Header.Created.UTC().Format(time.RFC3339))
+	}
+	return fmt.Sprintf("the search index was built from a different compiled artifact (%s) than the one text is served from (%s): rebuild the index with `retsin index build`",
+		strings.TrimPrefix(s.idx().Source, "artifact "), art.Header.Created.UTC().Format(time.RFC3339))
+}
+
+// unitSource is where a search hit's text comes from: the artifact served, or the library the
+// server was made with before one is. The index itself stores no text either way.
+func (s *Server) unitSource() search.Documents {
+	if s.cache() != nil {
+		return artifactDocs{cache: s.cache()}
+	}
+	return libraryDocs{lib: s.lib()}
+}
+
+// libraryDocs reads a hit's document from a library.
+type libraryDocs struct{ lib chain.Library }
+
+func (l libraryDocs) Document(meta search.DocMeta) (*lexdoc.Document, error) {
+	m, _, ok := l.lib.Model(meta.Accession)
+	if !ok {
+		return nil, fmt.Errorf("%s is not readable in %s", meta.Accession, l.lib.Location())
+	}
+	return m, nil
 }
 
 // artifactDocs reads a hit's document out of the compiled artifact. The cache hands out a freshly
@@ -242,7 +383,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Name:    "retsin",
 		Version: s.version,
 	}, &mcp.ServerOptions{
-		Instructions: "Lookup Danish law from a local mirror of retsininformation.dk. " +
+		Instructions: "Lookup Danish law from a local mirror of retsinformation.dk. " +
 			"Every answer names where its text came from: 'xml' is the register's own " +
 			"structured body, 'html' is text our reader recovered from the site's HTML " +
 			"payload, and 'none' means the mirror has metadata but no text. Say which one " +
@@ -252,9 +393,14 @@ func (s *Server) mcpServer() *mcp.Server {
 		Name: "lookup",
 		Description: "Read one document from the mirror: metadata plus text, optionally one " +
 			"provision, optionally consolidated to a date. Answers report text provenance " +
-			"(xml, html or none) and the mirror's index time.",
+			"(xml, html or none) and the mirror's index time. A consolidated answer lists " +
+			"every amending change it could not place under \"Changes not placed in this " +
+			"text\", each with its act and wording, and marks the provisions they concern; " +
+			"a provision so marked may not read as the law does on that date.",
 	}, s.lookupTool)
-	if s.index != nil {
+	// Offered while the index is being built too: the tool list is fixed when a client connects,
+	// and a server that started a minute ago will have search a minute from now.
+	if s.idx() != nil || s.indexBuilding.Load() {
 		mcp.AddTool(srv, &mcp.Tool{
 			Name: "search",
 			Description: "Full-text search over the mirror. Returns provisions, not documents: " +
@@ -316,6 +462,7 @@ type searchInput struct {
 	// assuming the answer means the law has not been touched since the crawl.
 	Status string `json:"status,omitempty" jsonschema:"only documents the register labels 'Valid' (current), 'Historic' (repealed or superseded), or 'unknown' (the payload says nothing). The register's own claim, not a verification that nothing newer has changed it"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"maximum hits, default 10, cap 50"`
+	Offset int    `json:"offset,omitempty" jsonschema:"start further down the ranked list, e.g. the 'next offset' a previous answer gave"`
 
 	NoNear bool `json:"no_near,omitempty" jsonschema:"rank from the index alone and skip the text reads that measure word distance"`
 }
@@ -329,6 +476,7 @@ func (s *Server) searchTool(_ context.Context, _ *mcp.CallToolRequest, in search
 		Source: in.Source,
 		Status: in.Status,
 		Limit:  in.Limit,
+		Offset: in.Offset,
 		NoNear: in.NoNear,
 	})
 	if err != nil {

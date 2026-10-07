@@ -86,8 +86,7 @@ func TestHardestLaws(t *testing.T) {
 	if os.Getenv("RETSIN_FULL_SCAN") != "1" {
 		t.Skip("walks the entire archive; set RETSIN_FULL_SCAN=1")
 	}
-	dir := corpusDir(t)
-	a, err := Scan(t.Context(), dir)
+	a, err := corpusArchive(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +189,7 @@ func TestDumpChains(t *testing.T) {
 	if list == "" {
 		t.Skip("set RETSIN_DUMP_CHAINS=A,B,C to dump those chains as JSON")
 	}
-	a, err := Scan(t.Context(), corpusDir(t))
+	a, err := corpusArchive(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +400,7 @@ func TestDumpStructure(t *testing.T) {
 	if spec == "" {
 		t.Skip("set RETSIN_DUMP_STRUCTURE=ACCESSION[@YYYY-MM-DD],... to dump structure")
 	}
-	a, err := Scan(t.Context(), corpusDir(t))
+	a, err := corpusArchive(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,8 +422,9 @@ func TestDumpStructure(t *testing.T) {
 					d.Title = strings.TrimSpace(s.Text())
 				}
 			}
-			d.Notes = countNamed(doc.Root, "Nota", "Fodnote")
-			d.Paragraphs = dumpSections(doc.Sections())
+			m := doc.Model()
+			d.Notes = countNotes(&m.Content)
+			d.Paragraphs = dumpContent(&m.Content)
 		} else {
 			day, err := time.Parse("2006-01-02", asOf)
 			if err != nil {
@@ -436,8 +436,8 @@ func TestDumpStructure(t *testing.T) {
 			}
 			d.Applied = v.AppliedCount()
 			d.Title = v.Title
-			d.Notes = countNamed(v.Doc.Root, "Nota", "Fodnote")
-			d.Paragraphs = dumpSections(v.Sections())
+			d.Notes = countNotes(v.Content)
+			d.Paragraphs = dumpContent(v.Content)
 		}
 		out = append(out, d)
 	}
@@ -458,21 +458,30 @@ func TestDumpStructure(t *testing.T) {
 // dumpSections keeps only the provisions in the law's own numbering series.
 // Appendix provisions are the entry-into-force quotations of amending acts, and
 // the API's revision does not carry them.
-func dumpSections(secs []*Section) []dumpParagraph {
+func dumpContent(c *lexdoc.Content) []dumpParagraph {
 	out := make([]dumpParagraph, 0)
-	for _, s := range secs {
-		if s.Kind != "paragraf" || s.Appendix {
-			continue
+	for _, ref := range c.Provisions() {
+		p := ref.Provision
+		d := dumpParagraph{Number: p.Printed}
+		for _, st := range p.Stykker {
+			d.Stk = append(d.Stk, dumpStk{Number: st.Label, Text: p.SpanText(st.Span)})
 		}
-		p := dumpParagraph{Number: s.RawNumber}
-		for _, c := range secs {
-			if c.Kind == "stk" && c.Parent == s {
-				p.Stk = append(p.Stk, dumpStk{Number: c.RawNumber, Text: c.Node.PlainText()})
-			}
-		}
-		out = append(out, p)
+		out = append(out, d)
 	}
 	return out
+}
+
+// countNotes counts the footnotes a law's text carries.
+func countNotes(c *lexdoc.Content) int {
+	n := 0
+	for _, ref := range c.Provisions() {
+		for _, seg := range ref.Provision.Segments {
+			if seg.Note != "" {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // appendixCollisions counts appendix provisions printed with a number the law itself
@@ -533,7 +542,7 @@ func duplicateNumbers(secs []*Section) int {
 // reached it, so the edit was refused and BR18 served the 2019 word for six years. 26 of the
 // act's 109 refusals were this one shape.
 func TestBR18ItemCitationWithoutStykkeLands(t *testing.T) {
-	a, err := Scan(t.Context(), corpusDir(t))
+	a, err := corpusArchive(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,27 +552,275 @@ func TestBR18ItemCitationWithoutStykkeLands(t *testing.T) {
 	}
 
 	before := LawAsOf(base, time.Date(2020, 3, 5, 12, 0, 0, 0, time.UTC), a.Open)
-	s := before.Section("§ 92, nr. 2")
-	if s == nil {
+	s, ok := before.ProvisionText("§ 92, nr. 2")
+	if !ok {
 		t.Fatal(`"§ 92, nr. 2" does not resolve in BR18 as promulgated`)
 	}
-	if !strings.Contains(s.Display(), "bygn") {
-		t.Fatalf(`"§ 92, nr. 2" = %q, want the promulgated wording`, s.Display())
+	if !strings.Contains(s, "bygn") {
+		t.Fatalf(`"§ 92, nr. 2" = %q, want the promulgated wording`, s)
 	}
 
-	after := LawAsOf(base, time.Date(2020, 6, 2, 12, 0, 0, 0, time.UTC), a.Open)
-	if s := after.Section("§ 92, nr. 2"); s == nil {
+	// The order was signed on 2 June 2020 and takes effect on 1 July 2020 (its § 2).
+	after := LawAsOf(base, time.Date(2020, 7, 1, 12, 0, 0, 0, time.UTC), a.Open)
+	if got, ok := after.ProvisionText("§ 92, nr. 2"); !ok {
 		t.Fatal(`"§ 92, nr. 2" does not resolve after the amendment`)
-	} else if got := s.Display(); !strings.Contains(got, "byggeriet") {
+	} else if !strings.Contains(got, "byggeriet") {
 		t.Errorf(`"§ 92, nr. 2" = %q, want the word the amendment put there`, got)
 	}
 	// The stykke-naming citation has to keep working exactly as it did.
-	if s := after.Section("§ 92, stk. 1, nr. 2"); s == nil || !strings.Contains(s.Display(), "byggeriet") {
-		t.Errorf(`"§ 92, stk. 1, nr. 2" = %+v, want the same item`, s)
+	if got, ok := after.ProvisionText("§ 92, stk. 1, nr. 2"); !ok || !strings.Contains(got, "byggeriet") {
+		t.Errorf(`"§ 92, stk. 1, nr. 2" = %q, want the same item`, got)
 	}
 	for _, u := range after.Unresolved {
 		if u.Edit.Address.String() == "§ 92, nr. 2" {
 			t.Errorf("the item citation is still refused: %s", u.Reason)
+		}
+	}
+}
+
+// Changes the archive's metadata does not tie to the law they amend, and changes it ties to a law
+// they do not amend.
+func TestChainFollowsTheActsItsActsCite(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	asOf := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Lov nr. 687 of 2017 lists only the 2021 act; that act cites "som ændret ved § 8 i lov nr.
+	// 1585 af 27. december 2019", which changed § 7, stk. 3, from 2020 to 2022 first.
+	v, err := a.LawAsOf("A20170068730", asOf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := v.ProvisionText("§ 7, stk. 3"); !ok || !strings.Contains(got, "2031") {
+		t.Errorf(`"§ 7, stk. 3" = %q, want the 2031 the 2021 act put in place of 2022`, got)
+	}
+
+	// Lov nr. 486 of 2009 and lov nr. 1398 of 2008 are both "Lov om ændring af udlændingeloven",
+	// and neither is a consolidation of the other.
+	v, err = a.LawAsOf("A20090048630", asOf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ap := range v.Applied {
+		// A20240170230's § 11 is lov nr. 486's; its § 10 is lov nr. 1398's.
+		if ap.Edit.Source == "A20090151130" || ap.Edit.Source == "A20240170230" && ap.Edit.Section != "11" {
+			t.Errorf("%s %s applied to lov nr. 486 of 2009, which it does not amend", ap.Edit.Source, ap.Edit.Number)
+		}
+	}
+	for _, u := range v.Unresolved {
+		if u.Edit.Source == "A20090151130" {
+			t.Errorf("%s %s taken as a change of lov nr. 486 of 2009", u.Edit.Source, u.Edit.Number)
+		}
+	}
+
+	// Lov nr. 504 of 2009 repeals changes 1 and 2 of § 3 in lov nr. 526 of 2006.
+	v, err = a.LawAsOf("A20060052630", asOf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := v.ProvisionText("§ 3"); !ok || strings.Contains(got, "§ 478, stk. 4") || !strings.Contains(got, "§ 510, stk. 1") {
+		t.Errorf(`"§ 3" = %q, want changes 1 and 2 gone and the rest kept`, got)
+	}
+}
+
+// Virksomhedsskatteloven's new chapter 6 came with its heading, its §§ 17 and 18 in place of the
+// repealed ones, and BR18 § 344 prints "Stk. 2" inside the markup of stk. 1.
+func TestNewTextLandsInTheUnitItNames(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.LawAsOf("A20130111429", time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := v.ProvisionText("§ 17, stk. 2"); !ok || !strings.Contains(got, "indgiver selvangivelse") {
+		t.Errorf(`"§ 17, stk. 2" = %q, want the henstand rule the 2015 act brought`, got)
+	}
+
+	v, err = a.LawAsOf("B20170161505", time.Date(2019, 7, 1, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := v.ProvisionText("§ 344, stk. 2, nr. 9"); !ok || !strings.Contains(got, "DS/EN") {
+		t.Errorf(`"§ 344, stk. 2, nr. 9" = %q, want the ninth standard`, got)
+	}
+	if got, ok := v.ProvisionText("§ 344, stk. 3"); !ok || !strings.Contains(got, "væksthuse") || strings.Contains(got, "DS/EN") {
+		t.Errorf(`"§ 344, stk. 3" = %q, want the greenhouse rule alone`, got)
+	}
+}
+
+// Lov nr. 720 of 2014 is older than the consolidation of lov om en aktiv beskæftigelsesindsats of
+// 12 September 2014, which printed most of it and says in a note that § 2, nr. 41-43, taking effect
+// on 1 January 2015, are not included. They are made, and the act's other changes are not made
+// twice.
+func TestTheLatePartOfAnOlderActIsMade(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.LawAsOf("A20140099029", time.Date(2015, 6, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := v.ProvisionText("§ 118 a, stk. 1"); !ok || !strings.Contains(got, "rådighedsbeløb") {
+		t.Errorf(`"§ 118 a, stk. 1" = %q, want the provision lov nr. 720 of 2014 inserted from 2015`, got)
+	}
+	for _, ap := range v.Applied {
+		if ap.Edit.Source == "A20140072030" && ap.Edit.Section == "2" && lexdoc.Atoi(strings.TrimSuffix(ap.Edit.Number, ".")) < 41 {
+			t.Errorf("%s § 2, nr. %s, which the consolidation printed, made again", ap.Edit.Source, ap.Edit.Number)
+		}
+	}
+}
+
+// Lov nr. 575 of 2005 amends almenboligloven "jf. lovbekendtgørelse nr. 106 af 21. februar 2005",
+// the consolidation before the base, printed under the law's older title. Its changes are this
+// law's, and the §§ 185 c and 185 d it brings are there for lov nr. 223 of 2006 to amend.
+func TestAnActCitingAnOlderTitleIsThisLaws(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.LawAsOf("A20050061029", time.Date(2007, 6, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := v.ProvisionText("§ 185 c, stk. 1"); !ok || !strings.Contains(got, "regionale") {
+		t.Errorf(`"§ 185 c, stk. 1" = %q, want the provision lov nr. 575 of 2005 brought, as lov nr. 223 of 2006 changed it`, got)
+	}
+}
+
+// Lov om gasforsyning of 2023 continues a consolidation of April 2023, which continues lov om
+// naturgasforsyning as consolidated in 2020; an act amending the law under its former name is the
+// law's, and the consolidation prints it already.
+func TestAnActAmendingTheLawUnderAFormerNameIsItsOwn(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.LawAsOf("A20230110029", time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range v.InBase {
+		found = found || e.Source == "A20210092330"
+	}
+	for _, ap := range v.Applied {
+		found = found || ap.Edit.Source == "A20210092330"
+	}
+	if !found {
+		t.Error("lov nr. 923 of 2021, amending lov om naturgasforsyning, was read as another law's")
+	}
+}
+
+// An act older than the base that a consolidation printed is not made again, whatever its changes
+// look like: lov nr. 1564 of 2010 changed the coal duty's rates, quoted as bare figures, and
+// rewrote its § 7 b and annexes, all printed by the consolidation of 2015 or replaced since, but
+// for the § 7 b a minister was to set in force.
+// Sømandsloven's consolidation of 2024 notes that § 2 of lov nr. 1231 of 2003, which its minister
+// was to set in force, still is not: it waits. A later act's part left to a minister goes with the
+// act, as the parts of lov nr. 1555 of 2019 that aktivloven's consolidation of 2021 prints.
+func TestAnOlderActIsMadeOnlyWhereTheBaseLacksIt(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	v, err := a.LawAsOf("A20150108029", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ap := range v.Applied {
+		// Nr. 14, § 7 b, waited for the minister in 2015 and 2020; the consolidation of 2025 prints
+		// it and no longer names it.
+		if ap.Edit.Source == "A20100156430" && ap.Edit.Number != "14." {
+			t.Errorf("lov nr. 1564 of 2010, nr. %s, made on the consolidation of 2015", ap.Edit.Number)
+		}
+	}
+	v, err = a.LawAsOf("A20240033529", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := v.ProvisionText("§ 64 b, stk. 2"); !ok || !strings.Contains(got, "søfartsbøger") || strings.Contains(got, "identitetsbevis") {
+		t.Errorf(`"§ 64 b, stk. 2" = %q, want the text lov nr. 1231 of 2003 has not replaced`, got)
+	}
+	v, err = a.LawAsOf("A20190098129", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	made := map[string]bool{}
+	for _, ap := range v.Applied {
+		if ap.Edit.Source == "A20190155830" && ap.Edit.Section == "1" {
+			made[ap.Edit.Number] = true
+		}
+	}
+	if !made["20."] || !made["56."] {
+		t.Errorf("lov nr. 1555 of 2019, § 1, nr. 20 and 56, set in force by order, not made: %v", made)
+	}
+}
+
+// Vandforsyningsloven's consolidation of June 2010 prints § 52 a, stk. 1, in its old wording, with a
+// note: "Det følger af § 3, nr. 1, i lov nr. 1518 af 27. december 2009, at § 52 a, stk. 1, affattes
+// således", from 1 January 2011. The act is not in the law's change list. It is read from the note,
+// that change only, and the acts of 2011 then find the conditions they name: a new nr. 11 after nr.
+// 10, and nr. 12 citing the water duty law.
+func TestAChangeTheBaseNotesIsMade(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.LawAsOf("A20100063529", time.Date(2012, 6, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := v.ProvisionText("§ 52 a, stk. 1")
+	if !ok || !strings.Contains(got, "10) udgifter til kortlægning") || !strings.Contains(got, "11) udgifter til dækning af en fastsat økonomisk godtgørelse") ||
+		!strings.Contains(got, "12) udgifter til dækning af afgifter, jf. § 3, stk. 2, i lov om afgift af ledningsført vand") {
+		t.Errorf(`"§ 52 a, stk. 1" = %q`, got)
+	}
+	for _, u := range v.Unresolved {
+		if u.Edit.Source == "A20110055330" || u.Edit.Source == "A20110138430" {
+			t.Errorf("%s %s refused: %s", u.Edit.Source, u.Edit.Number, u.Reason)
+		}
+	}
+}
+
+// Aktivloven's consolidation of September 2019 prints repealed ranges as "§§ " with "34 a-34 b." on
+// the line after, under a localId that is a sequence number (56): read by it, the stub was found as
+// § 56, and "§§ 16-21" as § 35. And lov nr. 551 of May 2019, drafted against the consolidation of
+// March 2019, calls § 69, stk. 2, what the September text prints as stk. 3, a subsection having been
+// put in front of it in between; its changes are made where that text prints the words.
+func TestAktivlovensRangesAndCitedNumbering(t *testing.T) {
+	a, err := corpusArchive(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, _, ok := a.Open("A20190098129")
+	if !ok {
+		t.Fatal("not in the archive")
+	}
+	c := doc.Model().Content
+	for _, n := range []string{"35", "56"} {
+		loc, ok := c.Find(lexdoc.Address{Recognised: true, Paragraph: n})
+		if !ok || strings.Contains(loc.Provision.Text(), "(Ophævet)") {
+			t.Errorf("§ %s found as %q", n, loc.Provision.Text())
+		}
+	}
+	v, err := a.LawAsOf("A20190098129", time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// § 13 a, stk. 3, of lov nr. 1000 of 2015, printed though it never took effect, went with its
+	// repeal by lov nr. 551 of 2019; the consolidation of 2021 prints four subsections.
+	if got, ok := v.ProvisionText("§ 13 a, stk. 3"); !ok || !strings.Contains(got, "skal være aktivt jobsøgende. Personen skal ved første jobsamtale") {
+		t.Errorf(`"§ 13 a, stk. 3" = %q`, got)
+	}
+	for _, u := range v.Unresolved {
+		if u.Edit.Source == "A20190055130" && (u.Edit.Address.Paragraph == "69" || u.Edit.Address.Paragraph == "69k") {
+			t.Errorf("lov nr. 551 of 2019, nr. %s, refused at %s: %s", u.Edit.Number, u.Edit.Address, u.Reason)
 		}
 	}
 }

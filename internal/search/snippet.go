@@ -3,7 +3,6 @@ package search
 import (
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
@@ -12,27 +11,10 @@ const DefaultSnippetRunes = 320
 
 // Documents reads the document a hit names. The index deliberately stores no text, so somebody
 // has to: serving passes the compiled artifact (internal/compiled.Cache), which reads one document
-// without parsing anything, and the offline paths pass XMLDocuments, which reads the publisher's
-// file because there the parse is the point.
+// without parsing anything; tests that measure the publisher's files pass
+// a reader that parses them.
 type Documents interface {
 	Document(meta DocMeta) (*lexdoc.Document, error)
-}
-
-// XMLDocuments reads documents through the archive's own reader. It is the building and grading
-// path: the artifact does not exist yet while an index is being built, and a snippet graded
-// against a document that was just parsed does not need it either way.
-type XMLDocuments struct{}
-
-// Document parses the file the index says the document is in.
-func (XMLDocuments) Document(meta DocMeta) (*lexdoc.Document, error) {
-	if meta.Path == "" {
-		return nil, nil
-	}
-	doc, err := lexdania.LoadWithBody(meta.Path)
-	if err != nil {
-		return nil, err
-	}
-	return doc.Model(), nil
 }
 
 // SnippetFrom centres a window on text that has already been read.// SnippetFrom centres a window on text that has already been read.

@@ -1,9 +1,21 @@
 # retsin — Danish legislation mirror
 
-Mirrors [retsininformation.dk](https://www.retsinformation.dk) into a local archive of
+Mirrors [retsinformation.dk](https://www.retsinformation.dk) into a local archive of
 canonical ELI XML, and keeps itself current through Civilstyrelsens official change
 feed. Written for a full bootstrap of ~200k documents plus years of daily updates,
 without getting rate-limited or blocked.
+
+Two programs, which can run on different machines:
+
+- **`retsin-update`** collects: it walks the sitemap, follows the change feed, downloads the
+  XML and the site's HTML bodies, and compiles the archive into one **artifact** file
+  (`retsin-update artifact build`). It is the only program that talks to the site or reads
+  the publisher's XML.
+- **`retsin`** serves the artifact: an MCP endpoint, reading pages, full-text search and laws
+  as of a date (`retsin serve`, `retsin mcp`). The artifact is everything it reads — no XML,
+  no state store, no network — and it cuts its own search index from it. A test
+  (`TestTheServerLinksNoCollectionOrXML`) fails if the binary ever links the collecting or
+  XML-reading packages again.
 
 ## Status
 
@@ -195,13 +207,13 @@ treat the second number as an upper bound until a `--bodies-scan` says otherwise
 therefore looks like:
 
 ```
-retsin fetch --bodies-scan                          # the census, zero requests
-retsin fetch --bodies --kind lta --limit 50         # fifty sidecars, one series
-retsin fetch --bodies --kind lta,ltb                # the laws, ~10 h at 1.2 s spacing
-retsin fetch --bodies --state empty                 # re-test the table documents
+retsin-update fetch --bodies-scan                          # the census, zero requests
+retsin-update fetch --bodies --kind lta --limit 50         # fifty sidecars, one series
+retsin-update fetch --bodies --kind lta,ltb                # the laws, ~10 h at 1.2 s spacing
+retsin-update fetch --bodies --state empty                 # re-test the table documents
 ```
 
-`retsin status` reports the two representations apart — `canonical xml: N, SIZE` and
+`retsin-update status` reports the two representations apart — `canonical xml: N, SIZE` and
 `body payloads: N, SIZE` — plus the body queue's state counts, so "how much of the corpus has
 text now" is one command. A sidecar already on disk closes its row **without a request**, which
 is the resume path after an interrupted run, and a second pass over a completed one issues zero.
@@ -463,7 +475,7 @@ the version is present and its words are not (see the exception above).
 
 ### Cross-checked against a third-party consolidation API
 
-`retsininformation-api.dk` (run by syv.ai) serves the same archive as JSON, including a
+`retsinformation-api.dk` (run by syv.ai) serves the same archive as JSON, including a
 computed version history per document. It is a useful second opinion — the same upstream
 XML, consolidated by someone else — and it is rate-limited hard: **35 requests per hour,
 100 per day**. The comparison cost 23 calls; every payload is cached under `data/jsonapi/`
@@ -564,7 +576,7 @@ whose rows say *"Se detaljer for paragraf"*. Annotate and link; do not merge.
 answered 200 with 3,567–3,584 bytes of SPA shell.
 
 **Consequence: a refusal is the cost of a feature the source does not offer.** A
-refusal (`UnresolvedEdit`, `internal/lexdania/consolidate.go:66`) is a change the
+refusal (`UnresolvedEdit`, `internal/lexdoc/consolidate.go:157`) is a change the
 engine could not place, so it left the text alone and reported the failure instead of
 guessing. BR18 as of 2026-09-19: 17 of 17 amending acts found and effective, **515
 edits attempted, 406 applied, 109 refused**, nothing missing from the mirror, nothing
@@ -715,7 +727,7 @@ flowchart LR
     B["harvest 12s PINNED<br/>document at floor 200ms (settable)<br/>sitemap 2s, may double"]
   end
   C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>reports outcome → learner<br/>one request per call · Retry-After → bucket delay"]
-  H --> RI["retsininformation.dk"]
+  H --> RI["retsinformation.dk"]
   PACE --> RI2["api.retsinformation.dk"]
   H --> RI2
   H --> A["data/xml/… (plain files)"]
@@ -728,7 +740,7 @@ flowchart LR
 
 The XML files *are* the product — they must stay greppable, diffable, rsync-able and
 readable without this program. So `data/meta/kv` is a *derived* index: if it corrupts,
-`retsin rebuild` reconstructs it from the XML on disk at **zero HTTP cost**. Verified:
+`retsin-update rebuild` reconstructs it from the XML on disk at **zero HTTP cost**. Verified:
 deleting the store and running `rebuild` recovered every stored document, and the next
 `fetch` issued no requests for them.
 
@@ -837,7 +849,7 @@ interval — the learner finds the safe pace by being corrected, not by probing 
 ## Configuration
 
 Flags only — no config file and no environment overrides, so `ps` and a cron line show
-exactly what a run will do. Run `retsin --help` for the full list. The important ones:
+exactly what a run will do. Run `retsin-update --help` (or `retsin --help` for the server) for the full list. The important ones:
 
 ```
 --data-dir DIR           archive + state location (default ./data)
@@ -954,7 +966,7 @@ three stamps, and each authorises something different.
 **The 10-day rule.** The harvesting service answers for a rolling ten days
 (`harvest.MaxWindowDays`), so a mirror whose last recorded pull is older than that
 cannot be refilled honestly: the changes in between are listed nowhere any more.
-`retsin update` therefore **fails** rather than collecting a partial set and leaving
+`retsin-update update` therefore **fails** rather than collecting a partial set and leaving
 the mirror looking current — it fails *before the first request*, and says to run
 `update --full`, which re-reads the sitemap and finds every change by `lastmod` for
 about 22 requests. `--force` exists for deliberate repair and is the only other way
@@ -975,11 +987,13 @@ The fingerprint does what the counts cannot. `owed=0 stalled=14` on two consecut
 nights says nothing about whether anything changed; the same digest says it is the same
 fourteen documents the site refuses, and a moving digest says something new broke. The
 counts and digest travel in the state store row, in `data/sweep.stamp` for readers that
-cannot open Badger, in `retsin status`, and in the dataset line of every MCP answer.
+cannot open Badger, in `retsin-update status`, into the header of the next artifact built
+(`compiled.ArtifactHeader.Collection`), and from there into the dataset line of every answer
+served from it.
 
 `owed` counts rows still pending *or* failed while under the retry ceiling; past the
 ceiling they are `stalled` and are reported apart, since no automatic pass will ever
-fetch them and `retsin fetch --state pending` is the remedy.
+fetch them and `retsin-update fetch --state pending` is the remedy.
 
 **An inventory pass merges; it does not overwrite.** The sitemap reports every
 resource it has ever advertised, and the rows it hands over carry only URL, `lastmod`,
@@ -994,11 +1008,11 @@ re-running an inventory pass affordable. It also means an amended law, once
 downloaded, can never be updated: the row gets re-pended, the file is found, the row
 is closed, and the mirror keeps serving the superseded text while reporting itself
 current. So a moved `lastmod` on a row whose bytes we hold marks it `stale`, the one
-state the on-disk shortcut does not apply to. `retsin rebuild` deliberately does not
+state the on-disk shortcut does not apply to. `retsin-update rebuild` deliberately does not
 downgrade those rows, because re-deriving state from disk re-derives exactly the
 older copy.
 
-**The feed is read back, not just written.** `retsin changes` resolves each harvested
+**The feed is read back, not just written.** `retsin-update changes` resolves each harvested
 accession against the archive and reports how many are queued, how many were collected
 with new bytes, and how many are unknown to the mirror. It exists because the feed is a
 dead end as a *mechanism*: it names documents by accession and `href`, never by ELI
@@ -1046,7 +1060,7 @@ every harvested day is the only evidence that leaves the feed as annotation and 
 Measured so far, over the eight feed days the store holds (2026-09-09 to 2026-09-18, 424 distinct
 changes): 424 resolved to held resources, **0** named an unseen document, 0 were left queued or
 behind. The collection cycle harvests the rolling window on every run, so the days keep
-accumulating; `retsin changes --report` writes each reconciliation to a dated file under
+accumulating; `retsin-update changes --report` writes each reconciliation to a dated file under
 `data/reports/` that is never overwritten, so the decision is read off files rather than off
 whatever the last person to run the command remembers.
 
@@ -1058,8 +1072,8 @@ for `--order`. `--kind` selects by ELI kind, which is the axis the sitemap itsel
 on:
 
 ```
-retsin fetch --kind retsinfo --limit 50    # sample one series
-retsin fetch --kind lta,ltb --kind ltc     # several at once: comma-separated or repeated
+retsin-update fetch --kind retsinfo --limit 50    # sample one series
+retsin-update fetch --kind lta,ltb --kind ltc     # several at once: comma-separated or repeated
 ```
 
 `--limit N` caps the run; `--batch N` sizes the pending window. The bar's total honours
@@ -1071,8 +1085,8 @@ The catalogue is stored in ELI URL order, which is chronological within a kind, 
 default walk meets 1873 before last month's law. `--order` chooses the other end:
 
 ```
-retsin fetch --order desc --limit 20     # the twenty most recent documents
-retsin fetch --order random --limit 200  # an unbiased sample of the catalogue
+retsin-update fetch --order desc --limit 20     # the twenty most recent documents
+retsin-update fetch --order random --limit 200  # an unbiased sample of the catalogue
 ```
 
 `desc` walks the same keyspace backwards and pages by cursor exactly like `asc`, so it costs
@@ -1098,9 +1112,9 @@ silent fallback to another one.
 without re-crawling anything:
 
 ```
-retsin fetch --state failed                 # retry every failure
-retsin fetch --state gone --kind retsinfo   # re-test 404s in one series
-retsin fetch --state fetched                # re-check rows that claim to be on disk
+retsin-update fetch --state failed                 # retry every failure
+retsin-update fetch --state gone --kind retsinfo   # re-test 404s in one series
+retsin-update fetch --state fetched                # re-check rows that claim to be on disk
 ```
 
 A default run takes `pending` plus `failed` rows still under the retry limit, so a
@@ -1130,10 +1144,10 @@ the XML — `data/xml/lta/1995/498.json` next to `498.xml`. See
 established this works and what the payloads contain.
 
 ```
-retsin fetch --bodies-scan                     # census only: 0 requests
-retsin fetch --bodies --kind lta --limit 50    # 50 requests, one series
-retsin fetch --bodies --kind lta,ltb           # the laws, ~10 h at 1.2 s
-retsin fetch --bodies --state empty            # re-test the table-only documents
+retsin-update fetch --bodies-scan                     # census only: 0 requests
+retsin-update fetch --bodies --kind lta --limit 50    # 50 requests, one series
+retsin-update fetch --bodies --kind lta,ltb           # the laws, ~10 h at 1.2 s
+retsin-update fetch --bodies --state empty            # re-test the table-only documents
 ```
 
 The scan and the fetch are separate on purpose: `--bodies-scan` prints what the archive holds
@@ -1153,7 +1167,7 @@ Three properties are what make a 10-hour run safe to interrupt:
 - nothing here can overwrite canonical bytes: writing a sidecar under the `.xml` extension is
   refused by `internal/archive` rather than honoured.
 
-`retsin status` then reports `canonical xml` and `body payloads` separately, plus the body
+`retsin-update status` then reports `canonical xml` and `body payloads` separately, plus the body
 queue per state, which is the census: `fetched` rows have text, `empty` rows are documents the
 site has no text for either.
 
@@ -1162,9 +1176,9 @@ site has no text for either.
 `--state` means the same thing for bodies as for XML, over the body queue's own states:
 
 ```
-retsin fetch --bodies --state failed   # transient faults: timeouts, challenge pages
-retsin fetch --bodies --state gone     # documents the site answered 404 for
-retsin fetch --bodies --state empty    # table documents, to check they still have no prose
+retsin-update fetch --bodies --state failed   # transient faults: timeouts, challenge pages
+retsin-update fetch --bodies --state gone     # documents the site answered 404 for
+retsin-update fetch --bodies --state empty    # table documents, to check they still have no prose
 ```
 
 Naming a state lifts the retry ceiling, exactly as in the XML path, and an unknown state name
@@ -1188,10 +1202,10 @@ opposite of `fetch --bodies`. Sampling is two phases, because phase one costs CP
 politeness:
 
 ```
-retsin sample --strata                      # what each stratum exists to measure
-retsin sample --plan --quota centreret=250 --quota random=400 --seed 20260917
-retsin sample --fetch --limit 30            # trial: does the site even serve HTML for these?
-retsin sample --fetch                       # the rest, resumable
+retsin-update sample --strata                      # what each stratum exists to measure
+retsin-update sample --plan --quota centreret=250 --quota random=400 --seed 20260917
+retsin-update sample --fetch --limit 30            # trial: does the site even serve HTML for these?
+retsin-update sample --fetch                       # the rest, resumable
 ```
 
 `--plan` reads the archive and writes a manifest; nothing is requested until it is reviewed. Strata are
@@ -1248,11 +1262,13 @@ Three properties are deliberate:
   that is all it opens — and a process that cannot write is easier to trust in front of
   a legal corpus.
 - **Text comes from the compiled artifact when one exists.** `retsin mcp` reads
-  `<data-dir>/artifact.bin` — `--artifact` and `--artifact-cache-mb` move it — so a lookup is a
+  the current artifact (`<data-dir>/artifact.current` names it; `--artifact` pins one file instead,
+  `--artifact-cache-mb` sizes its cache) — so a lookup is a
   seek and a decode rather than an XML parse, and the status line says which of the two a client
-  is being served from. An artifact written by another build is refused at startup with the side
-  that is stale named, because the file holds the model as JSON and would otherwise decode into
-  this server's types with another revision's meaning.
+  is being served from. An artifact holding another document model is refused at startup with the
+  side that is stale named, because the file holds the model as JSON and would otherwise decode into
+  this server's types with another revision's meaning; one holding this server's model is read
+  whichever build wrote it.
 - **Every answer is markdown, and names its text.** `- **Text source:** xml|html|none` with
   the payload path for `html`, plus the mirror's document count and index time; the statute
   itself is fenced so nothing in it is re-read as markup. `html` means the sentence was
@@ -1368,10 +1384,47 @@ the port can read the corpus.
 ### Full-text search: `retsin index build`, and what the measurement decided
 
 ```bash
-retsin index build                      # whole mirror → data/search.idx
+retsin serve                            # builds the current artifact's index itself when it needs one
+retsin index build                      # the same build by hand, beside the artifact
 retsin search "pligt fyringsanlæg" --limit 5
 retsin search "ubetinget råderet" --source xml --since 1990
 ```
+
+**The server keeps its own index; indexes are not distributed.** The index is cut from the
+compiled artifact, and only the artifact is published. Every artifact build carries a random
+128-bit stamp in its header, and an index records the stamp of the artifact it was cut from plus
+the version of the code that cut it (`search.CutVersion`, bumped by hand when unit-cutting
+changes). At startup `serve` and `mcp` use the index on disk only if it names the artifact being
+served and this build's cut; otherwise — missing, unreadable, an older file format, another
+artifact, older cutting code — they rebuild it in the background, save it, and switch search on
+when it is ready, about a minute later. Lookups and browsing answer meanwhile, the MCP `search`
+tool and the web page say search is on its way, and `make deploy` no longer builds the index.
+
+**Built from the artifact, in about 4 GB.** Whoever holds the artifact can build the index that
+goes with it, without the mirror. The artifact build stamps each document with
+the shelf, year and number the mirror filed it under, which is what the index needs to cite
+and filter without the mirror. Profiled with `--memprofile`/`--cpuprofile` (new flags on every
+command; the heap profile is taken at the run's peak heap) on 4 cores, as a GitHub runner has:
+
+| | peak RSS | time |
+|---|---|---|
+| mirror build, before | 27.0 GB | 4 m 47 s |
+| artifact build of the index, streaming | 7.0 GB | 2 m 14 s |
+| the same with the default 4 GiB `GOMEMLIMIT` | **4.0 GB** | **1 m 35 s** |
+| `retsin-update artifact build` (unchanged) | 2.6 GB | 3 m 27 s |
+
+The old peak had 10 GB live and the rest uncollected garbage. Of the live part, 5.4 GB was
+the text of every provision, held until the last one was counted, and 3.3 GB was a map from
+unit to count per term. The build now streams — a batch of 1,024 documents is read, cut and
+counted, and its text let go — and a term's postings are two appended arrays, sorted once.
+Each dictionary shard is freed as it is flattened, the file is written straight to disk
+instead of assembled in memory, and the index build sets a 4 GiB soft memory limit unless
+`GOMEMLIMIT` is given. The result differs from the mirror-built index only where the
+artifact's data is better: 191 titles the mirror's header scan left HTML-escaped ("P&amp;T"),
+32 with zero-width characters, the duplicate title units those caused in 86 documents, and
+6,833 documents numbered 0 that no longer get an ELI path like `eli/ft/1985/0`. The ranking
+judgments score identically. `retsin index build --sample N --out file` indexes a
+stratum-balanced sample of the artifact (up to N per kind and decade), for measurements.
 
 The index is derived data, like `data/meta/kv`: rebuilt from the files at zero HTTP cost,
 written to a temporary name and renamed so a reader never sees a half-built one. It is a
@@ -1404,9 +1457,9 @@ what the postings carried. Query latency over the 26 measured queries: p50 0.8 m
 29 ms, the p95 being the widest query in the fixture (a compound-head query whose grep truth
 set is 54,816 units in the sample); the brute-force baseline over the same text extrapolates
 to ~0.7 s per query, so the index is two to three orders of magnitude faster and ranks —
-grep is not hopeless, which is why the index stores no text and adds no dependency. The peak
-RSS is the in-memory term map: a two-pass sort-merge build is the known follow-up for
-smaller machines.
+grep is not hopeless, which is why the index stores no text and adds no dependency. (The
+26 GB peak above was the mirror build before streaming; see the table at the top of this
+section.)
 
 **The unit is a passage, not the document.** A hit in a 300-page act has to name
 "§ 267, stk. 3". Units are cut from the model rather than from the publisher's element
@@ -1484,20 +1537,92 @@ Three honesty properties are pinned by tests rather than asserted in prose:
   that look entirely plausible. `Load` now rejects a version it did not write and says to
   rebuild.
 
+#### Ranking, judged against questions with known answers
+
+The measurement above is recall against grep: it shows that matches are found, not that the
+right one comes first, and on the real mirror the right one did not. For "forældremyndighed",
+"barselsorlov" or "opsigelse af lejemål" the first page held bills, amending acts, Faroese
+commencement orders and one accounting standard printed as a single annex — everything that
+repeats a law's words except the law. `internal/search/judgments_test.go` now holds 100
+everyday questions, each with the document a lawyer would open: 57 tuned the ranking, 43 took
+no part and show whether it generalises. Score is mean reciprocal rank (MRR) and hit@10.
+Four expected answers were corrected after review, each because the hit the ranking gave was
+the right law and the pattern was not: bodeling (ægtefælleskifteloven), køreprøve (the order on
+driving tests), huslejenævn (lov om boligforhold since 2022) and førtidspension (the law still
+governing pensions granted under the old rules).
+
+| | no filters | love og bekendtgørelser, gældende |
+|---|---|---|
+| tuning, words only (before) | MRR 0.003, hit@10 2 % | MRR 0.17, hit@10 37 % |
+| tuning, now | MRR 0.86, hit@10 93 % | MRR 0.84, hit@10 91 % |
+| held-out, words only (before) | MRR 0.003, hit@10 2 % | MRR 0.14, hit@10 35 % |
+| held-out, now | MRR 0.69, hit@10 81 % | MRR 0.67, hit@10 77 % |
+
+What ranks now, beyond the words (`internal/search/ranking.go`, `DefaultRanking`):
+
+- **What the document is.** A law or lovbekendtgørelse ×3; a bill ×0.25; an act or order
+  whose title says it amends or repeals ×0.5; a Faroese, Greenlandic or entry-into-force
+  version ×0.5; guidance and decisions ×0.3; anything the register calls historic ×0.25.
+- **How much of it answers.** ×(1 + 0.4·ln n) for n matching provisions: a law that uses a word
+  in forty sections is about it.
+- **Its title.** Query words in the title, weighted by how rare each is among titles. A query
+  that names a document ("bekendtgørelse om jagttegn", "vejledning om forvaltningsloven",
+  "færdselsloven") weighs the title ×4 and, when it names a type, lifts the type priors.
+- **Length.** BM25 b = 0.2 instead of the index's 0; see the comment on `bm25B`.
+- **Longer forms.** A word that exists also reaches its inflections and compounds
+  ("ansættelsesbevis" → "ansættelsesbeviser"); before, only a word absent from the dictionary
+  was extended.
+- **Common words only add.** A word in more than 2 % of all provisions ("af", "og") adds to
+  provisions a rarer word found but finds none itself. "opsigelse af lejemål" went from 8.8 s
+  to 0.2 s, because "af" alone had been scoring 2.2 million provisions.
+- **Citations from the register's numbers.** "lov nr. 1399 af 2019" is answered above the ranked
+  provisions by the documents with that number (and year, and type when named), because a
+  document's own number is rarely in its text.
+
+Each provision is still its own hit, and the proximity grade still reorders the first 20. Run
+`RETSIN_RANK_JUDGE=1 go test ./internal/search -run TestRankingJudgments -v` to score the
+ranking (8 s, needs the current artifact's index); add `RETSIN_RANK_SWEEP=1 -run TestRankingSweep` to
+re-tune it after changing what ranking can see. What it still misses: compounds the corpus
+never spells out ("jagttegnsprøve", "momsfradrag"), and questions whose words belong to a
+different law than the one meant ("samvær med barnet" finds barnets lov before
+forældreansvarsloven).
+
 Guards: 34 mutations of the reader, encoder, ranking, filters and answer rendering, all
 caught with 0 holes (each by the test that names it), plus `internal/lexdania/scanroot_test.go`
 for the empty-mirror case that produced the first confusing "0 documents" measurement.
 
-### Compiled serving: `retsin artifact build`
+### Compiled serving: `retsin-update artifact build`
 
 ```bash
-retsin artifact build                   # whole mirror → data/artifact.bin
+retsin-update artifact build                   # whole mirror → data/artifacts/artifact-<time>-<stamp>.retsin, made current
 ```
+
+**Where artifacts live, and how a new one takes over.** Artifacts are named for their build time
+and stamp, their indexes for the stamp, and a one-line pointer names the current one:
+
+```
+data/artifacts/artifact-20261006T1520Z-8f3a2c1d.retsin        current, served
+data/artifacts/search-8f3a2c1d.idx                            its index, kept by the server
+data/artifacts/artifact-20261007T0310Z-c41e9b07.retsin.part   being built or downloaded
+data/artifact.current                                         artifact-20261006T1520Z-8f3a2c1d.retsin
+```
+
+A new artifact is written beside the current one under a `.part` name, becomes a `.retsin` only
+once it is complete and opens, and becomes current when the pointer is replaced (a rename). A
+running `serve` or `mcp` looks at the pointer every 30 seconds; when it names a new artifact, the
+server opens and checks it, loads or builds its index while still answering from the old pair,
+then swaps artifact and index together — no restart, and no moment without search. Two artifacts
+are kept, the current and the previous, with their indexes; older ones, and `.part` files a day
+old, are pruned. The extension is `.retsin`, not `.zst`: the file is a zstd stream, but its
+documents need the dictionary in its second frame, and a name that invited `zstd -d` would fail
+on every one. A data directory from before this layout (`data/artifact.bin`, `data/search.idx`)
+is moved into it the first time it is read. `internal/artifactdir` holds the layout.
 
 The artifact is the mirror's own document model (`internal/lexdoc`) as JSON, one
 independently decodable zstd frame per document, in the
 [Zstandard Seekable Format](https://github.com/facebook/zstd/blob/dev/contrib/seekable_format/zstd_seekable_compression_format.md)
-so the result is still a plain zstd stream that ordinary tools read. It exists because
+so the result is still a zstd stream that ordinary tools read (since format version 2, with
+the dictionary from its second frame: `zstd -d -D`). It exists because
 `lookup` re-parsed the publisher's XML on every request and `search` re-parsed it again for
 snippets.
 
@@ -1508,9 +1633,9 @@ writes a complete frame per call. What the writer stores is the model, so no pub
 element name or attribute map is in the file: the refusal reasons an answer gives come from
 the model's vocabulary, and the artifact cannot leak the schema by accident.
 
-Three properties are enforced by the reader rather than by discipline. An artifact from a
-different build is **refused**, with both commits named, the side that is out of date identified
-from the artifact's own timestamp, and the remedy in the message. The
+Three properties are enforced by the reader rather than by discipline. An artifact holding a
+different document model is **refused**, with both model versions named, the side that is out of
+date identified, and the remedy in the message. The
 document table and the frame table are **cross-checked against each other** on open, so a
 build that wrote one without the other fails instead of serving half a mirror. A document
 the artifact does not hold is an **error**, not an empty answer, because coverage is the one
@@ -1564,25 +1689,126 @@ speedup. The same binary with a cold page cache took 6 m 54.7 s, because then th
 sample, and the miss is the distribution rather than the average: 86,780 documents are under 8 KiB of
 JSON, 83,151 under 64 KiB, 21,061 under 1 MiB, 417 under 8 MiB, 20 above it.
 
+**Profiled and cut to a third.** With `--cpuprofile`/`--memprofile` on 4 cores, as a GitHub runner
+has, the build went from 3 m 27 s and 2.61 GB peak RSS to **1 m 04 s and about 1.5–1.8 GB**
+(27 s on 32 cores), and every step was checked with `tools/artifactcmp`: the compressed payload
+of all 191,589 documents is identical to the build before. In order of what each bought:
+
+- **XML by a shortcut** (`internal/lexdania/fastxml.go`). `encoding/xml`'s tokenizer was two fifths
+  of the CPU. The register serves a small subset of XML — a UTF-8 declaration, plain names, the
+  predefined entities, CRLF line ends — and a direct reader of that subset builds the same tree;
+  anything outside it (a namespace, a DOCTYPE, CDATA, an unknown entity, a character XML forbids, a
+  mismatched tag) hands the document to `encoding/xml`, errors included. Over the whole mirror all
+  191,590 files take the shortcut and every tree is identical to `encoding/xml`'s; a test holds it
+  to that on edge cases and on 30,000 random corruptions of a realistic document.
+- **The SGML quote rewrite** (`name=""P1""`) by hand instead of by an unanchored regexp over every
+  payload: a sixth of the CPU. A test holds the scanner to the regexp's exact answers and output.
+- **A leak in the archive scan.** Every entry's title, type and dates were slices of the file's
+  6 KB head, which kept all 191,589 heads alive: 650 MB of the 930 MB live at the peak.
+- **Smaller things:** `Squeeze` returns clean text as it is and copies words whole; exact
+  prefilters in front of four regexps that almost never match (zero-width characters, "Første
+  afsnit" lines, change-list openings, inline "Stk."); frames keep their JSON's length, not the
+  JSON.
+
+What is left is turning the tree into the model (22 %), JSON and zstd (22 %), the HTML payloads
+(12 %) and the collector, with no single hot spot.
+
+**A fixed dictionary, chosen on documents it had not seen (format version 2).** Most documents
+are small — 85 % under 64 KiB of JSON — and a small frame compresses badly on its own, because
+the compressor starts from nothing; every document repeats the same field names and legal
+phrasing, which a dictionary supplies. The candidates were trained on documents published up
+to 2024 and measured on the 6,035 published in 2025–2026, i.e. a dictionary frozen today used
+on future documents, at the "better" level (none at the old default level: 80.5 MB):
+
+| dictionary | held-out 2025–26 | whole corpus |
+|---|---|---|
+| none, "better" level | −7.6 % | −6.8 % |
+| Go library's builder, 112 KiB | −16.5 % | −18.2 % |
+| zstd fastcover, 110 KiB (cover: the same, 6× slower to train) | −18.4 % | −20.5 % |
+| zstd fastcover, 256 KiB / 512 KiB | −19.7 % / −20.3 % | −21.8 % / −22.6 % |
+| **zstd fastcover, 1 MiB** | **−21.4 %** | **−23.6 %** |
+
+The artifact went from 1,646.5 MB to **1,259.2 MB**; a build on 4 cores from 1 m 04 s to 1 m 30 s;
+reading and decoding one document from p50 17 µs / p99 319 µs to 19 µs / 445 µs. The file
+carries its dictionary (frame 1) and the header names it (ID, size, SHA-256), so any build reads
+any version-2 artifact; the writer embeds `internal/compiled/dictionary/retsin-1.zdict`.
+Grouping several documents per frame was measured too (−17 % at 16, −20 % at 64) and rejected: a
+lookup decodes the group (411 µs at 16), and one insertion moves every later document into a
+different group, so a daily upload would carry most of the file again.
+
+The dictionary is fixed on purpose. The published artifact is uploaded as a new version of one
+file, and the storage keeps content-defined chunks (about 64 KiB, cut where a rolling hash of the
+last 64 bytes has its top 16 bits zero), so an unchanged document — which compresses to the same
+bytes every build only under the same dictionary — costs nothing to re-upload, wherever it moved
+in the file. Retraining therefore re-uploads the whole artifact once and is a deliberate step:
+`go run ./tools/dictsamples -until <year> -out <dir>`, then
+`zstd --train-fastcover -T0 --maxdict=1048576 <dir>/* -o internal/compiled/dictionary/retsin-N.zdict`,
+measured on the documents after the cutoff before it is adopted.
+
 ### Serving from the artifact
 
-`retsin mcp` reads `data/artifact.bin` when it is there, and says in every answer's dataset
-line which of the two it is reading. What moved onto it: whole-document lookup, addressed
-lookup, the provenance and warnings an answer carries, and the unit text a search answer cuts
-its snippets from and grades proximity on — which was the second XML parse per query. What did
-not: an `as_of` answer still consolidates through the tree engine and parses the files it
-splices into, because M012T011 has not yet decided that the model's subsection numbering is
-the one to serve; and building an index reads XML, since the artifact is what a build produces.
+`retsin mcp` and `retsin serve` read the current artifact and nothing else, and refuse to start
+without one: the XML archive is what `retsin-update` builds from, not what a server reads. Every answer's dataset line says which
+artifact it came from. The artifact carries three things a server needs besides the documents:
 
-The version pin is the commit the artifact was compiled from plus whether that tree was
-uncommitted, both stamped by the Go toolchain and recorded in the header. Same commit with a
-different working tree counts as a different build — that is the state where a model type was
-edited and not committed. A mismatch names the side that is out of date, using the artifact's
-own timestamp against the binary's commit date, because the operator can rebuild either one and
-only the file says which needs it.
+- **each document's model** — lookup, addressed lookup, provenance and warnings, and the unit text
+  search snippets are cut from;
+- **each amending act's changes**, in its model (`lexdoc.Document.Changes`: the edits it makes and
+  when its parts take effect), so an `as_of` answer applies stored patches to a stored law and
+  parses nothing;
+- **a catalogue frame**: one record per document, in the order the build scanned them — the entry
+  (accession, kind, year, number, title), the metadata consolidation reads (status, signing date,
+  the register's references), whether it is a bill, and the changes its notes say it does not
+  print yet.
+
+#### Downloading the published artifact (placeholder)
+
+A server does not need `retsin-update` of its own. With no current artifact, `retsin serve` and
+`retsin mcp` download the published one from a Hugging Face dataset repository (`--hf-repo`)
+before starting, and while they run they look for a newer one every `--auto-update` (a week by
+default; `0` turns it off), install it and move to it the way they move to any new current
+artifact. `retsin artifact download` does the same by hand. The time of the last check is kept
+in `<data-dir>/artifact.checked`, so restarting the server does not reset the week.
+
+**Nothing is published yet**, so the default repository is empty and none of this does anything:
+a server without an artifact still refuses to start, now naming `--hf-repo` as the other remedy.
+The repository is expected to hold a manifest beside the artifact it names:
+
+```
+latest.json                                {"file": "artifact-….retsin", "size": …, "sha256": "…", "model": 1}
+artifact-20261007T0648Z-61f208f4.retsin
+```
+
+The manifest's document model is checked before downloading, so a binary never fetches an
+artifact it would refuse; the size and SHA-256 are checked after, and the file's own header
+before it becomes current (`internal/artifactfetch`). Publishing that layout is still to do.
+
+The search index is cut from the artifact too, by the server, when it is missing or was cut from
+another one (see [Full-text search](#full-text-search-retsin-index-build-and-what-the-measurement-decided)), so anyone holding the artifact can build
+it, and indexes are not distributed.
+
+Consolidation is one code path for both sources. `internal/chain` resolves a law's amendment chain
+from models and catalogue metadata only — it imports no XML — and is fed by one of two libraries:
+`lexdania.Archive`, which reads the XML files, and `internal/library`, which reads the artifact.
+`go run ./tools/libparity -artifact <file>` asks both the same questions — every law with a chain,
+as of three dates — and compares the answers; over the 2026-10-06 artifact all 81,912 answers were
+identical (450,406 changes applied, 33,587 refused, in both). A sample (`-n 1500`, 4,551 answers)
+takes about a minute.
+
+The version pin is the document model, not the build. The header records `compiled.ModelVersion`,
+the version of what a document compiles to, beside the commit that wrote it, and a server reads any
+artifact holding its own model version: a change to rendering, templates, the consolidation engine
+or the tools' wording deploys with a restart, and only a change to what is stored needs a rebuild.
+The version is not left to memory. `TestModelVersionCoversTheStoredModel` compiles a committed
+sample of 38 real documents (`internal/compiled/testdata/models`: laws, orders, amending acts,
+parliamentary and ombudsman documents, XML bodies and HTML-only payloads) through the path `retsin
+artifact build` takes, hashes the stored JSON, and fails when it changes under the same version,
+naming the constant to bump; `-update-model` then records the new fingerprint. A mismatch at startup
+names the side that is out of date. An artifact written before model versions were recorded is
+compared by its build stamp, as before: same commit and same dirty flag, or refused.
 
 Deploying asks that question rather than guessing it. `make deploy` compiles into `bin/`, runs
-`retsin artifact check` — which prints both stamps and returns the server's own refusal, so a
+`retsin artifact check` — which prints the model versions and stamps and returns the server's own refusal, so a
 deploy sees the failed start before the unit does — rebuilds the artifact only when this binary
 cannot serve the file on disk, and restarts the service. The unit runs the repository's own
 `bin/retsin`, the way the llama.cpp and ninfer user services run their build output, so there is
@@ -1591,11 +1817,12 @@ no second copy of the binary that can be older than the one just compiled, and t
 drift. The search index carries no stamp, so its freshness is a file-age rule in the Makefile and
 is called out as a guess there; the artifact's is not.
 
-The other way a compiled file goes wrong is data, not code: a crawl that finishes after the
-artifact was built leaves the mirror holding documents the artifact has never seen. An artifact
-older than the last recorded collection pass is refused at startup, and one that went stale while
-the server was running says so in every answer it is read for — the crawl finishes at night and
-the server does not restart, so the answer that is affected is where the fact belongs.
+How current the text is travels in the artifact too. The build copies the last collection pass
+(`data/sweep.stamp`: when it pulled, what it could not get) into the artifact's header, and the
+server quotes that in every answer's dataset line. So the date is the served text's own, not the
+newest crawl on some disk: a crawl that finishes after the build is not in the text, and the
+answer does not claim it. A new artifact installed while the server runs is picked up within 30
+seconds, with its pass.
 
 Measured in one run over the same 1,000 documents, both paths, same machine and file cache
 (`internal/mcpserver/testdata/serve-baseline-20260918.txt`):
@@ -1661,7 +1888,532 @@ runs, so an `<DokumentIndhold>` whose prose lives inside `<Paragraf>` and `<Stk>
 one — reads as empty, and the loader would then have overwritten the register's text with ours.
 The test that pins this is `TestCanonicalBodyIsNeverReplacedByASidecar`.
 
+### One consolidation engine
+
+Consolidation is one pipeline with one structure in the middle. Each front end turns the changes
+an amending act describes into `lexdoc.Edit`: what the change does, where (`lexdoc.Address`),
+which law it is aimed at (`lexdoc.Target`), and what it brings in the model's own shapes
+(provisions, stykker, items, chapters, annexes, text). The engine (`lexdoc.Content.AsOf`) reconciles
+from that structure alone and never sees markup.
+
+```
+register XML ─ <AendringsNummer> markup ─┐
+                                          ├─ lexdoc.Classify ─ lexdoc.Edit ─ Content.AsOf ─ law as of a date
+site HTML / plain XML ─ text in reading   │   (Danish change wording,
+   order ─ lexdoc.ReadChangeLists ────────┘    one reader for every format)
+```
+
+`Document.Changes()` is where the front ends meet. The XML markup is used where it exists, because
+it carries the new text as structure. Everywhere else the act's text goes over as paragraphs in
+reading order, and `lexdoc` reads the change lists out of the prose. Both paths classify through
+the same `lexdoc.Classify`, so a change means the same thing whichever format carried it. The HTML
+lines are re-read from the payload rather than from the display tree the HTML reader builds,
+because for the oldest markup that tree holds a sentence's inline pieces apart ("I ændres »stk. 3«
+til …", "2.", "§ 6, stk. 4,").
+
+There used to be a second engine that edited the parsed XML in place and served every `as_of`
+answer. It is gone. `go run ./tools/chainsweep` reproduces the census; over 799 laws since 2005
+with a chain, consolidated to 2026-10-03:
+
+| | applied | refused | time |
+|---|--:|--:|--:|
+| tree engine (was serving `as_of`) | 7,915 | 2,010 | ~95 s |
+| model engine at the start | 7,549 | 2,376 | ~6.5 s |
+| model engine, XML changes only | 8,880 | 1,045 | ~7 s |
+| model engine, XML and HTML changes | 9,633 | 1,237 | ~9 s |
+| after the refusal census | 12,566 | 367 | ~12 s |
+| earlier consolidations, successor check | 14,197 | 305 | ~20 s |
+| entry into force, replay within an act | 14,183 | 278 | ~21 s |
+| chains completed from the acts' own citations; annexes | 14,551 | 206 | ~30 s |
+| tables as tables; books; older acts the base prints | 14,429 | 181 | ~35 s |
+| what the consolidations' notes say; slips they read through | 14,485 | 146 | ~50 s |
+| acts amending acts; conditions placed as numbered | 14,467 | 132 | ~50 s |
+| sentences after the one named; repeals printed by the base | 14,404 | 128 | ~50 s |
+| placements checked against the next consolidation | 14,428 | 108 | ~55 s |
+| **every refusal traced: acts of one day, annex change lists, readers** | **14,480** | **47** | ~70 s |
+
+The XML-and-HTML row reads acts that contributed nothing before, which is why it both applies and
+refuses more. The silent class (next section) fell from 50.5 % of sampled amending acts to 8.7 %.
+The refusal-census row is the work of `chainsweep -solvable`, below; the row after the next reads
+acts that cite an earlier consolidation of the same law, and is checked against the law's next
+consolidation (also below). The "tables as tables" row applies fewer changes than the one before,
+and that is the point of it: changes of acts older than their base, or left to a minister who has
+not set them in force, were being made over text that already printed them or never would. The
+last row traced every remaining refusal to its cause (below).
+
+The external checks ran beside every step, because a falling refusal count can also mean
+confident wrong edits:
+
+- `tools/goldenpair` went from 0 copies of the amended state and 3 digits-only differences (the
+  recorded M024 debt) to 3 copies and 0. The ministry's later orders now match our
+  consolidated text word for word where they used to show stale numbering.
+- `tools/pairs` over 33 laws, mostly 1990–2005 chains read from HTML: 701 quoted assertions
+  satisfied, with 1 old-absent and 3 new-absent left. Each was traced. One is an act whose change 3
+  edits wording its own change 2 introduced, which the audit expects to find before the act. One
+  is the Markdown placeholder for a headingless group. The third was a real defect, fixed below.
+
+What making this work found, most of it in places where an edit applied silently and wrongly
+rather than being refused:
+
+- **An amending act cites the law as it stood before that act.** "I § 88, stk. 2, der bliver stk.
+  5, …" follows a change in the same act that inserted three stykker ahead of stk. 2. Stykke and
+  item numbers are pinned for the duration of each act (`Content.pinNumbering`).
+- **Sentences.** "§ 7, stk. 8, 3. pkt., affattes således" names one sentence, and the address
+  stopped at the stykke, so 254 such changes over the census replaced or repealed a whole stykke
+  with one sentence and reported success. Addresses read "pkt." now, and the engine replaces,
+  repeals or inserts the sentence (`sentence.go`). A sentence ends at a stop followed by a
+  capital letter or "§", except after the abbreviations legal prose uses mid-sentence, and a
+  unit's own label is not one. A table or schedule inside a stykke ("affattes skemaet for GRUNDFAG
+  således") is refused rather than replacing the stykke around it.
+- **"nr. 4 affattes således" replaced the whole stykke** with the one new condition. It replaces
+  the item now. "§ 6, stk. 1-3, affattes" replaces the range, rather than stk. 1 with stk. 2 and 3
+  left beside the new ones.
+- **HTML-bodied laws had no stk. 1.** The site prints a provision's opening text as a plain
+  paragraph and only later subsections as `Stk.`, so "Stk. 2." was numbered 1 and every citation
+  of such a provision was off by one: an amendment to stk. 2 edited the text printed as Stk. 3.
+  This also corrected ordinary lookups of those documents.
+- **Chapter letters were dropped.** `localId="7a"` and "Kapitel 3 e" both read as chapter 7 and 3.
+- **Placement.** "Før § 21 indsættes" inserted after § 21. Inserting stykker with no anchor filed
+  their text at the end and their numbers at the front. Prose aimed at a stykke or an item went to
+  the end of the whole provision. Subsections and conditions an amendment brought arrived without
+  their items. A provision's heading could never be rewritten, and a heading printed above a new
+  provision was dropped. A provision number printed inside stk. 1 went with stk. 1 when it was
+  replaced.
+- **Units that are not provisions** are placed: a new preamble or title, whole annexes (including
+  "Bilag 1 affattes som bilag 1 til denne bekendtgørelse"), new chapters and headings, chapter and
+  annex repeals. A heading governs what is printed after it until the next heading of its rank,
+  so an inserted chapter goes beside the chapter its anchor sits in and takes the text that now
+  prints under it. Whole-unit repeals require the change's own words to name the whole unit:
+  "Pkt. 3 i bilag 1-7 ophæves" resolves to bilag 1 and must not repeal it.
+- **Reading prose change lists** needs the edges right: a list ends at the act's own next
+  provision even when a quotation never closes, since otherwise "§ 2. Bekendtgørelsen træder i
+  kraft …" was inserted into the law being amended. A list of one is printed without a number.
+
+`Content.Validate` checks the structure every edit has to keep (spans inside their provision,
+stykker in order, items inside their stykke).
+
+**Performance.** 85 % of an `as_of` answer for BR18 was re-parsing its seventeen amending acts on
+every request. The archive keeps acts it has read, already turned into `lexdoc.Edit`, in a bounded
+LRU (`actCacheSize`, 4,096 acts). A repeated BR18 answer went from 172 ms and 136 MB allocated to
+24 ms and 32 MB, and what remains is parsing the base law once per request.
+
+**The refusal census.** `go run ./tools/chainsweep -solvable` sorts every refusal by the evidence
+for placing it, judged against the law exactly as the act met it (`Archive.LawBefore`: every
+earlier act, the ones taking effect earlier the same day included). *IN-ACT* applies alone but not
+after the act's earlier changes; *BUG* fails even alone although its passage is in the addressed
+unit; *MISMATCH* and *ELSEWHERE* find the passage in the provision or the law but not in the unit
+addressed; *NEAR* finds it once spacing, punctuation and case are ignored; *KNOCK-ON* depends on an
+earlier refused change; *UNPLACEABLE* finds it nowhere, and says whether the chain before the act
+has a gap. Working through the classes took the refusals from 636 to 367 and showed most of them
+were reading errors, several of them silent wrong edits:
+
+- **Ranges and lists.** "§§ 34-36 ophæves" also repealed §§ 36 a-36 m, which the same act then
+  amended; a range now ends at the bare number. "§§ 28-30 affattes således" replaced each of the
+  three with all three new provisions, leaving nine. "Bilag 4, 5 og 7 ophæves", "Kapitel 2 B og
+  2 C ophæves", a heading named by its words together with the provisions under it ("Overskriften
+  »…« efter § 12 b og §§ 13-17, 17 a, 17 b og 18 ophæves") and "nr. 2 og 3 ophæves, og i stedet
+  indsættes" are each carried out whole; before, only the first unit went.
+- **Address lists** read past the act's own renumbering ("stk. 3, der bliver stk. 2, stk. 5, nr. 1,
+  der bliver stk. 4, nr. 1, og stk. 6") instead of stopping at its first "bliver", and a bare
+  number with a letter after a list ("og 15 c, stk. 1") is the next §, not stk. 15. Sub-addresses
+  between operations read every level ("og i stk. 1, nr. 1, udgår"). Typos the register prints —
+  "stk.,1", "I 9 h, stk. 1", "§ § 121", "1, pkt.", zero-width joiners, quotation marks typed the
+  wrong way round — are repaired before reading.
+- **Same-day acts** are drafted against the text before any of them; a change refused in the
+  numbering the earlier acts left is retried in the day's numbering.
+- **Sentences** end after a list-closing "m.v." before a capital, and a sentence may open with the
+  sentences it cites ("1. og 2. pkt. finder …"). A sentence-addressed change edits the occurrence
+  inside the sentence in place, so a sentence running into a list no longer takes the list's items
+  with it, and a sentence named after a quotation belongs to a later operation of the change.
+- **Footnotes** are tagged on every segment of the note, not only the first. An endnote the site
+  sets at its reference was read as the provision's own text: its "4)" became a condition, its
+  sentences counted as the subsection's, and edits matched words inside it.
+- **Wording.** A passage quoted with a different initial ("Ansøger" mid-sentence), spacing ("46og
+  49"), dashes, or citation punctuation ("jf. stk 1 og 12") is placed when it occurs exactly once
+  in the unit, on word boundaries, with a note saying so. Lists of old wordings ("»a«, »b« og »c«
+  til: »X«", "til henholdsvis") replace each form. A change that edits words and then brings new
+  text ("…, og som 2. pkt. indsættes:") inserts the text too; it used to be dropped while the
+  change was reported applied.
+- **Structure the readers missed.** Headings the site prints at the end of the provision before the
+  one they head moved down to it. A subsection printed straight under a chapter ("§ 36." in a
+  `Stk` paragraph) is a provision. Subsection labels printed inside the text of the one before are
+  split out, and so is a run of conditions brought by one item's replacement. An amending act's
+  own provisions (its transitional § 13-18), printed by the site as a flat run of paragraphs, are
+  provisions a later act can amend. A chapter keeps the number the act found it under while the
+  act inserts a new chapter of the same number, and "Kapitelbetegnelsen »Kapitel 5 a« ændres til:
+  »Kapitel 5 b«" renumbers it.
+- **Printed labels follow the structure.** After a subsection is repealed or inserted, the labels
+  "Stk. 3." onwards are renumbered when they ran in order before; a provision the publisher printed
+  out of order keeps its labels. `tools/pairs` over the 40 most-refused laws: worst-state printed
+  numbering holes went to 0, quoted assertions satisfied from 3,097 to 3,151.
+- **Annex parts.** A table of contents that prints every label again no longer makes a label
+  ambiguous, "4.01.023" follows "4.01.022", "2.1" is not part "2", and a numbered section is found
+  by the heading the new text brings when its number also numbers list items inside other sections.
+  A section's extent runs to the next section's heading, and a section whose end cannot be found
+  is refused rather than replaced to the end of the annex.
+
+**Acts that cite an earlier consolidation.** A law's change list includes acts drafted against an
+earlier consolidation of it ("lov om aktiv socialpolitik, jf. lovbekendtgørelse nr. 806 af
+2015"), and acts older than the base text, listed because parts of them took effect later. Such an
+act is read (`Archive.sameLaw`) and *tentative* when it predates the base: tried on a copy first,
+it is applied only if most of its changes that quote wording find that wording and change the
+text; otherwise the base already carries it and its changes are listed in `View.InBase`. Wording
+that is only references ("nr. 5" to "nr. 4") is no evidence either way. Before this, the 2015
+"integrationsydelse" act was applied a second time to the 2019 consolidation that already
+printed it — "integrationsydelse eller integrationsydelse eller".
+
+**The next consolidation as ground truth.** `tools/goldenpair -pairs base=successor` also takes a
+law and its next lovbekendtgørelse: our consolidation of the base as of the day the successor was
+signed should print what the successor prints, where no change outside the chain intervened. Over
+267 such pairs from the census laws, the provisions matching our consolidated text (and not the
+base) went from 2,700 to 3,112 (3,225 after the round below, 3,376 after the last four, 3,396 after the placement round, 3,402 after the last), and those differing only in their
+digits from 154 to 68; the
+comparison reads a provision's own words (`Provision.OwnText`, without its notes) and ignores the
+typesetter's spacing around punctuation. Most of the remaining differences are changes no act in
+the chain makes — ministries renamed by royal resolution, editorial corrections — and acts whose
+parts take effect later than the act's date. What the comparison found:
+
+- **Conditions dropped from replaced subsections.** "§ 68, stk. 2, affattes således" brings
+  "Stk. 2. … udgør et månedligt beløb på" with its conditions 1)–4) as elements of their own;
+  they went to a side bucket and the law lost them. A new stk. 1 printed as loose lines ahead of
+  "Stk. 2." ("§ 37, stk. 1-3, affattes således") was lost the same way.
+- **Placement and numbering of conditions.** "indsættes som nr. 2" put the new condition after
+  the old nr. 2, and "som nr. 17" was read in the numbering the act found rather than the one its
+  own repeals leave. Printed condition and subsection labels now follow inserts and repeals when
+  they ran in order before, and a repealed stk. 1 leaves the next subsection unlabelled.
+- **"Stk. 3 og 4 ophæves, og i stedet indsættes"** replaced only stk. 3, leaving the old stk. 4
+  beside the new ones and every later number off by one.
+- **Annex parts named inside other parts.** "punkt 49, litra d, affattes", "pkt. 3.02.200 (5),
+  c), ophæves" and "nr. 2, litra c" replaced or repealed the whole of the outer part. Sections
+  lettered A, B or numbered in roman numerals, "litra e", "Kapitel 6", ranges ("nr. 1-5"), lists
+  ("nr. 3.5., 4.5., og 5.5."), insertions before a part, headings named by their words across
+  lines, and a repeal that quotes the part it repeals are read; a section's end is not taken from
+  a list that restarts at "1." inside it.
+- **Words and numbers.** A quoted number is whole ("stk. 1" is not in "stk. 12"), "0,8" is
+  "0,80", an act's full stop slipped inside its quotation does not end the law's sentence, a
+  deleted word takes its space with it, and a list of forms all given the wording after "til"
+  ("»dommeren« og »tinglysningsdommeren« til: »retten«, …") replaces every form — the first was
+  dropped. In an everywhere change the longer forms go first, or "virksomhed" inside
+  "virksomheds" became "Energinet.dks".
+- **Readers.** Zero-width characters are removed when text is read; an older payload's
+  superscript "2)" is a note reference, not a condition; "§ 46 a." marked up as subsections ahead
+  of a provision is a provision; a repealed stub ("§§ 86-87. (Ophævet)") gives way to provisions
+  that take its numbers; a heading inserted between provisions heads the one after it.
+
+**When a change takes effect.** The date a law's change list gives an amending act is the day it
+was signed; 1,680 of the 1,751 acts with changes in the census chains take effect later. Each
+act's own entry-into-force provisions are read (`lexdoc.ParseInForce`): "Loven træder i kraft den
+1. januar 2009, jf. dog stk. 2-4. Stk. 2. § 1, nr. 13-15, træder i kraft den 1. juli 2008",
+"dagen efter bekendtgørelsen i Lovtidende", and where the act leaves the day to a minister, the
+order that sets it ("Bekendtgørelse om ikrafttræden af …", found by the act's title and checked
+against its number and date). Every change records which of the act's own provisions it sits in
+(`Edit.Section`) and the day it takes effect (`Edit.InForce`). A view as of a day leaves out the
+changes not yet in force and lists them (`View.Pending`; a lookup says how many and from when),
+while the chain is still applied in the order the acts were signed, because each is drafted
+against the law as every act passed before it left it. The audits read the law that way
+(`LawAdoptedAsOf`), and so does the comparison with a law's next consolidation, which most often
+prints adopted changes not yet in force: as of 2026-10-02, 45 census changes signed already take
+effect later.
+
+**Later in the same round** the census found more that was applied wrongly or not at all:
+
+- **Silent repeals.** "§ 77 a, stk. 1, 2. pkt . , ophæves, og … udgår »…«" lost its repeal to the
+  space in "pkt .", "… udgår i stk. 2 »…«, og stk. 3 ophæves" lost "stk. 3 ophæves", and "§ 13,
+  stk. 4, der bliver stk. 3, udgår i 1. pkt. »tilsyn,«" repealed a whole subsection. "nr. 2, udgår
+  efter »stk. 3-6«: ».« og indsættes: », eller«" repealed nr. 2; it is one replacement.
+- **A change quotes the text before its act.** When an earlier change of the same act has already
+  rewritten its words, it is carried out on the provision as it stood before the act and the act's
+  earlier changes to it are made again (`Content.replayInAct`). "og to steder ændres »C«" after a
+  change aimed at 2. pkt. counts its places in the provision; "i 5. og 8. pkt." is two sentences.
+- **Near quotations.** A word may end differently on a shared stem ("medvirken", "medvirkning"),
+  "den" and "år" in a date are filler, and a quotation of eight words or more is placed with one
+  word added, dropped or exchanged — still only where it occurs once and its figures agree.
+- **Reading.** "§ § 121, 513, nr. 6, og 514" names § 514; a provision-less ikrafttrædelses-
+  bekendtgørelse is its own § 1; the site's `class="Stk0"` is a subsection, without which lov om
+  finansiel virksomhed 2006 had no § 1.
+
+**Completing the chain.** A law's change list, read from its own metadata, is not the whole
+story, and some of what it lists was read as another law's:
+
+- **Acts the metadata leaves out.** An act's preamble names the acts that amended the law before
+  it: "I lov nr. 687 af 8. juni 2017 …, som ændret ved § 8 i lov nr. 1585 af 27. december 2019".
+  Those are followed (`Target.Earlier`, `Archive.citedAct`); the 2019 act had moved the date in
+  § 7, stk. 3, from 2020 to 2022 before the listed 2021 act moved it to 2031.
+- **Acts read as another law's.** An act aimed at the law under its short name ("I
+  virksomhedsskatteloven, jf. …"), under a former title, through a consolidation the archive does
+  not hold, or with the day of publication in place of the day of signing ("bekendtgørelse nr. 1398
+  af 1. december 2013" for the order signed on the 12th) was dropped whole. Lov nr. 575 of 2005
+  alone brought 100 changes to almenboligloven, among them the §§ 185 c and d the next act amends.
+  The law's names now include its short name, a consolidation's preamble ("Herved bekendtgøres …,
+  jf. lovbekendtgørelse nr. 972 af 22. september 2006") links it to the one it continues, and
+  through those to the law's former titles, and a number is its document's within the year.
+  Conversely, many acts share the title "Lov om ændring af udlændingeloven", and none of them is an
+  earlier consolidation of another.
+- **Older acts taking effect late.** A tentative act is judged in two parts: the changes taking
+  effect after the consolidation was signed cannot be in it, and a new provision they bring that
+  the text lacks says so. The aktivlov consolidation of September 2014 notes that lov nr. 720 of
+  2014, § 2, nr. 41-43, "er ikke medtaget"; they are made now.
+- **Order.** A change applied ahead of its day (the chain runs in the order the acts were
+  signed) rewrites or repeals a unit before an act signed later but taking effect sooner. Such an
+  act's change, found in the unit as it stood, is settled as overtaken; one another act has made
+  word for word is settled as made. An act drafted against the numbering before another act
+  inserted a subsection (opkrævningsloven § 16 c, where the ministry's own consolidation placed it)
+  is read in that numbering when every one of its changes to the provision is made there and not
+  every one is made in the numbering as it stands. The third change otherwise went silently into
+  the wrong subsection.
+
+And in reading the text and its annexes:
+
+- **"sidste pkt."** — the last sentence — named the whole subsection, and "§ 2, stk. 1, sidste pkt.,
+  ophæves" repealed stk. 1. "næstsidste" and "de to sidste" are counted too.
+- **Letters æ, ø and å** never matched a § number: "§ 9 ø" was compared by its last byte.
+- **Change lists as text.** An amending act's numbered changes are items its later amendments
+  cite ("§ 3, nr. 1 og 2, ophæves"); a quoted "Stk. 4." in them is not its subsection, and "2.
+  pkt.:" on a line of its own is not change 2.
+- **New text with structure.** "Overskriften til kapitel 6 ophæves, og i stedet indsættes:" brings
+  the chapter's new provisions in place of repealed ones; "Afsnit X a" holds the chapters printed
+  under it; "Som bilag 1 til loven indsættes: »…«" is a new annex.
+- **Readers.** Title notes the site prints as Word endnotes (`MsoFootnoteText`); afsnit numbers
+  and headings (`Afsnitsnummer`); an annex printed without its `<div class="bilag">`, which had
+  gone into the last provision; "Stk. 2" printed without its full stop inside the markup of stk. 1;
+  paragraph ends the register marks (`Segment.Para`).
+- **Annexes.** Renumberings of annexes and of their parts are carried out, because an annex prints
+  its labels — at the end of the act, since the act's later changes cite the old ones; a renumbering
+  stated after the change it follows ("Pkt. 30-76 bliver herefter pkt. 29-75") is read from its
+  prose. Scopes are read by headings of their shape ("1. Skema for balance …" ends at "2. Skema",
+  "EGENKAPITAL" at the next heading in capitals), a heading's own commas and parentheses are not
+  separators, a lettered group runs to the next letter (not to "f. sp."), "efter litra a" and
+  "indsættes i afsnit II., nr. 2, et nyt litra g" place what they name — before, both went to the
+  end of the scope — "punkt 67, 2. pkt., ophæves" takes one sentence and not the point, a paragraph
+  is placed by its sentences when the annex prints one to a line, and "de to sidste afsnit" counts
+  marked paragraphs.
+
+**Tables, books and older acts.** The last round:
+
+- **Tables are kept as tables.** A table cell's segments carry their table, row and column
+  (`Segment.Table`, `Row`, `Col`, with column spans), and the pesticide orders' changes are made
+  cell by cell: "indsættes i gruppen »kernefrugter« efter »Chlorfenvinphos«: »Chlormequat« med
+  maksimalgrænseværdien »0,2m« for produktet »Pærer«", a row removed from a list of substance,
+  product and limit, and "I Bilag 2 indsættes maksimalgrænseværdier som angivet i bilag 1 til denne
+  bekendtgørelse", which merges the act's own tables into the law's: tables grouping products
+  under a group printed in capitals, a group split over two tables (told apart by "II" in the row
+  describing it, then by the products the headers share), groups of one column named in the row
+  above their header ("TE | HUMLE | KARTOFLER"), columns standing over the data without a group
+  (the animal tables 4A and 4B), and lists, where a product the act prints with others ("Æbler,
+  pærer") takes the place of the rows printing them apiece. Checked against the next order of
+  2007. A change to an annex's table of contents removes and adds its rows, and a
+  part named by its label is found in the text, not in the table of contents that repeats it.
+- **Books and afsnit.** The retsplejelov's chapter titles (`TekstoverskriftB`) and its books and
+  afsnit printed as loose lines ("Fjerde bog. …") are read, and "bog" is addressed.
+- **Annexes.** An annex printed after an act's flat run of provisions closes it; lettered annexes
+  ("Bilag 4A") are numbered as printed; the SOLAS annexes' "regel 19-1 affattes overskriften"
+  rewrites the heading, not the rule, and "regel 30, stk. 3" one paragraph.
+- **Older acts the base already prints.** A rate is wording: lov nr. 1564 of 2010 changed the coal
+  duty's rates, quoted as bare figures such as »47,9« to »52,2«, which counted as references and so
+  as no evidence, and the act was made again on the consolidation of 2015 — its 2010 § 7 b and four
+  annexes printed over the 2015 ones. A new chapter's provisions are evidence too, where nothing
+  quoted is.
+- **Parts a minister sets in force.** "Økonomi- og erhvervsministeren fastsætter tidspunktet for
+  ikrafttræden af § 2" leaves the part waiting for the order that sets it (`lexdoc.Deferred`).
+  Søloven's Rotterdam rules of lov nr. 618 of 2013 and sømandsloven's § 2 of lov nr. 1231 of 2003
+  "stadig ikke er sat i kraft", and both were being made. The archive holds too few of the orders
+  to tell when a part was set in force, so the consolidations decide (below), and a whole act left
+  to a minister goes with its date: digital tinglysning took effect by an order the archive lacks.
+- **Amending acts amended.** "I § 1, nr. 14, ophæves § 11 i, stk. 2" repeals a subsection of a
+  provision a change brings; a quotation opened twice and closed once no longer makes the rest of
+  the change list quoted text.
+
+**What the consolidations' notes say.** A consolidation notes the changes it does not print: "De
+ændringer, der følger af § 1, nr. 2, 8-13 …, i lov nr. 721 af 27. april 2021, er ikke indarbejdet
+…, da tidspunktet for ikrafttræden fastsættes af udlændinge- og integrationsministeren". The notes
+are read (`Archive.waiting`, `notedActs`):
+
+- **Parts a minister sets in force** wait while the newest consolidation of the law after the act
+  still lists them, and go with the act otherwise, set in force by an order the archive may not
+  hold (aktivloven's consolidation of 2021 prints the parts of lov nr. 1555 of 2019). A part listed
+  as waiting for ten years and then no longer named goes in only where the consolidation that
+  stops naming it prints its wording: lov nr. 947 of 1999's changes to spiritusafgiftsloven § 20 a
+  were still waiting in 2020, and § 20 a was rewritten since. A note saying a change "ophæves"
+  before it took effect (lov nr. 1000 of 2015, § 1, nr. 25) keeps it out. The act's own in-force
+  provisions are read further: "ikrafttrædelsen", and changes named by the provision of the law
+  they bring ("§ 52 a, stk. 1, i lov om vandforsyning m.v. som affattet ved denne lovs § 3, nr. 1").
+- **An act older than the base** is split by the base's own note: the changes it lists are the
+  late part, the rest the base prints. Færdselsloven's consolidation of 2009 lists § 2, nr. 2,
+  4-6, … of lov nr. 1338 of 2008; the act was applied whole, its other changes twice.
+- **A change the base notes but its change list omits** is read from the note, that change only:
+  "Det følger af § 3, nr. 1, i lov nr. 1518 af 27. december 2009, at § 52 a, stk. 1, affattes
+  således" in vandforsyningsloven, which the acts of 2011 then amend. A note's quotation of the
+  coming wording no longer counts as the text printing it.
+
+**Slips the consolidations read through**, each checked against the next consolidation: a
+quoted word with another ending (»genanvendelse« for "genanvende"), a word printed once in the
+condition next to the one named, »§ 15« for the "15" of "§§ 14 og 15", "2. og 3 pkt." without its
+stop, sentence lists "2., 3. og 4. pkt." — and in lists of addresses the second sentence of "2. og
+3. pkt." was dropped, which the successor check alone counted 25 times — "indsættes efter nr. 10
+som nyt nummer" (which went to the end of the subsection, also where the conditions are printed
+inline), "Overalt i kapitel 25", and a change to an amending act's quoted provision ("I § 1, nr.
+14, ophæves § 11 i, stk. 2"). A quotation opened twice and closed once no longer makes the rest of
+an act's change list quoted text, and an act repealing "3. og 4 pkt." no longer replaces the whole
+subsection. An exponent typed as a digit (»(2,0 x hestens stangmål) 2 « for "…)²") and a quotation
+ending in a citation the text does not print (»lov om skifte af fællesbo m.v. § 69«) are placed.
+When two acts change the same words and the second was signed before the first took effect, the
+second's wording stands: aktivloven § 74 a, stk. 5, »§ 70 a« to »§ 117« from 2020 by lov nr. 551
+of May 2019, and to »§ 118« by lov nr. 1555 of December 2019, which the consolidation of 2021
+prints.
+
+**Every refusal against the next consolidation.** Each refusal was checked against the law's next
+consolidation after the act: does it print the change's new wording in the provision named? Where
+it did, the cause was found, and the largest was a reader error. Aktivloven's consolidation of
+September 2019 prints repealed ranges as "§§ " with "34 a-34 b." on the line after, under a
+`localId` that is a sequence number: the stub was § 56 and "§§ 16-21" § 35, and changes to §§ 35
+and 56 went to the stubs. A repealed range now takes its number from the text. An act drafted
+against an earlier consolidation numbers subsections as that one printed them (lov nr. 551 of May
+2019 calls § 69, stk. 2, what the September text prints as stk. 3); a change refused at its number
+is retried at the subsection the cited consolidation's words are found in now
+(`Edit.CitedStykker`), and only there. A change made at several places by an act and again by a
+later one is settled place by place.
+
+**Acts amending acts, and conditions placed as numbered.** The next round, by the same triage:
+
+- **An act repealing another act's changes.** "I lov nr. 743 af 8. juni 2018 … § 1 og § 2
+  ophæves" repeals the changes lov nr. 743 was to make to aktivloven § 11 from the day they were
+  to take effect; made anyway beside the act that replaced them, § 11 printed two subsections
+  twice. A repeal of an amending act's own provisions or numbered changes by an act in the same
+  chain now leaves out what it repeals before it took effect (`withoutRepealed`), each such repeal
+  checked to name an amending act in the chain and whole changes of it.
+- **Conditions placed as numbered.** "indsættes før nr. 1 som nyt nummer", "efter nr. 1, der
+  bliver nr. 2, som nye numre", "som nr. 6 og 7" and "som nr. 4" in a provision of one subsection
+  were placed approximately — at the end — and a condition the text already printed was printed
+  twice; fødevareloven § 60 and børne- og ungeydelsesloven § 2 now read as their next
+  consolidations. The changes placed only approximately over the census went from 111 to 77.
+- **Words a later act rewrote first.** An act signed while an earlier act's wording change still
+  waited drafted its change against the words before it (aktivloven § 37, stk. 3, rewritten by lov
+  nr. 1555 of December 2019 over the changes of lov nr. 174 and nr. 551 of 2019 that took effect in
+  2020); it is made on the provision as it stood, and the earlier changes it leaves room for are
+  made again. A citation of ten words or more may lack two words together (»… digitalt selv at
+  booke …« for "digitalt via Jobnet selv"), a word in four may be spelt otherwise (»særskilt« for
+  "særligt"), a compound the text suspends is read ("studenter- og hf-kurser"), and a minister
+  renamed everywhere in a text naming the new one already is no refusal.
+
+**Sentences, and what the base printed too soon.** Then:
+
+- **"indsættes efter 1. pkt. som nye punktummer"** names the sentence the new ones follow, and it
+  was read as the number they take: the new sentences went in front of the one they follow. About
+  ninety insertions over the census were one sentence early, silently; the successor check rose
+  from 3,338 to 3,376 when they moved.
+- **Repeals of several provisions of an act at once** ("§ 2, nr. 8, 15, 42 …, § 6, nr. 9, og § 16,
+  nr. 1, ophæves") are read, and a subsection the base prints although the change bringing it was
+  repealed before it took effect is removed just before the repealing act: aktivloven § 13 a, stk.
+  3, of lov nr. 1000 of 2015, printed by the consolidations of 2016-2019 with a note that it waited
+  for the minister, repealed by lov nr. 551 of 2019, and gone from the consolidation of 2021.
+- A later act's change to words an earlier act's insertion had moved — aktivloven § 75, stk. 1,
+  "nr. 6", which lov nr. 551's new nr. 3 made nr. 7 from 2020 — is made in the numbering it was
+  drafted in, and the insertion after it.
+
+**Placements checked against the next consolidation.** Every change the engine placed only
+approximately was compared with the law's next consolidation, and the differences traced:
+
+- **Units the act names exactly.** "før stk. 1 som nyt stykke" and "som stk. 1" went to the end of
+  the provision; "som litra d" in nr. 2, and "efter litra i som nyt litra", went to the end of the
+  subsection, the old letters keeping theirs; "som nr. 69-71", "efter nr. 4 som nyt nummer: Nr. 5
+  og 6 bliver herefter …", "som nyt nummer" with the number printed in the new line, a quoted
+  sentence or condition (»10) …«), "Efter § 24 indsættes:" printing "§ 24 a. …" as lines, and a
+  heading on its own after a provision are all placed where they say. Subsections a register
+  delivers for "indsættes som litra j" are read as the letter they are.
+- **New text printing several conditions on one line**, "1) … 2) … 3) …", is read as the
+  conditions it prints, numbered and lettered, after each act: aktivloven § 72, stk. 1, brought
+  whole by lov nr. 551 of 2019, had no nr. 2 for the change of 2020 to find. A run "og nr. 1-4
+  affattes således" in its own clause replaces the whole run.
+- **Changes made twice.** An insertion an earlier act had made in the same words, an ending
+  already changed (»plan.« til »plan, eller«), a condition already printed with a comma more, a
+  subsection a tentative act brings that the base prints in a later act's words, and a sentence
+  for conditions an earlier act's rewrite removed (aktivloven § 74 e, stk. 3, of lov nr. 525 of
+  2020 under lov nr. 701 of 2018) are made once, or count as overtaken.
+- **Readings.** »nr. 5 og 6« for "nr. 5 eller 6", one short word other in a citation of eight
+  words or more, »§ 36, stk. 5« for § 36's own "stk. 5", "art." closing a sentence before a capital,
+  a minister named by an earlier title where the unit names only one, words closing a subsection
+  cited as its last condition's, "litra a og b", "§ 25, A", "som 4 pkt.", "efter: »…«", "efter §
+  »3, …«", "efter m.v.:" and "»efter bemyndigelse«".
+- **Annexes.** A numbered scheme's new entry goes in as the row after the number named (bilag 4
+  and 5 of the order on insurers' accounts), a sentence after the one named in a numbered point,
+  and a letter before or after the one named.
+- **Dates and readers.** An entry-into-force order naming an act by another title is found by the
+  act it cites (digital tinglysning, lov nr. 539 of 2006, in force 8 September 2009, not 2006),
+  and "loven med undtagelse af § 12" is the act's date. A provision an act prints loose under a
+  group heading, without a provision element, is read as the provision (§ 9 b of lov nr. 528 of
+  2008).
+
+The changes placed only approximately went from 62 to 5, each now traced: three annex passages
+whose paragraph the mirror's lines do not mark, a compound change ending in an insertion after the
+last condition, and a note in an annex. The successor check rose to 3,396.
+
+**Every refusal traced.** Each of the 108 was followed to its cause and either fixed or kept with
+the cause recorded. Many of the fixes were changes applied wrongly elsewhere, found on the way:
+
+- **Acts of one day.** Acts taking effect the same day are drafted on top of one another in an
+  order no number gives. Lov nr. 893 and nr. 915 of 21 June 2022 both amend udlændingeloven from
+  1 July; nr. 893's "§ 9, stk. 40, ophæves" counts the subsections after nr. 915 has repealed
+  stk. 21, and made first it repealed the fee subsection instead of the Danskbonus one. The acts
+  of a day are now tried in each order (up to three; for more, each moved after the others) and
+  made in the one whose changes refuse fewest, and a change refused that day is offered again once
+  all of them are made.
+- **When a part waits for a minister.** "fastsætter ikrafttrædelsestidspunktet for ændringerne i
+  vægtafgiftslovens § 4 som affattet ved denne lovs § 2, nr. 1" was not read, and the day charge of
+  lov nr. 1337 of 2008 was made from 2009; it is made from the consolidation that first prints it,
+  2013, when no consolidation names it as waiting.
+- **Readers.** A second quotation of new text, its closing mark never printed, lost a new § 3 its
+  stk. 2-4; "2.1 Apotekere …" in new text was read as change 2; register XML holding changes 4-7
+  inside a table of change 3 is read from the act's text instead; new subsections handed over as
+  one ("Stk. 3. … Stk. 4. … Stk. 5. …") are three, and a repeal two years later had taken the wrong
+  ones; "3) …" brought "som nr. 3" is a condition, not a subsection pushing stk. 10 to 11; "§ 3 a"
+  and "." printed apart open a provision, not words of § 3; an act's own endnotes are not part of
+  its last annex.
+- **Annexes.** A table's numbered entries are siblings: "udgår nr. 11" took 11.1-11.3 with it, and
+  "affattes nr. 2" 2.1 and 2.2. A text change naming "bilag 1, pkt. 5 og 6" is made in those
+  points — eight model texts print the same words, and the first, pkt. 1's, was changed. Changes
+  that go on in the annex the change before named, "som nyt punkt 2.6" (with the points after it
+  renumbered), "tilføjes litra g)", "andet afsnit", a field's section ("FELT08 …"), a quoted run of
+  table rows printed a column at a time, and an act's annex that is itself a list of changes in
+  words ("Bilagene 2, 4, 9 og 10 ændres som anført i bilag 2 til denne") are read. Nothing is put at
+  an annex's end for want of reading where.
+- **What the act's words decide.** A stale quotation of a preamble or a title note after an earlier
+  act changed the words; a citation of a subsection the cited provision does not have, or printed
+  once in the law in the next subsection; a number's digits transposed (»§ 135« for § 153, which
+  the act's next change quotes right); a long passage replaced whole, printed with a few words
+  otherwise; "nr. 6 affattes" of a list ending at nr. 5; "§ 7, stk. 15, affattes" where § 6, stk. 15,
+  opens with the new text's words; subsections counted after the act's own insertion; new
+  subsections whose labels place them ("før stk. 3 som nye stykker: Stk. 2. …", confirmed by the
+  next order's stk. 5); the heading before a chapter's first provision as the chapter's title; a
+  condition added at the end keeping the act's number.
+
+Still refused, by the same census (47), every one traced:
+
+- **Repealed or rewritten before the change took effect** (9): a sentence, § 17 a and aktivloven
+  § 22 repealed earlier; provisions rewritten by an earlier act, so that the change would bring
+  back what that act removed (lov nr. 651 of 2024 dropped nr. 14 from § 7, stk. 7, of lov nr. 2071
+  of 2020; lov nr. 1669 of 2024 quotes the 2020 wording); a base printing a later act's wording;
+  an insertion of 25 June 2021 into words an order rewrote whole from 1 July.
+- **Never in force** (1): lov nr. 528 of 2008, § 8, nr. 3, which no order set in force.
+- **Not in the text the act met** (11): wording no consolidation printed, a § 5 a the law never had,
+  a title note and a subsection label the source lacks, words printed only by an act's own
+  transitional provisions, and annex points the act numbers otherwise or corrects for a print
+  error the mirror does not share.
+- **The act misprints itself** (7): "§ 9 ø, stk. 2, nr. 1" for stk. 1 (the next act corrects
+  it), its own new words printed as "»73, …", a citation in another subsection than the one named,
+  a regulation named under the wrong SOLAS part, two changes contradicting the text.
+- **Two acts adding the same title note** (1).
+- **Tables and images** (18): a product × substance matrix, a frequency table and a fraction set by
+  an act's own annex, two formulas published as images, SOLAS tables 19.1-19.3, a table cell, and
+  the seabed-extraction order's annex sections 2.1-3.77, which the mirror prints without their
+  numbers.
+
 ### Half the archive's amendment chains consolidate as no-ops, and the receipt said nothing
+
+*Since resolved for most of the class: the prose change lists these acts carry are now read (see
+[One consolidation engine](#one-consolidation-engine)), and the same census counts 17 of 196
+acts, 8.7 %, that still yield nothing, among them acts that genuinely change nothing (a
+replacing order filed in its predecessor's chain). What follows is the measurement that started
+it.*
 
 `go run ./tools/pairs -silent 400` walks 400 sampled laws, resolves each chain, opens every
 amending act in it and asks what that act contributed. On this mirror: **187 amending acts in the
@@ -1743,7 +2495,7 @@ internal self-tests (`bodycensus_internal_test.go`) rather than only the corpus 
 ### What the paired ground truth measured (2,108 documents)
 
 `RETSIN_PAIRED_TRUTH=../../data/paired-truth go test -timeout 2h -run TestPairedTruthParity ./internal/lexdania/ -v`,
-sampled by `retsin sample` (seed 20260917) from the 89,667 documents that have both a canonical
+sampled by `retsin-update sample` (seed 20260917) from the 89,667 documents that have both a canonical
 body and a payload. Reference is the publisher's own XML, never a third-party API. Full report:
 `internal/lexdania/testdata/paired-truth-20260917.txt`.
 
@@ -1855,11 +2607,12 @@ found (below).
 
 ### What each check is allowed to prove
 
-Four corpus tests compare two of our own implementations, and agreement between two
-implementations is a migration guard, not ground truth: engines built on the same wrong
-assumption agree perfectly. One pair of them did -- both numbered `stykker` by position, so
-both printed item numbers that cannot exist in 21 BR18 provisions while
-`TestModelConsolidationParityOnCorpus` stayed green. The tests say so in their own headers now.
+Corpus tests that compare two of our own implementations are migration guards, not ground
+truth: engines built on the same wrong assumption agree perfectly. Two did -- both numbered
+`stykker` by position, so both printed item numbers that cannot exist in 21 BR18 provisions while
+the tree-against-model parity test stayed green. That test went with the tree engine; the
+reader-level comparisons that remain (model against the flat section list, HTML against XML)
+say in their own headers what they can and cannot prove.
 
 The checks that read the register rather than ourselves:
 
@@ -1867,7 +2620,7 @@ The checks that read the register rather than ourselves:
 |---|---|---|
 | `tools/pairs` | each amendment's own quoted `»old« → »new«`, tested against the states that act names | BR18: 410 assertions, 0 violations; `B19950050705` has 0 auditable edits, which turned out to be a whole class and has its own section above |
 | `data/paired-truth` | the register's own second format for the same document, JSON API beside XML, thousands of documents | gated behind `RETSIN_PAIRED_TRUTH` |
-| `tools/goldenpair` | a later document the ministry actually promulgated after amending the earlier one | 16,398 candidate supersession pairs, 71 re-enacting at least half the base; over the top 10, 371 successor provisions: 263 copied unchanged, 0 copies of the amended state we failed to produce, 3 identical except in their digits, 34 real changes |
+| `tools/goldenpair` | a later document the ministry actually promulgated after amending the earlier one | 16,398 candidate supersession pairs, 71 re-enacting at least half the base; over the top 10, 371 successor provisions: 263 copied unchanged, 3 copies of the amended state and 0 we failed to produce, 0 identical except in their digits (3 before the work in [One consolidation engine](#one-consolidation-engine)), 34 real changes |
 | `TestGoldenPairAgainstPromulgatedSuccessors` | the same, pinned to eight named pairs so it runs in 1.5 s on every commit | 271 successor provisions: 238 copies, 0 missed copies of the amended state, 3 digits-only (0 of them ours), 30 real changes |
 
 The digits-only bucket was first read as our numbering defect's signature, and that reading was
@@ -1925,7 +2678,7 @@ XML class above, seen from the outside.
 - **A nightly inventory pass erased the whole catalogue's state, and an amended law
   could never be re-downloaded.** Two separate defects in the same path, both found by
   actually running yesterday→today rather than by reading the code. `PutInventoryBatch`
-  wrote the sitemap's rows blind, so every `retsin update` reset all ~200k rows to
+  wrote the sitemap's rows blind, so every `retsin-update update` reset all ~200k rows to
   pending with no hash, no accession and no attempt counter — the fetch then re-closed
   200k files locally and re-requested the ~10k resources already recorded as `gone`. And
   the fetch loop closes any row whose file is on disk without asking the site, which
@@ -2106,7 +2859,7 @@ XML class above, seen from the outside.
   the changes; it is the same failure mode as the appendix and roman-numeral bugs, a regex
   that is quietly dead.
 - **Zero-width marks in the archive made quoted amendments unappliable.** Of the 158
-  subsections where our text disagreed with retsininformation-api.dk's and theirs was not
+  subsections where our text disagreed with retsinformation-api.dk's and theirs was not
   simply truncated, 152 were characters we keep in the comparison form and they drop:
   U+00AD soft hyphen in 7,564 documents, U+200D in 3,448, U+200C in 2,953, U+200B in 145,
   U+FEFF in 30 — counted by a hunt over the whole archive, and visible in real text as

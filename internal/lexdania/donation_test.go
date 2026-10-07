@@ -1,6 +1,7 @@
 package lexdania
 
 import (
+	"encoding/xml"
 	"strings"
 	"testing"
 	"time"
@@ -125,11 +126,10 @@ func TestReplacementKeepsTheRunItArrivesWith(t *testing.T) {
 		t.Fatalf("the replacement was refused: %v", v.Unresolved[0].Reason)
 	}
 
-	got := v.Section("§ 2")
-	if got == nil {
+	text, ok := v.ProvisionText("§ 2")
+	if !ok {
 		t.Fatal("§ 2 is gone after being replaced")
 	}
-	text := got.Display()
 	for _, want := range []string{
 		"Selskabet skal oplyse om sine adresser:",     // the paragraph's own subsection
 		"den hvor bestyrelsen har mødested",           // a numbered item that arrived loose
@@ -145,12 +145,12 @@ func TestReplacementKeepsTheRunItArrivesWith(t *testing.T) {
 
 	// The reason the loss matters: the subsection has to stay citable, or the next act's change
 	// to "§ 2, stk. 2" is refused against text that is quietly shorter than the law.
-	stk2 := v.Section("§ 2, stk. 2")
-	if stk2 == nil {
+	stk2, ok := v.ProvisionText("§ 2, stk. 2")
+	if !ok {
 		t.Fatalf("§ 2, stk. 2 does not resolve after the replacement; § 2 now reads:\n%s", text)
 	}
-	if !strings.Contains(stk2.Display(), "Erhvervsstyrelsen") {
-		t.Errorf("§ 2, stk. 2 resolves to the wrong text: %q", stk2.Display())
+	if !strings.Contains(stk2, "Erhvervsstyrelsen") {
+		t.Errorf("§ 2, stk. 2 resolves to the wrong text: %q", stk2)
 	}
 }
 
@@ -179,18 +179,50 @@ func TestReplacementPlacesFurtherParagraphsAfter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	extra := v.Section("§ 2 a")
-	if extra == nil {
+	extra, ok := v.ProvisionText("§ 2 a")
+	if !ok {
 		secs := []string{}
-		for _, s := range v.Sections() {
-			secs = append(secs, s.Number)
+		for _, ref := range v.Content.Provisions() {
+			secs = append(secs, ref.Provision.Address())
 		}
-		t.Fatalf("the second paragraph of the run was not placed; sections are %v", secs)
+		t.Fatalf("the second paragraph of the run was not placed; provisions are %v", secs)
 	}
-	if !strings.Contains(extra.Display(), "er offentlig") {
-		t.Errorf("§ 2 a placed with the wrong text: %q", extra.Display())
+	if !strings.Contains(extra, "er offentlig") {
+		t.Errorf("§ 2 a placed with the wrong text: %q", extra)
 	}
-	if s := v.Section("§ 2, stk. 2"); s == nil || !strings.Contains(s.Display(), "Erhvervsstyrelsen") {
+	if s, ok := v.ProvisionText("§ 2, stk. 2"); !ok || !strings.Contains(s, "Erhvervsstyrelsen") {
 		t.Error("placing the second paragraph disturbed § 2, stk. 2")
+	}
+}
+
+// TestAProvisionPrintedLooseUnderAGroupHeadingIsKept is lov nr. 528 of 2008's "Efter § 9 a
+// indsættes: Kompensation for CO2-afgift § 9 b. …": the rubric, then § 9 b as loose lines and
+// subsections with no provision element around them. The group arrived empty.
+func TestAProvisionPrintedLooseUnderAGroupHeadingIsKept(t *testing.T) {
+	src := `<AendringNyTekst overskriftAfType="ParagrafGruppe">
+  <Rubrica><Linea><Char>Kompensation for CO</Char><Char formaChar="Subscript">2</Char><Char>-afgift</Char></Linea></Rubrica>
+  <Exitus><Linea><Char formaChar="Bold">§ 9 b.</Char></Linea><Linea><Char>Elproducenter har ret til en kompensation.</Char></Linea></Exitus>
+  <Stk><Explicatus>Stk. 2.</Explicatus><Exitus><Linea><Char>Kompensationen udbetales månedligt.</Char></Linea></Exitus></Stk>
+</AendringNyTekst>`
+	dec := xml.NewDecoder(strings.NewReader(src))
+	var root *Node
+	for root == nil {
+		tok, err := dec.Token()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if se, ok := tok.(xml.StartElement); ok {
+			if root, err = decodeElement(dec, se); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	d := donation(root.Elems)
+	if len(d.parts) != 1 || len(d.parts[0].Order) != 1 || d.parts[0].Order[0].Provision == nil {
+		t.Fatalf("parts %+v, prose %q, stykker %d", d.parts, d.prose, len(d.stykker))
+	}
+	p := d.parts[0].Order[0].Provision
+	if p.Number != "9" || p.Litra != "b" || len(p.Stykker) != 2 {
+		t.Errorf("§ %s%s with %d subsections: %q", p.Number, p.Litra, len(p.Stykker), p.Text())
 	}
 }

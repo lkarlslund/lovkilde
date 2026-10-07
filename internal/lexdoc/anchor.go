@@ -84,6 +84,12 @@ func (a *anchorSet) walk(nodes []Node, level int, prefix string) {
 		case n.Part != nil:
 			id := a.name(partKindWord(n.Part), n.Part.Number, path)
 			a.parts[n.Part] = id
+			if strings.TrimSpace(n.Part.Printed) == "" && strings.TrimSpace(n.Part.Heading) == "" {
+				// A division the document neither numbers nor heads is no line of its contents:
+				// "provisionsgruppe" above every run of provisions told a reader nothing.
+				a.walk(n.Part.Order, level, path)
+				continue
+			}
 			a.contents = append(a.contents, Contents{ID: id, Label: partLabel(n.Part), Level: level})
 			a.walk(n.Part.Order, level+1, path)
 		case n.Provision != nil:
@@ -190,6 +196,8 @@ func partKindWord(p *Part) string {
 		return "kapitel"
 	case PartGroup:
 		return "gruppe"
+	case PartBook:
+		return "bog"
 	default:
 		return "afsnit"
 	}
@@ -200,6 +208,9 @@ func partKindWord(p *Part) string {
 func partLabel(p *Part) string {
 	if l := strings.TrimSpace(p.Printed); l != "" {
 		return l
+	}
+	if h := strings.TrimSpace(p.Heading); h != "" {
+		return h
 	}
 	kind := "afsnit"
 	switch p.Kind {

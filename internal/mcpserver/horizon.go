@@ -3,8 +3,6 @@ package mcpserver
 import (
 	"fmt"
 	"time"
-
-	"github.com/lkarlslund/retsinformation/internal/crawl"
 )
 
 // horizon is what this server knows about how current its own data is, and the only
@@ -19,8 +17,9 @@ import (
 type horizon struct {
 	Now time.Time
 
-	// PulledAt is when the last collection pass recorded itself. Known is false when
-	// no pass has published a record, which is said out loud rather than filled in.
+	// PulledAt is when the collection pass the served artifact was built after recorded
+	// itself. Known is false when the artifact records none, which is said out loud rather
+	// than filled in.
 	PulledAt time.Time
 	Known    bool
 
@@ -45,43 +44,33 @@ type horizon struct {
 	// HasIndex is false when no index is attached, in which case the index half of the
 	// dataset line says so rather than reporting zero coverage.
 	HasIndex bool
-
-	// err explains an unknown horizon when unknown is not simply "no pass has run", so
-	// an operator can tell "never collected" from "the record will not parse".
-	err error
 }
 
-// horizon reads the current facts. The published record is re-read on every call, which
-// costs one small read and lets a server that has been running since last night report
-// tonight's collection instead of the one it started against.
+// horizon reads the current facts. The collection pass is the served artifact's: the artifact is
+// what answers are made from, so how current it is is how current they are, and a server that
+// swaps in a new artifact reports the new one's pass from that moment.
 func (s *Server) horizon() horizon {
 	h := horizon{
 		Now:        s.clock(),
-		MirrorDocs: s.archive.Len(),
-		HasIndex:   s.index != nil,
+		MirrorDocs: s.lib().Len(),
+		HasIndex:   s.idx() != nil,
 	}
-	// The collection record is read first and unconditionally: it belongs to the
-	// mirror, not to the index, so a server serving lookup without a full-text index
-	// still has to say how current its data is.
-	rec, found, err := crawl.ReadSweepRecord(s.SweepStampPath)
-	if err != nil {
-		// A record that will not parse is worse than none: it would be quoted as though
-		// it were a date.
-		h.err = err
-	} else {
-		h.Known = found
-		h.PulledAt = rec.PulledAt
-		h.Owed, h.Stalled, h.Digest = rec.Owed, rec.Stalled, rec.Digest
-		h.IssuesKnown = rec.IssuesKnown
+	if c := s.cache(); c != nil {
+		if pass := c.Artifact().Header.Collection; pass != nil {
+			h.Known = true
+			h.PulledAt = pass.PulledAt
+			h.Owed, h.Stalled, h.Digest = pass.Owed, pass.Stalled, pass.Digest
+			h.IssuesKnown = pass.IssuesKnown
+		}
 	}
-	if s.index == nil {
+	if s.idx() == nil {
 		// A lookup-only server has no index half to report. Reporting zero coverage
 		// would read as "the corpus is empty".
 		return h
 	}
-	h.IndexDocs = len(s.index.Docs)
-	if s.index.Built > 0 {
-		h.IndexBuilt = time.Unix(s.index.Built, 0)
+	h.IndexDocs = len(s.idx().Docs)
+	if s.idx().Built > 0 {
+		h.IndexBuilt = time.Unix(s.idx().Built, 0)
 	}
 	return h
 }
@@ -89,10 +78,7 @@ func (s *Server) horizon() horizon {
 // pull is the half of the line the collection pass is responsible for.
 func (h horizon) pull() string {
 	if !h.Known {
-		if h.err != nil {
-			return fmt.Sprintf("last update pull unreadable (%v)", h.err)
-		}
-		return "never pulled (no collection pass has run here)"
+		return "never pulled (the artifact records no collection pass)"
 	}
 	when := "last pulled " + h.PulledAt.Format("2006-01-02 15:04:05Z07:00")
 	switch {
@@ -106,6 +92,53 @@ func (h horizon) pull() string {
 		return fmt.Sprintf("%s, %d unresolved (issues %s: %d owed, %d past the retry ceiling)",
 			when, h.Owed+h.Stalled, h.Digest, h.Owed, h.Stalled)
 	}
+}
+
+// pullDA is pull in Danish, for the reading pages.
+func (h horizon) pullDA() string {
+	if !h.Known {
+		return "aldrig hentet (den kompilerede fil angiver ingen indsamling)"
+	}
+	when := "senest hentet " + h.PulledAt.Format("2006-01-02 15:04:05Z07:00")
+	switch {
+	case !h.IssuesKnown:
+		return when + ", fejl ikke registreret af den kørsel"
+	case h.Owed+h.Stalled == 0:
+		return when + ", intet uafklaret"
+	case h.Digest == "":
+		return fmt.Sprintf("%s, %d uafklarede", when, h.Owed+h.Stalled)
+	default:
+		return fmt.Sprintf("%s, %d uafklarede (sag %s: %d afventer, %d over grænsen for nye forsøg)",
+			when, h.Owed+h.Stalled, h.Digest, h.Owed, h.Stalled)
+	}
+}
+
+// LineIn is the dataset line in the language a page or answer is written in.
+func (h horizon) LineIn(danish bool) string {
+	if !danish {
+		return h.Line()
+	}
+	if !h.HasIndex {
+		return fmt.Sprintf("spurgt %s · %s · %d dokumenter, intet søgeindeks tilknyttet",
+			h.Now.Format("2006-01-02"), h.pullDA(), h.MirrorDocs)
+	}
+	built := "udateret"
+	if !h.IndexBuilt.IsZero() {
+		built = h.IndexBuilt.Format("2006-01-02 15:04:05Z07:00")
+	}
+	return fmt.Sprintf("spurgt %s · %s · søgeindeks bygget %s, dækker %d af spejlets %d dokumenter",
+		h.Now.Format("2006-01-02"), h.pullDA(), built, h.IndexDocs, h.MirrorDocs)
+}
+
+// indexStampDA is indexStamp in Danish.
+func (h horizon) indexStampDA() string {
+	if !h.HasIndex {
+		return "intet søgeindeks"
+	}
+	if h.IndexBuilt.IsZero() {
+		return "udateret"
+	}
+	return h.IndexBuilt.Format("2006-01-02 15:04Z07:00")
 }
 
 // Line is the one factual line every answer carries.

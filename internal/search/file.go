@@ -1,7 +1,7 @@
 package search
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -18,7 +18,25 @@ import (
 // query is one binary search plus a linear run, which is what makes Danish compound
 // matching free at query time.
 func (idx *Index) Save(path string) error {
-	var buf bytes.Buffer
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	// Written through a buffer straight to the file: assembling the whole file in memory
+	// first cost its size again, plus the copies a growing buffer leaves behind.
+	w := bufio.NewWriterSize(f, 1<<20)
+	if err := idx.write(w); err != nil {
+		f.Close()
+		return err
+	}
+	if err := w.Flush(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+func (idx *Index) write(buf *bufio.Writer) error {
 	buf.WriteString(magic)
 	buf.WriteByte(formatVersion) // bump whenever the header or table layout changes
 	var hdr [8]byte
@@ -30,43 +48,44 @@ func (idx *Index) Save(path string) error {
 	buf.Write(hdr[:])
 	binary.LittleEndian.PutUint64(hdr[:], uint64(idx.Built))
 	buf.Write(hdr[:])
-	putUvarint(&buf, uint64(len(idx.Docs)))
-	putUvarint(&buf, uint64(len(idx.Units)))
-	putUvarint(&buf, uint64(len(idx.Terms)))
+	putString(buf, idx.Source)
+	putUvarint(buf, uint64(len(idx.Docs)))
+	putUvarint(buf, uint64(len(idx.Units)))
+	putUvarint(buf, uint64(len(idx.Terms)))
 
 	for _, d := range idx.Docs {
-		putString(&buf, d.Accession)
-		putString(&buf, d.ELI)
-		putString(&buf, d.Kind)
-		putString(&buf, d.Title)
-		putString(&buf, d.Source)
-		putString(&buf, d.Path)
-		putString(&buf, d.Status)
-		putString(&buf, d.TypeCode)
-		putUvarint(&buf, uint64(d.Year))
-		putUvarint(&buf, uint64(d.Number))
+		putString(buf, d.Accession)
+		putString(buf, d.ELI)
+		putString(buf, d.Kind)
+		putString(buf, d.Title)
+		putString(buf, d.Source)
+		putString(buf, d.Path)
+		putString(buf, d.Status)
+		putString(buf, d.TypeCode)
+		putUvarint(buf, uint64(d.Year))
+		putUvarint(buf, uint64(d.Number))
 	}
 
 	for _, u := range idx.Units {
-		putUvarint(&buf, uint64(u.Doc))
-		putUvarint(&buf, uint64(u.Len))
-		putString(&buf, u.Addr)
+		putUvarint(buf, uint64(u.Doc))
+		putUvarint(buf, uint64(u.Len))
+		putString(buf, u.Addr)
 	}
 
 	var prev uint32
 	for i, term := range idx.Terms {
-		putString(&buf, term)
+		putString(buf, term)
 		buf.WriteByte(idx.Stream[i])
 		postings := idx.Postings[i]
-		putUvarint(&buf, uint64(len(postings)))
+		putUvarint(buf, uint64(len(postings)))
 		prev = 0
 		for _, p := range postings {
-			putUvarint(&buf, uint64(p.Unit-prev))
+			putUvarint(buf, uint64(p.Unit-prev))
 			buf.WriteByte(p.Tf)
 			prev = p.Unit
 		}
 	}
-	return os.WriteFile(path, buf.Bytes(), 0o644)
+	return nil
 }
 
 // Load reads an index file back.
@@ -95,6 +114,7 @@ func Load(path string) (*Index, error) {
 	idx.avgUnitLen = math.Float64frombits(r.uint64())
 	idx.B = math.Float64frombits(r.uint64())
 	idx.Built = int64(r.uint64())
+	idx.Source = r.str()
 	// B is read as written, including a literal zero: zero is this corpus's measured
 	// default, so "no length normalisation" is a real setting rather than an absent one.
 	// Substituting a default here would silently re-rank an index built with the
@@ -151,13 +171,13 @@ func Load(path string) (*Index, error) {
 func (idx *Index) HasFolded() bool   { return idx.Flags&1 != 0 }
 func (idx *Index) HasReversed() bool { return idx.Flags&2 != 0 }
 
-func putUvarint(buf *bytes.Buffer, v uint64) {
+func putUvarint(buf *bufio.Writer, v uint64) {
 	var scratch [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(scratch[:], v)
 	buf.Write(scratch[:n])
 }
 
-func putString(buf *bytes.Buffer, s string) {
+func putString(buf *bufio.Writer, s string) {
 	putUvarint(buf, uint64(len(s)))
 	buf.WriteString(s)
 }

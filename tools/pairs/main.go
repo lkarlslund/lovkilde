@@ -49,6 +49,7 @@ import (
 	"unicode"
 
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
 func main() {
@@ -92,7 +93,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	final := lexdania.LawAsOf(law, asOf, a.Open)
+	final := lexdania.LawAdoptedAsOf(law, asOf, a.Open)
 	var chain []lexdania.Version
 	for _, v := range final.Chain {
 		if v.Found && !v.Effective.After(asOf) {
@@ -125,7 +126,7 @@ func main() {
 				defer wg.Done()
 				sem <- struct{}{}
 				defer func() { <-sem }()
-				views[i] = lexdania.LawAsOf(law, d, a.Open)
+				views[i] = lexdania.LawAdoptedAsOf(law, d, a.Open)
 			}(i, d)
 		}
 		wg.Wait()
@@ -213,7 +214,9 @@ func corpusSilent(budget int) {
 				continue
 			}
 			t.acts++
-			if len(doc.Amendments()) != 0 {
+			// The changes consolidation reads, from whichever format the act arrived in: its XML
+			// change markup, or the change list in its HTML payload's prose.
+			if len(doc.Changes()) != 0 {
 				continue
 			}
 			t.silent++
@@ -297,8 +300,8 @@ func auditPairs(chain []lexdania.Version, stateBefore func(time.Time) *lexdania.
 		if cur == nil {
 			continue
 		}
-		prevText := norm(stateBefore(v.Effective).Text())
-		curText := norm(cur.Text())
+		prevText := norm(stateBefore(v.Effective).Content.PlainText())
+		curText := norm(cur.Content.PlainText())
 		for _, ap := range cur.Applied {
 			e := ap.Edit
 			if e.Source != v.Accession {
@@ -335,6 +338,9 @@ func auditPairs(chain []lexdania.Version, stateBefore func(time.Time) *lexdania.
 			}
 			if strings.Contains(prevText, norm(u.Edit.Old)) {
 				refusedWithOld++
+				if os.Getenv("PAIRS_VERBOSE") != "" {
+					fmt.Printf("    refused-old %s %s: %s | %s\n", v.Accession, u.Edit.Address.String(), u.Reason, clip(oneLineOf(u.Edit.Prose)))
+				}
 			}
 		}
 	}
@@ -409,35 +415,23 @@ func holes(v *lexdania.View) []hole {
 	if v == nil {
 		return nil
 	}
-	byParent := map[*lexdania.Section][]int{}
-	order := []*lexdania.Section{}
-	seen := map[*lexdania.Section]bool{}
-	for _, s := range v.Sections() {
-		if s.Kind != "nr" || s.Parent == nil {
-			continue
-		}
-		n, ok := printedNumber(s.RawNumber)
-		if !ok {
-			continue
-		}
-		if !seen[s.Parent] {
-			seen[s.Parent] = true
-			order = append(order, s.Parent)
-		}
-		byParent[s.Parent] = append(byParent[s.Parent], n)
-	}
 	var out []hole
-	for _, p := range order {
-		nums := byParent[p]
-		sort.Ints(nums)
-		want := 1
-		for _, n := range nums {
-			if n == want {
-				want++
-				continue
+	for _, ref := range v.Content.Provisions() {
+		p := ref.Provision
+		for _, st := range p.Stykker {
+			var nums []int
+			for _, it := range st.Items {
+				if n, ok := printedNumber(it.Label); ok && it.Litra == "" {
+					nums = append(nums, n)
+				}
 			}
-			out = append(out, hole{fmt.Sprintf("%s items print %v (expected 1..%d)", addressOf(p), nums, len(nums))})
-			break
+			sort.Ints(nums)
+			for k, n := range nums {
+				if n != k+1 {
+					out = append(out, hole{fmt.Sprintf("%s items print %v (expected 1..%d)", addressOf(p), nums, len(nums))})
+					break
+				}
+			}
 		}
 	}
 	return out
@@ -476,28 +470,19 @@ func stykkehols(v *lexdania.View) []hole {
 	if v == nil {
 		return nil
 	}
-	byPar := map[*lexdania.Section][]string{}
-	order := []*lexdania.Section{}
-	seen := map[*lexdania.Section]bool{}
-	for _, s := range v.Sections() {
-		if s.Kind != "stk" || s.Parent == nil || s.Parent.Kind != "paragraf" {
-			continue
-		}
-		if !seen[s.Parent] {
-			seen[s.Parent] = true
-			order = append(order, s.Parent)
-		}
-		byPar[s.Parent] = append(byPar[s.Parent], s.RawNumber)
-	}
 	var out []hole
-	for _, p := range order {
-		labels := byPar[p]
-		if len(labels) < 2 {
+	for _, ref := range v.Content.Provisions() {
+		p := ref.Provision
+		if len(p.Stykker) < 2 {
 			continue
 		}
 		var print []int
-		for i, l := range labels {
-			n, ok := printedNumber(l)
+		for i, st := range p.Stykker {
+			label := st.Label
+			if label == "" && st.Span.From < len(p.Segments) && strings.HasPrefix(strings.ToLower(strings.TrimSpace(p.Segments[st.Span.From].Text)), "stk") {
+				label = p.Segments[st.Span.From].Text // the HTML reader leaves the label in the text
+			}
+			n, ok := printedNumber(label)
 			if !ok {
 				n = i + 1 // unlabelled: the convention is that it is the next in line
 			}
@@ -513,20 +498,14 @@ func stykkehols(v *lexdania.View) []hole {
 	return out
 }
 
-// addressOf walks up to the provision and renders its printed number. An empty number is
-// reported as such rather than as an empty string: a row that names nothing looks like a
-// formatting bug in this tool, when it is really a provision the archive prints no number on.
-func addressOf(s *lexdania.Section) string {
-	for s != nil {
-		if s.Kind == "paragraf" {
-			if n := strings.TrimSpace(s.RawNumber); n != "" {
-				return n
-			}
-			return "(provision with no printed number)"
-		}
-		s = s.Parent
+// addressOf renders a provision's printed number. An empty number is reported as such rather
+// than as an empty string: a row that names nothing looks like a formatting bug in this tool, when
+// it is really a provision the archive prints no number on.
+func addressOf(p *lexdoc.Provision) string {
+	if n := strings.TrimSpace(p.Printed); n != "" {
+		return n
 	}
-	return "(outside a provision)"
+	return "(provision with no printed number)"
 }
 
 // norm folds the typography that differs between an amendment's quotation and the archive's
@@ -549,6 +528,8 @@ func norm(s string) string {
 	}
 	return b.String()
 }
+
+func oneLineOf(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 func clip(s string) string {
 	r := []rune(s)

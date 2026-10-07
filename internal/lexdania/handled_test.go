@@ -174,7 +174,7 @@ func TestNewAddressUnitsApply(t *testing.T) {
 	if len(v.Applied) != 8 {
 		t.Fatalf("applied = %d, want 8: %+v", len(v.Applied), v.Applied)
 	}
-	text := v.Doc.Root.PlainText()
+	text := v.Content.PlainText()
 	wants := []string{
 		"i Østersøen", // document title rewritten
 		"2024/1770",   // preamble rewritten
@@ -200,8 +200,8 @@ func TestNewAddressUnitsApply(t *testing.T) {
 			t.Errorf("%q should be gone", gone)
 		}
 	}
-	if err := v.Doc.Root.checkInvariant(""); err != nil {
-		t.Errorf("derived tree broken: %v", err)
+	if err := v.Content.Validate(); err != nil {
+		t.Errorf("derived content broken: %v", err)
 	}
 }
 
@@ -246,50 +246,47 @@ func TestRomanAfsnitNumbering(t *testing.T) {
 // missing and the instruction has to say so.
 func TestRenumberIsCheckedNotExecuted(t *testing.T) {
 	law := mustParse(t, fixtureHandledLaw)
-	v := &View{Doc: law.Clone()}
-	v.Doc.Meta = law.Meta
+	c := law.Model().Content
+	apply := func(e Edit) lexdoc.Outcome { return c.Apply(modelEdits([]Edit{e})[0]) }
 
-	satisfied := Edit{
+	satisfied := apply(Edit{
 		Number:     "6.",
 		Kind:       EditRenumber,
 		Definition: "Stk. 2 bliver herefter stk. 3.",
 		Preceding:  ParseAddress("§ 1, stk. 2"),
+	})
+	if !satisfied.Applied {
+		t.Fatalf("a renumbering the insertion already achieved should be recorded: %s", satisfied.Reason)
 	}
-	v.applyOne(satisfied)
-	if len(v.Applied) != 1 {
-		t.Fatalf("a renumbering the insertion already achieved should be recorded: %+v", v.Unresolved)
-	}
-	if !strings.Contains(v.Applied[0].Note, "already has 3 stk") {
-		t.Errorf("the note should say what it checked, got %q", v.Applied[0].Note)
+	if !strings.Contains(satisfied.Note, "already has 3 stk") {
+		t.Errorf("the note should say what it checked, got %q", satisfied.Note)
 	}
 	// The printed number is still there: this is the assertion that catches an
 	// implementation that splices "stk. 2" to "stk. 3" in the text instead of checking
 	// that the numbering already says so.
-	if text := v.Doc.Root.PlainText(); !strings.Contains(text, "Stk. 2.") || !strings.Contains(text, "Fiskeri fra skib er tilladt") {
+	if text := c.PlainText(); !strings.Contains(text, "Stk. 2.") || !strings.Contains(text, "Fiskeri fra skib er tilladt") {
 		t.Errorf("a renumbering must not change any words:\n%s", text)
 	}
 
-	impossible := Edit{
+	impossible := apply(Edit{
 		Number:     "7.",
 		Kind:       EditRenumber,
 		Definition: "Stk. 2 bliver herefter stk. 5.",
 		Preceding:  ParseAddress("§ 1"),
+	})
+	if impossible.Applied {
+		t.Fatal("renumbering to a number the text cannot hold must be refused")
 	}
-	v.applyOne(impossible)
-	if len(v.Unresolved) != 1 {
-		t.Fatalf("renumbering to a number the text cannot hold must be refused: %+v", v.Applied)
-	}
-	if !strings.Contains(v.Unresolved[0].Reason, "has 3 stk") {
-		t.Errorf("the refusal should report the count it found, got %q", v.Unresolved[0].Reason)
+	if !strings.Contains(impossible.Reason, "has 3 stk") {
+		t.Errorf("the refusal should report the count it found, got %q", impossible.Reason)
 	}
 
-	orphan := Edit{Number: "8.", Kind: EditRenumber, Definition: "Stk. 2 bliver herefter stk. 3."}
-	v.applyOne(orphan)
-	if len(v.Unresolved) != 2 {
+	orphan := apply(Edit{Number: "8.", Kind: EditRenumber, Definition: "Stk. 2 bliver herefter stk. 3."})
+	if orphan.Applied {
 		t.Fatal("a renumbering with no § of its own and none before it cannot be placed")
 	}
-	if !strings.Contains(v.Unresolved[1].Reason, "no earlier change") {
-		t.Errorf("the refusal should name the missing context, got %q", v.Unresolved[1].Reason)
+	if !strings.Contains(orphan.Reason, "no earlier change") {
+		t.Errorf("the refusal should name the missing context, got %q", orphan.Reason)
 	}
 }
 
@@ -357,7 +354,7 @@ func TestTitleEditsSeePastASCIIWordBoundaries(t *testing.T) {
 	if len(v.Unresolved) != 0 {
 		t.Fatalf("the title word edit should apply: %+v", v.Unresolved)
 	}
-	text := v.Doc.Root.PlainText()
+	text := v.Content.PlainText()
 	if !strings.Contains(text, "fiskeri og havbrug i Østersøen") {
 		t.Errorf("title should carry both edits in order, got:\n%s", text)
 	}
@@ -369,8 +366,10 @@ func TestTitleEditsSeePastASCIIWordBoundaries(t *testing.T) {
 // changes ask for a footnote *to* the title, and rewriting the title instead would be a
 // confident corruption of the wrong text while the footnote model does not exist.
 func TestFootnoteToTitleIsNotTheTitle(t *testing.T) {
-	if a := ParseAddress("Fodnoten til lovens titel affattes således:"); a.DocTitle {
-		t.Error("a footnote attached to the title is not the title")
+	// The footnote is addressed as such: it hangs from the title, and Footnote is what keeps an
+	// edit to it from landing on the title's own words.
+	if a := ParseAddress("Fodnoten til lovens titel affattes således:"); !a.Footnote {
+		t.Error("a footnote attached to the title is not addressed as the footnote")
 	}
 	if a := ParseAddress("Lovens titel affattes således:"); !a.DocTitle {
 		t.Error("the document title should be addressable")

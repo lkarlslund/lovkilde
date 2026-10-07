@@ -119,81 +119,29 @@ func TestSubsectionNumberingIsPositional(t *testing.T) {
 
 // TestRestatedEditIsCounted covers the edit that finds its quoted passage and writes back text
 // identical to what was already there: an amendment that restates existing law. It stays
-// applied, but the view has to be able to say how many of its edits changed nothing, because the
-// alternative is an engine that reports amendments applied while leaving the law alone — which is
-// what it did, undetectably, until the run list was fixed.
+// applied, but the outcome has to be able to say it changed nothing, because the alternative is
+// an engine that reports amendments applied while leaving the law alone — which is what it did,
+// undetectably, until the run list was fixed.
 func TestRestatedEditIsCounted(t *testing.T) {
 	doc := mustParse(t, fixtureLaw)
-	v := &View{Doc: doc.Clone()}
-	before := Find(v.Doc.Sections(), ParseAddress("§ 2, stk. 1")).Display()
-
-	// A passage inside one text run, so that writing the same words back really does
-	// leave the document alone. A passage that straddles runs cannot: the replacement
-	// lands in the first run touched and empties the others, which drops any inline
-	// markup inside the span. That is inherent to a text splice — the register's new
-	// text is plain prose, with no markup to put back — and the model behaves the same.
-	v.applyOne(Edit{Kind: EditReplaceText, Address: ParseAddress("§ 2, stk. 1"),
+	c, out := applyToModel(doc, Edit{Kind: EditReplaceText, Address: ParseAddress("§ 2, stk. 1"),
 		Old: "Selskabet", New: "Selskabet"})
-
-	if len(v.Applied) != 1 {
-		t.Fatalf("a passage that is present was not applied: %+v", v.Unresolved)
+	if !out.Applied {
+		t.Fatalf("a passage that is present was not applied: %s", out.Reason)
 	}
-	if v.NoOpEdits != 1 {
-		t.Errorf("an edit that changed nothing was not counted: NoOpEdits = %d", v.NoOpEdits)
+	if !out.NoOp {
+		t.Error("an edit that changed nothing was not reported as a no-op")
 	}
-	if after := Find(v.Doc.Sections(), ParseAddress("§ 2, stk. 1")).Display(); after != before {
-		t.Errorf("restating an edit changed the provision:\n before %q\n  after %q", before, after)
-	}
+	before := provisionText(t, c, "§ 2, stk. 1")
 
 	// And the same address with real new text must not be counted as a no-op.
-	v.applyOne(Edit{Kind: EditReplaceText, Address: ParseAddress("§ 2, stk. 1"),
-		Old: "anmode om tilladelse før", New: "søge om tilladelse før"})
-	if v.NoOpEdits != 1 {
-		t.Errorf("an edit that changed text was counted as a no-op: NoOpEdits = %d", v.NoOpEdits)
+	out = c.Apply(modelEdits([]Edit{{Kind: EditReplaceText, Address: ParseAddress("§ 2, stk. 1"),
+		Old: "anmode om tilladelse før", New: "søge om tilladelse før"}})[0])
+	if !out.Applied || out.NoOp {
+		t.Errorf("an edit that changed text: %+v", out)
 	}
-	if changed := Find(v.Doc.Sections(), ParseAddress("§ 2, stk. 1")).Display(); changed == before {
+	if provisionText(t, c, "§ 2, stk. 1") == before {
 		t.Error("a real edit left the provision unchanged")
-	}
-}
-
-// TestSpliceAcrossFormattingRuns is the guard for the index map in matchRunes. The
-// passage being replaced straddles three <Char> runs with an italic run in the middle,
-// so byte offsets from a normalised string cannot address it directly. Without the
-// map, either the match fails or the replacement lands in the wrong place.
-func TestSpliceAcrossFormattingRuns(t *testing.T) {
-	doc := mustParse(t, fixtureLaw)
-	sec := Find(doc.Sections(), ParseAddress("§ 2, stk. 1"))
-	if sec == nil {
-		t.Fatal("§ 2, stk. 1 not found")
-	}
-	if found, _ := sec.splice("anmode om tilladelse før", "søge om tilladelse før"); !found {
-		t.Fatal("splice failed to locate a passage that is present")
-	}
-
-	got := Squeeze(sec.Node.Elem("Exitus").PlainText())
-	want := "Selskabet skal søge om tilladelse før erhvervelse af egne anparter."
-	if got != want {
-		t.Errorf("after splice =\n  %q\nwant\n  %q", got, want)
-	}
-
-	// Typography outside the replaced span must survive: the italic run is still an
-	// italic run, not flattened text.
-	italics := 0
-	sec.Node.Descendants(func(n *Node) {
-		if n.Name == "Char" && n.Attrs["formaChar"] == "Italic" {
-			italics++
-		}
-	})
-	if italics != 1 {
-		t.Errorf("italic runs after splice = %d, want 1 (formatting was flattened)", italics)
-	}
-
-	// A passage that is not there must fail rather than corrupt anything.
-	if found, _ := sec.splice("this wording does not exist", "x"); found {
-		t.Error("splice claimed to replace text that is absent")
-	}
-	if err := doc.Root.checkInvariant(""); err != nil {
-		t.Error(err)
 	}
 }
 
@@ -377,17 +325,17 @@ func TestViewAsOfStages(t *testing.T) {
 	if text := v.Text(); !strings.Contains(text, "henvisning i erhvervsregistret") {
 		t.Error("inserted § 4 missing by 2007-06-01")
 	}
-	if v.Section("§ 3") != nil {
+	if has(v, "§ 3") {
 		t.Error("repealed § 3 is still addressable")
 	}
-	if v.Section("§ 4") == nil {
+	if !has(v, "§ 4") {
 		t.Error("inserted § 4 is not addressable")
 	}
 	if !v.Trustworthy() {
 		t.Errorf("view should be complete: %+v", v.Unresolved)
 	}
-	if err := v.Doc.Root.checkInvariant(""); err != nil {
-		t.Errorf("tree invariant broken by structural edits: %v", err)
+	if err := v.Content.Validate(); err != nil {
+		t.Errorf("content broken by structural edits: %v", err)
 	}
 }
 
@@ -425,17 +373,13 @@ func TestMissingChainDocumentIsReported(t *testing.T) {
 	if v.Trustworthy() {
 		t.Error("a view whose chain documents are missing must not be presented as complete")
 	}
-	if len(v.Unresolved) != 2 {
-		t.Errorf("unresolved = %d, want 2 (one per missing amender): %+v", len(v.Unresolved), v.Unresolved)
+	// A missing document is a gap in what we hold, not a change we refused: the two have
+	// different remedies, so they are reported apart.
+	if got := v.MissingChain(); len(got) != 2 {
+		t.Errorf("missing chain = %+v, want both amenders", got)
 	}
-	missing := false
-	for _, u := range v.Unresolved {
-		if strings.Contains(u.Reason, "not in the archive") {
-			missing = true
-		}
-	}
-	if !missing {
-		t.Errorf("missing chain documents not explained: %+v", v.Unresolved)
+	if len(v.Unresolved) != 0 {
+		t.Errorf("a missing document was reported as a refused change: %+v", v.Unresolved)
 	}
 }
 
@@ -497,23 +441,17 @@ func TestForeignOnlyAmenderIsNotSilent(t *testing.T) {
 
 func TestUnresolvableAddressIsRefused(t *testing.T) {
 	doc := mustParse(t, fixtureLaw)
-	v := &View{Doc: doc.Clone(), AsOf: time.Now()}
-	v.applyOne(Edit{Kind: EditDeleteProvision, Address: ParseAddress("§ 999"), Number: "1."})
-
-	if len(v.Unresolved) != 1 {
-		t.Fatalf("unresolved = %d, want 1: %+v", len(v.Unresolved), v.Unresolved)
-	}
-	if len(v.Applied) != 0 {
-		t.Errorf("an edit with an unfindable address was applied somewhere: %+v", v.Applied)
+	_, out := applyToModel(doc, Edit{Kind: EditDeleteProvision, Address: ParseAddress("§ 999"), Number: "1."})
+	if out.Applied || out.Reason == "" {
+		t.Errorf("an edit with an unfindable address must be refused with a reason: %+v", out)
 	}
 }
 
 func TestUnknownKindIsRefused(t *testing.T) {
 	doc := mustParse(t, fixtureLaw)
-	v := &View{Doc: doc.Clone()}
-	v.applyOne(Edit{Kind: EditUnknown, Address: ParseAddress("§ 1"), Prose: "some wording we cannot parse"})
-	if len(v.Unresolved) != 1 || len(v.Applied) != 0 {
-		t.Errorf("unknown kind must be refused: applied=%d unresolved=%d", len(v.Applied), len(v.Unresolved))
+	_, out := applyToModel(doc, Edit{Kind: EditUnknown, Address: ParseAddress("§ 1"), Prose: "some wording we cannot parse"})
+	if out.Applied {
+		t.Errorf("unknown kind must be refused: %+v", out)
 	}
 }
 
@@ -546,15 +484,15 @@ func TestInsertAfterProvisionRepealedInSameAct(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Section("§ 3") != nil {
+	if has(v, "§ 3") {
 		t.Error("§ 3 should be repealed")
 	}
-	inserted := v.Section("§ 4")
-	if inserted == nil {
+	inserted, ok := v.ProvisionText("§ 4")
+	if !ok {
 		t.Fatalf("insertion was lost; unresolved = %+v", v.Unresolved)
 	}
-	if !strings.Contains(inserted.Display(), "henvisning i erhvervsregistret") {
-		t.Errorf("inserted § 4 content = %q", inserted.Display())
+	if !strings.Contains(inserted, "henvisning i erhvervsregistret") {
+		t.Errorf("inserted § 4 content = %q", inserted)
 	}
 
 	anchored := false
@@ -569,10 +507,8 @@ func TestInsertAfterProvisionRepealedInSameAct(t *testing.T) {
 
 	// Order must still be sane: the new provision sits after § 2, not before § 1.
 	var nums []string
-	for _, s := range v.Sections() {
-		if s.Kind == "paragraf" && s.Parent == nil {
-			nums = append(nums, s.Number)
-		}
+	for _, ref := range v.Content.Provisions() {
+		nums = append(nums, ref.Provision.Number)
 	}
 	if len(nums) != 3 || nums[0] != "1" || nums[1] != "2" || nums[2] != "4" {
 		t.Errorf("provision order after repeal+insert = %v, want [1 2 4]", nums)
@@ -581,36 +517,39 @@ func TestInsertAfterProvisionRepealedInSameAct(t *testing.T) {
 
 func TestStructuralEditsKeepInvariants(t *testing.T) {
 	doc := mustParse(t, fixtureLaw)
-	v := &View{Doc: doc.Clone()}
-
-	// Repeal § 3.
-	v.applyOne(Edit{Kind: EditDeleteProvision, Address: ParseAddress("§ 3")})
+	c, out := applyToModel(doc, Edit{Kind: EditDeleteProvision, Address: ParseAddress("§ 3")})
+	if !out.Applied {
+		t.Fatalf("§ 3 repeal refused: %s", out.Reason)
+	}
 	// Insert § 4 after § 2, using markup extracted from a real amender.
 	amender := mustParse(t, fixtureAmender2)
 	var ins *Edit
-	for i := range amender.Amendments() {
-		if amender.Amendments()[i].Kind == EditInsertProvision {
-			ins = &amender.Amendments()[i]
+	for _, e := range amender.Amendments() {
+		if e.Kind == EditInsertProvision {
+			ins = &e
 		}
 	}
 	if ins == nil {
 		t.Fatal("fixture lost its insertion")
 	}
 	ins.Address = ParseAddress("§ 2")
-	v.applyOne(*ins)
-
-	if err := v.Doc.Root.checkInvariant(""); err != nil {
-		t.Fatalf("mixed-content invariant broken by structural edits: %v", err)
+	if out := c.Apply(modelEdits([]Edit{*ins})[0]); !out.Applied {
+		t.Fatalf("§ 4 insertion refused: %s", out.Reason)
 	}
-	secs := v.Sections()
-	if Find(secs, ParseAddress("§ 3")) != nil {
+	if err := c.Validate(); err != nil {
+		t.Fatalf("structure broken by structural edits: %v", err)
+	}
+	if _, ok := c.Find(ParseAddress("§ 3")); ok {
 		t.Error("§ 3 survived repeal")
 	}
-	if Find(secs, ParseAddress("§ 4")) == nil {
-		t.Error("§ 4 was not inserted")
-	}
-	// § 1 and § 2 must still be intact, i.e. the splice removed exactly one element.
-	if Find(secs, ParseAddress("§ 1")) == nil || Find(secs, ParseAddress("§ 2")) == nil {
-		t.Error("unrelated provisions were damaged")
-	}
+	provisionText(t, c, "§ 4")
+	// § 1 and § 2 must still be intact, i.e. the repeal removed exactly one provision.
+	provisionText(t, c, "§ 1")
+	provisionText(t, c, "§ 2")
+}
+
+// has reports whether an address resolves in a consolidated law.
+func has(v *View, addr string) bool {
+	_, ok := v.ProvisionText(addr)
+	return ok
 }

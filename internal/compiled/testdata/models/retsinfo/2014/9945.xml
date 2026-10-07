@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2014/09/26/VEJ.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>VEJ#LOKDOK15</DocumentType>
+    <Rank>C</Rank>
+    <AccessionNumber>C20140994560</AccessionNumber>
+    <DocumentId>CF000444</DocumentId>
+    <UniqueDocumentId>165922</UniqueDocumentId>
+    <DocumentTitle>Vejledning om omregning af skattefri indtægter i sager om børnebidrag og ægtefællebidrag i 2014
+</DocumentTitle>
+    <Year>2014</Year>
+    <DiesSigni>2014-11-24</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2014-11-25</StartDate>
+    <EndDate REFid="submit_1">2026-07-16</EndDate>
+    <Status>Valid</Status>
+    <Number>9945</Number>
+    <AnnouncedIn>Retsinformation</AnnouncedIn>
+    <DiesEdicti>2014-11-25</DiesEdicti>
+    <Concerns id="concerns_1" />
+    <Ref_Accn REFid="concerns_1">A20190077329</Ref_Accn>
+    <Ref_Af REFid="concerns_1">2019-08-07</Ref_Af>
+    <Ref_Text REFid="concerns_1">Bekendtgørelse af lov om børns forsørgelse</Ref_Text>
+    <Concerns id="concerns_2" />
+    <Ref_Accn REFid="concerns_2">A20190077429</Ref_Accn>
+    <Ref_Af REFid="concerns_2">2019-08-07</Ref_Af>
+    <Ref_Text REFid="concerns_2">Bekendtgørelse af lov om ægtefællers økonomiske forhold</Ref_Text>
+    <Concerns id="concerns_3" />
+    <Ref_Accn REFid="concerns_3">A20260066329</Ref_Accn>
+    <Ref_Af REFid="concerns_3">2026-07-01</Ref_Af>
+    <Ref_Text REFid="concerns_3">Bekendtgørelse af lov om ægteskabs indgåelse og opløsning</Ref_Text>
+    <Subject>Bidrag</Subject>
+    <Subject>Børnebidrag</Subject>
+    <Subject>Ægtefællebidrag</Subject>
+    <Subject>Skattefri indkomst</Subject>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Tanja Skriver Frandsen </Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Annette Frandsen</Signature>
+    <PlaceOfSignature>Ankestyrelsen, Familieretsafdelingen</PlaceOfSignature>
+    <JournalNumber>Ministeriet for Børn, Ligestilling, Integration og Sociale Forhold\nAnkestyrelsen, Familieretsafdelingen, j.nr. 2014-1010-12951</JournalNumber>
+    <Ministry>Social- og Boligministeriet</Ministry>
+    <AdministrativeAuthority>Ankestyrelsen, Familieretsafdelingen</AdministrativeAuthority>
+  </Meta>
+  <TitelGruppe>
+    <Titel>
+      <Linea>
+        <Char>Vejledning om omregning af skattefri indtægter i sager om børnebidrag og ægtefællebidrag i 2014</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold>
+    <TekstGruppe>
+      <Exitus formaForma="Overskriftstekst3">
+        <Linea>
+          <Char>1.</Char>
+        </Linea>
+        <Linea>
+          <Char>Skattefri indkomst</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>I sager om børnebidrag og ægtefællebidrag tager statsforvaltningen udgangspunkt i parternes indkomst før skat og arbejdsmarkedsbidrag</Char>
+        </Linea>
+        <Nota id="Not1">
+          <Explicatus>1)</Explicatus>
+          <Exitus>
+            <Linea>
+              <Char>Se vejledning nr. 9415 af 12. juni 2014 om børne- og ægtefællebidrag.</Char>
+            </Linea>
+          </Exitus>
+        </Nota>
+        <Linea>
+          <Char>.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Overskriftsnummer1" formaEx="Left">
+        <Linea>
+          <Char formaChar="Italic">Indkomst</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>En lønindkomst bliver beregnet før skat og arbejdsmarkedsbidrag, men med fradrag for ATP og rimelige pensionsindbetalinger.</Char>
+        </Linea>
+        <Linea>
+          <Char>Andre indtægter indgår også i partens samlede indkomst.</Char>
+        </Linea>
+        <Linea>
+          <Char>Dette gælder f.eks. overskud ved personlig virksomhed og overskud i selskaber, som parten helt eller delvist ejer, renteindtægter og aktieudbytte m.v.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char formaChar="Bold Italic">Skattefri indkomst</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Hvis en part har en indkomst, der reelt er helt eller delvist skattefri, er det nødvendigt at omregne denne indkomst til en indkomst før skat og arbejdsmarkedsbidrag.</Char>
+        </Linea>
+        <Linea>
+          <Char>En omregning er nødvendig for at kunne sammenligne indkomsten med en almindelige skattepligtig parts indkomst.</Char>
+        </Linea>
+        <Linea>
+          <Char>På den måde ligestilles parter i bidragssager, uanset om deres indkomst er skattefri eller ej.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char>En part kan have en skattefri indkomst, eksempelvis hvis parten er udstationeret, arbejder på en boreplatform, eller er sømand med DIS-indkomst (Dansk Internationalt Skibsregister).</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Overskriftstekst3">
+        <Linea>
+          <Char>2.</Char>
+        </Linea>
+        <Linea>
+          <Char>Retningslinjer for omregning af skattefri indkomst</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Omregningen af den skattefri indkomst i en bidragssag skal ske efter de 2 omregningsmodeller, som Arbejdsmarkedsstyrelsen bruger ved omregningen af sømænds skattefri DIS-indkomst ved vurderingen af retten til dagpenge.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Table formaMarginoTop="0cm" formaMarginoBottom="0cm" formaMarginoLeft="0cm" formaMarginoRight="0cm" width="647" style="padding-left: 3,5pt;padding-right: 3,5pt;column-width: 9pt 468pt 8pt;" cellspacing="0">
+          <Tr>
+            <Td valign="top" width="12" style="border-top: 1pt solid #000000; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="625" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="11" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="625">
+              <Exitus>
+                <Linea>
+                  <Char>Se bilag 1 til Arbejdsmarkedsstyrelsens bekendtgørelse nr. 1366 af 4. december 2013 om beregning af dagpengesatsen for lønmodtagere.</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: 1pt solid #000000; border-right: none; " />
+            <Td valign="top" width="625" style="border-bottom: 1pt solid #000000; " />
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: 1pt solid #000000; border-right: 1pt solid #000000; " />
+          </Tr>
+        </Table>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Omregningsmodellerne er alene et hjælpemiddel til brug for vurderingen af parternes indkomstniveau og dermed bidragets størrelse.</Char>
+        </Linea>
+        <Linea>
+          <Char>Da anvendelsen af omregningsmodellerne kan føre til en for høj bruttoindkomst, bør tendensen i vurderingen være at nedrunde.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Omregningsmodellerne gælder ikke for parter, der beskattes på Færøerne eller i Grønland.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Table formaMarginoTop="0cm" formaMarginoBottom="0cm" formaMarginoLeft="0cm" formaMarginoRight="0cm" width="647" style="padding-left: 3,5pt;padding-right: 3,5pt;column-width: 9pt 468pt 8pt;" cellspacing="0">
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: none; border-bottom: 1pt solid #000000; border-right: none; " />
+            <Td valign="top" width="625" style="border-top: none; border-left: none; border-bottom: 1pt solid #000000; border-right: none; ">
+              <Exitus>
+                <Linea>
+                  <Char formaChar="Bold Italic">Omregningsmodeller</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: 1pt solid #000000; border-right: none; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: 1pt solid #000000; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="625" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="11" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="625">
+              <Exitus>
+                <Linea>
+                  <Char formaChar="Bold">Omregningsmodel A (punkt 1 i bilag 1):</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>En skattefri indkomst omregnes efter modellen i punkt 12 i bilag 1 til Arbejdsmarkedsstyrelsens bekendtgørelse.</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="625">
+              <Exitus>
+                <Linea>
+                  <Char formaChar="Bold">Omregningsmodel B (punkt 2 i bilag 1):</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>Anvendes kun for sømænd, der sejler uden for begrænset fart.</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: 1pt solid #000000; border-right: none; " />
+            <Td valign="top" width="625" style="border-bottom: 1pt solid #000000; " />
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: 1pt solid #000000; border-right: 1pt solid #000000; " />
+          </Tr>
+        </Table>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char formaChar="Bold Italic">Særligt om sømænd</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Valget af omregningsmodellen for sømænd afhænger af, om sømanden sejler i begrænset fart (typisk på en indenlandsk færge), eller om sømanden sejler uden for begrænset fart (typisk på et containerskib).</Char>
+        </Linea>
+        <Linea>
+          <Char>Hvis dette ikke fremgår af oplysningerne, kan statsforvaltningen spørge SKAT eller Udligningskontoret.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Hvis sømanden får et ”kompensationstillæg”, bliver dette ikke medregnet ved omregningen af den skattefri indkomst.</Char>
+        </Linea>
+        <Linea>
+          <Char>Der ses altså helt bort fra kompensationstillægget.</Char>
+        </Linea>
+        <Linea>
+          <Char>Baggrunden for det er, at kompensationstillæg ydes som kompensation for de skattefradrag, sømanden ikke kan udnytte, fordi indkomsten er skattefri.</Char>
+        </Linea>
+        <Linea>
+          <Char>Kompensationstillægget sidestiller dermed sømænd med almindelige skatteydere i Danmark.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Hvis sømanden eventuelt ikke har ret til et kompensationstillæg for den manglende fradragsret, skal der ved fastsættelsen af bidragets størrelse tages hensyn til, at sømanden dermed ikke har ligningsmæssigt fradrag for bidraget.</Char>
+        </Linea>
+        <Linea>
+          <Char>Se nedenfor under punktet ”Skatteforhold”.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char formaChar="Bold Italic">Arbejdsmarkedsbidrag</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Efter Arbejdsmarkedsstyrelsens omregningsmodeller bliver den skattefri indkomst omregnet til skattepligtig indkomst efter fradrag for arbejdsmarkedsbidrag.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Da der i bidragssager tages udgangspunkt i parternes indkomst før betaling af arbejdsmarkedsbidrag, skal den omregnede indkomst forhøjes med arbejdsmarkedsbidraget.</Char>
+        </Linea>
+        <Linea>
+          <Char>Ved at dividere indkomsten efter arbejdsmarkedsbidrag med 0,92 fremkommer indkomsten før betaling af arbejdsmarkedsbidrag.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Linea>
+          <Char formaChar="Bold Italic">Skatteforhold</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>I retningslinjerne for fastsættelse af børne- og ægtefællebidrag er der taget hensyn til de danske skatteregler.</Char>
+        </Linea>
+        <Linea>
+          <Char>Efter disse regler har bidragsbetaleren normalt skattefradrag for betalte børne- og ægtefællebidrag.</Char>
+        </Linea>
+        <Linea>
+          <Char>Værdien af fradraget er omkring 1/3 af bidraget.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Bidraget er en betydelig større økonomisk belastning, hvis bidragsbetaleren ikke har mulighed for at fradrage bidraget i sin skattepligtige indkomst.</Char>
+        </Linea>
+        <Linea>
+          <Char>Derfor tager man hensyn til en eventuel manglende mulighed for skattefradrag.</Char>
+        </Linea>
+        <Linea>
+          <Char>En part, der kun har skattefri indkomst, vil som udgangspunkt ikke kunne opnå fradragsret for bidraget, da parten ikke har en skattepligtig indkomst at fradrage bidraget i.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaEx="Align">
+        <Linea>
+          <Char>Et ægtefællebidrag og et forhøjet børnebidrag vil normalt skønsmæssigt blive nedsat med omkring 1/3, hvis bidragsbetaleren ikke har fradragsret.</Char>
+        </Linea>
+        <Linea>
+          <Char>Der henvises til pkt. 6.1.6. og 7.1.8. i Ministeriet for Børn, Ligestilling, Integration og Sociale Forholds vejledning om børne- og ægtefællebidrag</Char>
+        </Linea>
+        <Nota id="Not2">
+          <Explicatus>2)</Explicatus>
+          <Exitus>
+            <Linea>
+              <Char>Se note 1</Char>
+            </Linea>
+          </Exitus>
+        </Nota>
+        <Linea>
+          <Char>.</Char>
+        </Linea>
+      </Exitus>
+      <Exitus formaForma="Overskriftstekst3">
+        <Linea>
+          <Char>3.</Char>
+        </Linea>
+        <Linea>
+          <Char>Eksempler på omregning af skattefri indkomst</Char>
+        </Linea>
+      </Exitus>
+      <Exitus>
+        <Table formaMarginoTop="0cm" formaMarginoBottom="0cm" formaMarginoLeft="0cm" formaMarginoRight="0cm" width="628" style="padding-left: 3,5pt;padding-right: 3,5pt;column-width: 9pt 454pt 8pt;" cellspacing="0">
+          <Tr>
+            <Td valign="top" width="12" />
+            <Td valign="top" width="606">
+              <Exitus>
+                <Linea>
+                  <Char formaChar="Bold Italic">Eksempel 1 – omregningsmodel A, skattefri indkomst</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: 1pt solid #000000; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="606" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="11" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="606">
+              <Exitus>
+                <Linea>
+                  <Char>En part (som ikke er sømand, der sejler uden for begrænset fart) har en årlig skattefri indkomst på 400.000 kr.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>Efter punkt 1 i bilag 1 svarer dette til følgende indkomst før skat og arbejdsmarkedsbidrag:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De første </Char>
+                  <Char formaChar="Bold">42.800 kr. </Char>
+                  <Char>ganges med 1,0 og svarer til brutto </Char>
+                  <Char formaChar="Bold">42.800 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De næste </Char>
+                  <Char formaChar="Bold">253.491 kr. </Char>
+                  <Char>(296.291 kr. minus 42.800 kr.) ganges med 1,6 og svarer til brutto </Char>
+                  <Char formaChar="Bold">405.585 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De resterende </Char>
+                  <Char formaChar="Bold">103.709 kr. </Char>
+                  <Char>(400.000 kr. minus 296.291 kr.) ganges med 2,1 og svarer til brutto </Char>
+                  <Char formaChar="Bold">217.788 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det bemærkes, at omregningsfaktoren 2,1 benyttes for al indkomst, der overstiger 296.291 kr.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>I alt svarer </Char>
+                  <Char formaChar="Bold">400.000 kr. </Char>
+                  <Char>til brutto </Char>
+                  <Char formaChar="Bold">666.173 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De </Char>
+                  <Char formaChar="Bold">666.173 kr.</Char>
+                  <Char> skal omregnes til bruttoindkomst før skat og arbejdsmarkedsbidrag og skal derfor divideres med 0,92.</Char>
+                </Linea>
+                <Linea>
+                  <Char>En skattefri indkomst på </Char>
+                  <Char formaChar="Bold">400.000 kr. </Char>
+                  <Char>svarer dermed til en indkomst på </Char>
+                  <Char formaChar="Bold">724.101 kr. </Char>
+                  <Char>før skat og arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: 1pt solid #000000; border-right: none; " />
+            <Td valign="top" width="606" style="border-bottom: 1pt solid #000000; " />
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: 1pt solid #000000; border-right: 1pt solid #000000; " />
+          </Tr>
+        </Table>
+      </Exitus>
+      <Exitus>
+        <Table formaMarginoTop="0cm" formaMarginoBottom="0cm" formaMarginoLeft="0cm" formaMarginoRight="0cm" width="628" style="padding-left: 3,5pt;padding-right: 3,5pt;column-width: 9pt 454pt 8pt;" cellspacing="0">
+          <Tr>
+            <Td valign="top" width="12" />
+            <Td valign="top" width="606">
+              <Exitus>
+                <Linea>
+                  <Char formaChar="Bold Italic">Eksempel 2 – omregningsmodel B, sømand uden for begrænset fart</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: 1pt solid #000000; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="606" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="11" style="border-top: 1pt solid #000000; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: none; border-right: none; " />
+            <Td valign="top" width="606">
+              <Exitus>
+                <Linea>
+                  <Char>En sømand, der sejler uden for begrænset fart, har en årlig skattefri indkomst på 400.000 kr. Indkomsten er eksklusive et eventuelt kompensationstillæg.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>Efter punkt 2 i bilag 1 svarer dette til følgende indkomst før skat og arbejdsmarkedsbidrag:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De første </Char>
+                  <Char formaChar="Bold">99.700 kr. </Char>
+                  <Char>ganges med 1,0 og svarer til brutto </Char>
+                  <Char formaChar="Bold">99.700 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De næste </Char>
+                  <Char formaChar="Bold">217.990 kr. </Char>
+                  <Char>(317.690 kr. minus 99.700 kr.) ganges med 1,6 og svarer til brutto </Char>
+                  <Char formaChar="Bold">348.784 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De resterende </Char>
+                  <Char formaChar="Bold">82.310 kr. </Char>
+                  <Char>(400.000 kr. minus 317.690 kr.) ganges med 2,1 og svarer til brutto </Char>
+                  <Char formaChar="Bold">172.851 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Det bemærkes, at omregningsfaktoren på 2,1 benyttes for al indkomst, der overstiger 317.690 kr.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>I alt svarer </Char>
+                  <Char formaChar="Bold">400.000 kr. </Char>
+                  <Char>til brutto </Char>
+                  <Char formaChar="Bold">621.335 kr. </Char>
+                  <Char>efter arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+              <Exitus>
+                <Linea>
+                  <Char>De </Char>
+                  <Char formaChar="Bold">621.335 kr. </Char>
+                  <Char>skal omregnes til bruttoindkomst før skat og arbejdsmarkedsbidrag og skal derfor divideres med 0,92.</Char>
+                </Linea>
+                <Linea>
+                  <Char>En skattefri indkomst på </Char>
+                  <Char formaChar="Bold">400.000 kr. </Char>
+                  <Char>svarer dermed til en indkomst på </Char>
+                  <Char formaChar="Bold">675.364 kr. </Char>
+                  <Char>før skat og arbejdsmarkedsbidrag.</Char>
+                </Linea>
+              </Exitus>
+            </Td>
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: none; border-right: 1pt solid #000000; " />
+          </Tr>
+          <Tr>
+            <Td valign="top" width="12" style="border-top: none; border-left: 1pt solid #000000; border-bottom: 1pt solid #000000; border-right: none; " />
+            <Td valign="top" width="606" style="border-bottom: 1pt solid #000000; " />
+            <Td valign="top" width="11" style="border-top: none; border-left: none; border-bottom: 1pt solid #000000; border-right: 1pt solid #000000; " />
+          </Tr>
+        </Table>
+      </Exitus>
+    </TekstGruppe>
+  </DokumentIndhold>
+  <UnderskriftGruppe>
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

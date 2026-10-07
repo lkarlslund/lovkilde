@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
@@ -24,7 +25,19 @@ type Artifact struct {
 	refs   map[string]DocRef
 	order  []string
 
-	decoder *zstd.Decoder
+	// decoder reads the plain frames (header, dictionary, table); docDecoder the documents,
+	// against the artifact's own dictionary.
+	decoder    *zstd.Decoder
+	docDecoder *zstd.Decoder
+
+	// catalogue is where the catalogue frame sits: what the documents are to one another, read
+	// by the library a server answers from (see lexdania.CatalogueRecord).
+	catalogue [2]uint64
+}
+
+// Catalogue is the catalogue frame's payload: JSON the library layer defines, kept opaque here.
+func (a *Artifact) Catalogue() ([]byte, error) {
+	return a.decodeWith(a.docDecoder, a.catalogue[0], a.catalogue[1])
 }
 
 // OpenArtifact reads the artifact's header and document table and refuses anything this build
@@ -60,9 +73,9 @@ func OpenArtifact(path string) (*Artifact, error) {
 		a.Close()
 		return nil, fmt.Errorf("%s: seek table carries frame checksums, which this build neither writes nor verifies", path)
 	}
-	if frames < 3 {
+	if frames < 5 {
 		a.Close()
-		return nil, fmt.Errorf("%s: seek table names %d frames; an artifact holds a header, a document and a table at least", path, frames)
+		return nil, fmt.Errorf("%s: seek table names %d frames; an artifact holds a header, a dictionary, a document, a catalogue and a table at least", path, frames)
 	}
 	// The skippable frame holding the seek table: magic, content length, entries, footer. Reading
 	// its header confirms the file is the length the seek table claims, rather than a truncated
@@ -96,12 +109,14 @@ func OpenArtifact(path string) (*Artifact, error) {
 			path, offsets[frames], size-int64(content)-8)
 	}
 
-	decoder, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(1))
+	// The header and the dictionary are plain frames: a reader has to open them before it has
+	// the dictionary the documents need.
+	plain, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(1))
 	if err != nil {
 		a.Close()
 		return nil, err
 	}
-	a.decoder = decoder
+	a.decoder = plain
 
 	if err := a.readJSONFrame(offsets[0], offsets[1], &a.Header); err != nil {
 		a.Close()
@@ -115,37 +130,55 @@ func OpenArtifact(path string) (*Artifact, error) {
 		return nil, fmt.Errorf("%s: artifact format version %d, this build reads and writes %d — rebuild the artifact from the mirror",
 			path, a.Header.Version, artifactVersion)
 	}
-	// The document table is the last content frame, the header the first, and the documents are
-	// whatever is between them: the frame count from the seek table locates all three, so there is
-	// no second index that can disagree about where the table is.
-	if frames < 3 {
+	// The dictionary is the second frame, and it must be the one the header names: documents
+	// compressed against another dictionary decode to garbage or not at all, and which of the two
+	// is luck.
+	dict, err := a.frameBytes(offsets[1], offsets[2])
+	if err != nil {
 		a.Close()
-		return nil, fmt.Errorf("%s: %d content frames; a header, at least one document and a table make three", path, frames)
+		return nil, fmt.Errorf("%s: dictionary frame: %w", path, err)
 	}
+	if got, err := describeDictionary(dict); err != nil || got != a.Header.Dictionary {
+		a.Close()
+		return nil, fmt.Errorf("%s: the dictionary frame is not the dictionary the header names (%+v, header says %+v, %v)", path, got, a.Header.Dictionary, err)
+	}
+	withDict, err := zstd.NewReader(nil, zstd.WithDecoderConcurrency(1), zstd.WithDecoderDicts(dict))
+	if err != nil {
+		a.Close()
+		return nil, fmt.Errorf("%s: dictionary: %w", path, err)
+	}
+	a.docDecoder = withDict
+
+	// The document table is the last content frame, the header and dictionary the first two, and
+	// the documents are whatever is between them: the frame count from the seek table locates them
+	// all, so there is no second index that can disagree about where the table is.
 	var refs []DocRef
 	if err := a.readJSONFrame(offsets[frames-1], offsets[frames], &refs); err != nil {
 		a.Close()
 		return nil, err
 	}
-	if len(refs) != frames-2 {
+	// The catalogue is the frame before the table: the documents are the frames between the
+	// dictionary and it.
+	a.catalogue = [2]uint64{offsets[frames-2], offsets[frames-1]}
+	if len(refs) != frames-4 {
 		a.Close()
 		return nil, fmt.Errorf("%s: %d content frames but the table lists %d documents: a document is missing from the table, or the table describes frames that are not documents",
 			path, frames, len(refs))
 	}
 	// Cross-check the two indexes against each other. The seek table says where the frames are, the
-	// document table says where the documents are, and documents are the frames between the header
-	// and the table: document i must be exactly frame i+1. A build that wrote one index without the
-	// other is refused here rather than served as half a mirror.
+	// document table says where the documents are, and documents are the frames between the
+	// dictionary and the table: document i must be exactly frame i+2. A build that wrote one index
+	// without the other is refused here rather than served as half a mirror.
 	for i, r := range refs {
-		if want, end := offsets[i+1], offsets[i+2]; r.Offset != want || r.Offset+r.Length != end {
+		if want, end := offsets[i+2], offsets[i+3]; r.Offset != want || r.Offset+r.Length != end {
 			a.Close()
 			return nil, fmt.Errorf("%s: %s recorded as bytes %d..%d, the frame table says frame %d is %d..%d",
-				path, r.Accession, r.Offset, r.Offset+r.Length, i+1, want, end)
+				path, r.Accession, r.Offset, r.Offset+r.Length, i+2, want, end)
 		}
-		if r.Length == 0 || r.Offset+r.Length > offsets[frames] {
+		if r.Length == 0 || r.Offset+r.Length > offsets[frames-2] {
 			a.Close()
 			return nil, fmt.Errorf("%s: %s claims bytes %d..%d, past the end of the content frames at %d",
-				path, r.Accession, r.Offset, r.Offset+r.Length, offsets[frames])
+				path, r.Accession, r.Offset, r.Offset+r.Length, offsets[frames-2])
 		}
 		a.refs[r.Accession] = r
 		a.order = append(a.order, r.Accession)
@@ -193,7 +226,7 @@ func (a *Artifact) Payload(accession string) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %s is not in this artifact (%d documents, built %s): rebuild the artifact from the mirror",
 			a.path, accession, len(a.order), a.Header.Created.Format("2006-01-02"))
 	}
-	raw, err := a.frameBytes(r.Offset, r.Offset+r.Length)
+	raw, err := a.decodeWith(a.docDecoder, r.Offset, r.Offset+r.Length)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %s: %w", a.path, accession, err)
 	}
@@ -202,6 +235,11 @@ func (a *Artifact) Payload(accession string) ([]byte, error) {
 
 // frameBytes reads and decompresses exactly the bytes between two offsets.
 func (a *Artifact) frameBytes(from, to uint64) ([]byte, error) {
+	return a.decodeWith(a.decoder, from, to)
+}
+
+// decodeWith reads the bytes between two offsets and decompresses them with dec.
+func (a *Artifact) decodeWith(dec *zstd.Decoder, from, to uint64) ([]byte, error) {
 	if to <= from {
 		return nil, fmt.Errorf("frame from %d to %d is empty", from, to)
 	}
@@ -209,7 +247,7 @@ func (a *Artifact) frameBytes(from, to uint64) ([]byte, error) {
 	if _, err := a.file.ReadAt(raw, int64(from)); err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
-	plain, err := a.decoder.DecodeAll(raw, nil)
+	plain, err := dec.DecodeAll(raw, nil)
 	if err != nil {
 		return nil, fmt.Errorf("frame at %d: %w", from, err)
 	}
@@ -226,8 +264,21 @@ func (a *Artifact) readJSONFrame(from, to uint64, out any) error {
 }
 
 func (a *Artifact) Close() error {
+	if a.docDecoder != nil {
+		a.docDecoder.Close()
+	}
 	if a.decoder != nil {
 		a.decoder.Close()
 	}
 	return a.file.Close()
+}
+
+// Identity names this artifact for whatever is derived from it: the search index records it, and
+// a server compares it with the artifact it serves. It is the build's random stamp, so two builds
+// are never mistaken for each other even from the same corpus in the same second.
+func (a *Artifact) Identity() string {
+	if a.Header.Stamp == "" {
+		return "artifact " + a.Header.Created.UTC().Format(time.RFC3339Nano)
+	}
+	return "artifact " + a.Header.Stamp
 }

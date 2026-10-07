@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="idfdf28fb3-1f9c-48a9-8c15-1f7232549586" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2022/05/17/BEKC.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="id77c557b4-4bfe-48d2-bd9d-5c7b2deb52b2">
+    <DocumentType>BEK Æ#LOKDOK05</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20240070005</AccessionNumber>
+    <DocumentId>AA014230</DocumentId>
+    <UniqueDocumentId>243877</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om ændring af bekendtgørelse om ydelser til lægdommere og vidner mv.</DocumentTitle>
+    <Year>2024</Year>
+    <DiesSigni>2024-06-10</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2024-06-12</StartDate>
+    <EndDate REFid="submit_1">2026-01-08</EndDate>
+    <Status>Valid</Status>
+    <Number>700</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2026-01-08</DiesEdicti>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Kristian Hertz</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Laila Lindemark</Signature>
+    <PlaceOfSignature>Domstolsstyrelsen</PlaceOfSignature>
+    <JournalNumber>Justitsmin.,\nDomstolsstyrelsen</JournalNumber>
+    <Ministry>Justitsministeriet</Ministry>
+    <AdministrativeAuthority>Domstolsstyrelsen</AdministrativeAuthority>
+  </Meta>
+  <TitelGruppe id="id19614eae-d7ca-4af4-b51a-74d2c0741f76">
+    <Titel id="id9b8d191c-ed8c-4db5-8ae3-5cd71291d3c4">
+      <Linea>
+        <Char>Bekendtgørelse om ændring af bekendtgørelse om ydelser til lægdommere og vidner mv.</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="id1586ec3e-7565-48d0-b78b-da3716217e59">
+    <AendringCentreretParagraf id="id632f8c18-c0af-476d-8fd8-a77a86826935" localId="1">
+      <Explicatus>§ 1</Explicatus>
+      <Exitus>
+        <Linea>
+          <Char>I bekendtgørelse nr. 712 af 17. november 1987 om ydelser til lægdommere og vidner mv. som ændret ved bekendtgørelse nr. 613 af 7. juli 1997, bekendtgørelse nr. 1180 af 15. december 2000 og bekendtgørelse nr. 1503 af 14. december 2006, foretages følgende ændringer:</Char>
+        </Linea>
+      </Exitus>
+      <AendringsNummer id="id34f3ff64-714b-4557-95e8-0569863098e8">
+        <Explicatus>1.</Explicatus>
+        <Aendring id="id785b687b-1009-4b0e-9a03-3c4093bb0365">
+          <AendringDefinition id="idb000d8b3-98a1-4e83-8645-cc69118c20f1">
+            <Exitus>
+              <Linea>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 1, stk. 2,</Char>
+                <Char> affattes således:</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="id088bbd76-0d11-4f0a-8185-c832fe8b22a2">
+            <AendringNyTekst>
+              <Stk id="id1c403f01-5717-4db9-a546-491a6eb548e0">
+                <Explicatus>Stk. 2.</Explicatus>
+                <Exitus>
+                  <Linea>
+                    <Char>Der tilkommer børnesagkyndige dommere, jf. § 148, stk. 1, i barnets lov, og sagkyndige retsmedlemmer 4.200 kr. for hver sag samt 120 kr. for hver nat, de i anledning af deres hverv må være borte fra hjemmet.</Char>
+                  </Linea>
+                  <Linea>
+                    <Char>Hvis behandlingen af en sag strækker sig over flere dage, udgør vederlaget 4.200 kr. for hver dag og 120 kr. for hver nat, de i anledning af deres hverv må være borte fra hjemmet.</Char>
+                  </Linea>
+                </Exitus>
+              </Stk>
+            </AendringNyTekst>
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+      <AendringsNummer id="iddb416b62-af99-418b-ad73-5cd04420f601">
+        <Explicatus>2.</Explicatus>
+        <Aendring id="idbd25b507-3e1b-4441-99e9-00010c1fbc1a">
+          <AendringDefinition id="id68c4ecbf-f221-4267-9004-c49f8f3ec6f1">
+            <Exitus>
+              <Linea>
+                <Char>To steder i </Char>
+                <Char signiChar="AendringURN" formaChar="Italic">§ 1, stk. 3, </Char>
+                <Char>udgår »og stk. 2«.</Char>
+              </Linea>
+            </Exitus>
+          </AendringDefinition>
+          <AendringAktion id="id934509a9-e916-4509-acf8-49cbcefe0d72">
+            <AendringNyTekst />
+          </AendringAktion>
+        </Aendring>
+      </AendringsNummer>
+    </AendringCentreretParagraf>
+    <IkraftCentreretParagraf id="id62097ad8-37cf-4dd2-b9d0-43e119b0086b" localId="2">
+      <Explicatus>§ 2</Explicatus>
+      <Stk id="id1b070169-ed3a-47a7-94cc-c55cd95b7bc9">
+        <Exitus>
+          <Linea>
+            <Char>Bekendtgørelsen træder i kraft den 15. juni 2024.</Char>
+          </Linea>
+        </Exitus>
+      </Stk>
+    </IkraftCentreretParagraf>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="id15387da7-edd5-42c0-a235-6b11f6e08409">
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

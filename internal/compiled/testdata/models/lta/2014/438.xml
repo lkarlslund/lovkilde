@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument SchemaLocation="https://www.retsinformation.dk/offentlig/xml/schemas/2013/08/13/BEKH.Retsinfo.LexDania_2.1.xsd">
+  <Meta>
+    <DocumentType>BEK H#LOKDOK04</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20140043805</AccessionNumber>
+    <DocumentId>AH005218</DocumentId>
+    <UniqueDocumentId>162986</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om ophævelse af bekendtgørelse om betaling for kontrol med autoriserede laboratorier</DocumentTitle>
+    <Year>2014</Year>
+    <DiesSigni>2014-05-02</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2014-05-06</StartDate>
+    <EndDate REFid="submit_1">2024-01-24</EndDate>
+    <Status>Valid</Status>
+    <Number>438</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2014-05-06</DiesEdicti>
+    <Concerns id="concerns_1" />
+    <Ref_Accn REFid="concerns_1">A20240006029</Ref_Accn>
+    <Ref_Af REFid="concerns_1">2024-01-19</Ref_Af>
+    <Ref_Text REFid="concerns_1">Bekendtgørelse af lov om foderstoffer</Ref_Text>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Espen Egede Rasmussen</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Carsten Haugsted</Signature>
+    <PlaceOfSignature>Fødevarestyrelsen</PlaceOfSignature>
+    <JournalNumber>Fødevaremin.,\nFødevarestyrelsen, j.nr. 2014-32-31-00017</JournalNumber>
+    <Ministry>Ministeriet for Fødevarer, Landbrug og Fiskeri</Ministry>
+    <AdministrativeAuthority>Fødevarestyrelsen</AdministrativeAuthority>
+  </Meta>
+  <TitelGruppe>
+    <Titel>
+      <Linea>
+        <Char>Bekendtgørelse om ophævelse af bekendtgørelse om betaling for kontrol med autoriserede laboratorier</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold>
+    <Indledning>
+      <Exitus />
+    </Indledning>
+    <Afsnit id="Afs0">
+      <Kapitel id="Kap0">
+        <ParagrafGruppe id="Kap0_X1">
+          <Paragraf id="Par1" localId="1">
+            <Explicatus>§ 1.</Explicatus>
+            <Stk id="Par1_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelse nr. 1211 af 11. december 2009 om betaling for kontrol med autoriserede laboratorier ophæves.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="Par2" localId="2">
+            <Explicatus>§ 2.</Explicatus>
+            <Stk id="Par2_Stk1">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen træder i kraft den 1. januar 2015.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+    </Afsnit>
+  </DokumentIndhold>
+  <UnderskriftGruppe>
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

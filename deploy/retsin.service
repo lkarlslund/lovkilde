@@ -8,28 +8,29 @@
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now retsin.service
 #
-# After that, deploying is `make deploy`: compile into bin/, refresh the artifact and the
-# index when the code that writes them is newer than they are, daemon-reload, restart.
+# After that, deploying is `make deploy`: compile into bin/, rebuild the artifact with
+# retsin-update when this build cannot read the one on disk, daemon-reload, restart.
 # The unit is a symlink, so an edit to this file needs no copy either.
 #
-# The compiled files carry the build that wrote them and the reader refuses one from
-# another build, because the payload is the JSON form of this repository's Go types. That
-# is why a deploy can end with a rebuild of the ~1.6 GB artifact — about a minute, and
-# `make deploy` skips it when nothing that writes the artifact has changed. If the
-# artifact is stale and the rebuild was skipped, the unit fails at startup naming both
-# commits rather than serving text it cannot trust. The search index has no such pin, so
-# keeping its provision ids aligned with the artifact's is `make deploy`'s job.
+# The server reads the artifact and nothing else: no XML, no state store, no network. The
+# artifact carries its document model version and the server refuses another model's,
+# because the payload is the JSON form of this repository's Go types; `make deploy` asks
+# first and rebuilds the artifact when needed. The search index is the server's own: it
+# cuts one from the artifact when there is none or it was cut from another artifact.
 #
 # No authentication: this process only ever reads the mirror, so anyone who can reach
 # the port can read every document in it and ask the search index anything. That is
 # fine on a trusted network and not fine anywhere else; there is no TLS either, so
 # put a reverse proxy in front before the port leaves the LAN.
 #
-# RestartSec is deliberately slow. The server refuses an artifact older than the last
-# recorded collection pass, so after a crawl without `retsin artifact build` the unit
-# fails at startup. A 30 second gap means the journal keeps one readable reason per
-# attempt instead of a hot loop; rebuild the artifact and `systemctl --user restart
-# retsin` and it comes back.
+# With no artifact the server downloads the published one from Hugging Face (--hf-repo), and
+# checks for a newer one weekly (--auto-update). Nothing is published yet, so the default
+# repository is empty and this does nothing until it is set.
+#
+# RestartSec is deliberately slow. Without a readable artifact the unit fails at startup;
+# a 30 second gap means the journal keeps one readable reason per attempt instead of a
+# hot loop. Build one with `retsin-update artifact build` (it becomes current, and a
+# running server picks a new one up by itself) and the unit comes back.
 
 [Unit]
 Description=Retsin mirror: HTML reading UI and MCP endpoint

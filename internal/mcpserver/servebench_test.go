@@ -13,6 +13,7 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
 
@@ -230,18 +231,18 @@ func TestServingBaselineCost(t *testing.T) {
 		}
 		return samples, got
 	}
-	xmlUnits, xmlUnitTexts := unitCost("xml reader", search.XMLDocuments{})
-	artUnits, artUnitTexts := unitCost("artifact", artifactDocs{cache: s.docs})
+	xmlUnits, xmlUnitTexts := unitCost("xml reader", xmlDocuments{})
+	artUnits, artUnitTexts := unitCost("artifact", artifactDocs{cache: s.cache()})
 	// Cached, because a page of ten hits often asks for the same document two or three times: the
 	// cache's whole purpose is the second read of one document inside one query.
-	artCached, artCachedTexts := unitCost("artifact warm", artifactDocs{cache: s.docs})
+	artCached, artCachedTexts := unitCost("artifact warm", artifactDocs{cache: s.cache()})
 
 	// Snippet text has to agree across the two readers too, or the index would be grading proximity
 	// against words the answer does not have.
 	snippetDifferences := 0
 	{
-		parseTexts := search.NewUnitTexts(search.XMLDocuments{})
-		artifactTexts := search.NewUnitTexts(artifactDocs{cache: s.docs})
+		parseTexts := search.NewUnitTexts(xmlDocuments{})
+		artifactTexts := search.NewUnitTexts(artifactDocs{cache: s.cache()})
 		for _, fx := range fixtures {
 			if fx.address == "" {
 				continue
@@ -269,8 +270,8 @@ func TestServingBaselineCost(t *testing.T) {
 	fmt.Fprintf(&b, "  one hit's unit text, already read this query:     %s\n", percentiles(artCached))
 	fmt.Fprintf(&b, "  artifact: %d documents, %.1f MB, built in %v; cache held %d payloads in %s of %s, %d hits, %d misses, %d drops\n",
 		len(fixtures), float64(artStat.Size())/1e6, buildCost.Round(time.Millisecond),
-		s.docs.Stats().Entries, humanBytes(s.docs.Stats().UsedBytes), humanBytes(s.docs.Stats().Budget),
-		s.docs.Stats().Hits, s.docs.Stats().Misses, s.docs.Stats().Drops)
+		s.cache().Stats().Entries, humanBytes(s.cache().Stats().UsedBytes), humanBytes(s.cache().Stats().Budget),
+		s.cache().Stats().Hits, s.cache().Stats().Misses, s.cache().Stats().Drops)
 	fmt.Fprintf(&b, "\n## the difference, same run and same sample\n")
 	fmt.Fprintf(&b, "  whole-document lookup: p50 %v -> %v (%.1fx), mean %v -> %v (%.1fx)\n",
 		p50(byParse.whole), p50(byArtifact.whole), ratio(p50(byParse.whole), p50(byArtifact.whole)),
@@ -413,4 +414,18 @@ func flattenUnresolved(m map[string][]string) []string {
 		out = append(out, v...)
 	}
 	return out
+}
+
+// xmlDocuments parses the publisher's file a hit names: the cost the artifact is measured against.
+type xmlDocuments struct{}
+
+func (xmlDocuments) Document(meta search.DocMeta) (*lexdoc.Document, error) {
+	if meta.Path == "" {
+		return nil, nil
+	}
+	doc, err := lexdania.LoadWithBody(meta.Path)
+	if err != nil {
+		return nil, err
+	}
+	return doc.Model(), nil
 }

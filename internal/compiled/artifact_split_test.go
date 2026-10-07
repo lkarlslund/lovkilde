@@ -120,6 +120,7 @@ func writeSplitArtifact(t *testing.T, path, source string, docs []ArtifactDoc) e
 			return err
 		}
 	}
+	wr.SetCatalogue([]byte("[]")) // no archive: an empty catalogue
 	if err := wr.Close(); err != nil {
 		f.Close()
 		return err

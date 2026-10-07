@@ -1,5 +1,5 @@
 // Package lexdania maps the canonical Lex Dania Open XML that
-// retsininformation.dk serves at /eli/.../xml into Go structs.
+// retsinformation.dk serves at /eli/.../xml into Go structs.
 //
 // # Why the body is a generic tree
 //
@@ -121,6 +121,9 @@ func (n *Node) Text() string { return strings.Join(n.Runs, "") }
 // these are the elements the schema uses to hold a run of prose or a structural
 // unit, as opposed to inline formatting (Char) or table cells.
 func (n *Node) PlainText() string {
+	if n == nil {
+		return "" // an element the document does not have, as TextOrNull reads it
+	}
 	var b strings.Builder
 	var render func(cur *Node, block bool)
 	render = func(cur *Node, block bool) {
@@ -172,6 +175,31 @@ var blockElements = map[string]bool{
 // Parse decodes canonical Lex Dania XML. It does not validate against the XSD;
 // it fails only on malformed XML or a missing Dokument root.
 func Parse(data []byte) (*Document, error) {
+	// The shortcut reads what the register serves; anything else, and every error, is read
+	// by encoding/xml below. See fastxml.go.
+	if root, ok := fastTree(data); ok {
+		if root.Name != "Dokument" {
+			return nil, fmt.Errorf("lexdania: root element is %q, expected \"Dokument\"", root.Name)
+		}
+		return newDocument(root)
+	}
+	return parseSlow(data)
+}
+
+// parseSlow is Parse through encoding/xml alone.
+func parseSlow(data []byte) (*Document, error) {
+	root, err := slowTree(data)
+	if err != nil {
+		return nil, err
+	}
+	if root.Name != "Dokument" {
+		return nil, fmt.Errorf("lexdania: root element is %q, expected \"Dokument\"", root.Name)
+	}
+	return newDocument(root)
+}
+
+// slowTree reads the root element's tree with encoding/xml.
+func slowTree(data []byte) (*Node, error) {
 	dec := xml.NewDecoder(bytesReader(data))
 	// The schema is served with a declaration and occasional DOCTYPE; unknown
 	// entities would otherwise abort decoding, and losing a document to an
@@ -185,14 +213,7 @@ func Parse(data []byte) (*Document, error) {
 	}
 	for err == nil {
 		if se, ok := t.(xml.StartElement); ok {
-			root, err := decodeElement(dec, se)
-			if err != nil {
-				return nil, err
-			}
-			if root.Name != "Dokument" {
-				return nil, fmt.Errorf("lexdania: root element is %q, expected \"Dokument\"", root.Name)
-			}
-			return newDocument(root)
+			return decodeElement(dec, se)
 		}
 		t, err = dec.Token()
 	}
@@ -221,7 +242,7 @@ func decodeElement(dec *xml.Decoder, start xml.StartElement) (*Node, error) {
 	// Text runs accumulate into buf; a run is closed when a child element starts.
 	var buf strings.Builder
 	closeRun := func() {
-		n.Runs = append(n.Runs, buf.String())
+		n.Runs = append(n.Runs, stripZeroWidth(buf.String()))
 		buf.Reset()
 	}
 
@@ -300,4 +321,19 @@ func (n *Node) Stats() map[string]*ElementCount {
 		}
 	})
 	return out
+}
+
+// zeroWidth removes the invisible characters an act's typesetting leaves inside words,
+// "integrati\u200donslovens": the law reads the same without them, and with them a quoted
+// word does not match the text that prints it, nor a search for it.
+var zeroWidth = strings.NewReplacer("\u200b", "", "\u200c", "", "\u200d", "", "\ufeff", "", "\u2060", "")
+
+// stripZeroWidth applies zeroWidth only to text that can hold one of its characters. All five
+// encode with a lead byte of 0xE2 or 0xEF, which no Danish letter has, so almost every run is
+// returned as it is; running the replacer on every run was a twentieth of an artifact build.
+func stripZeroWidth(s string) string {
+	if strings.IndexByte(s, 0xE2) < 0 && strings.IndexByte(s, 0xEF) < 0 {
+		return s
+	}
+	return zeroWidth.Replace(s)
 }

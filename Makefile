@@ -1,6 +1,8 @@
 GO      ?= go
 BIN     := bin/retsin
 PKG     := ./cmd/retsin
+UPDATER := bin/retsin-update
+UPDPKG  := ./cmd/retsin-update
 SERVICE := retsin.service
 DATA    := data
 
@@ -10,7 +12,7 @@ DATA    := data
 # to install a two-week-old binary and report success.
 #
 # Which sources decide which compiled file. The artifact needs no rule here: it carries
-# the build that wrote it and `retsin artifact check` answers whether this binary can read
+# its document model version and `retsin artifact check` answers whether this binary can read
 # it, which is the same comparison the server makes before it serves anything. The index
 # carries no stamp at all — its provision ids are only meaningful against the artifact they
 # were cut with — so a mtime rule is the only thing that notices, and it is a guess. The
@@ -18,7 +20,6 @@ DATA    := data
 # cmd/ is deliberately not in the list: the command wires the build up, the packages below are
 # what cut a document into passages, and leaving cmd/ in would rebuild the index for every flag
 # edit and teach everyone to ignore the deploy output.
-INDEX_SRC := internal/search internal/lexdania internal/lexdoc
 
 # This machine's go env file and module sumdb path are read-only, so module
 # verification must be off whenever dependencies change. Existing deps are
@@ -29,22 +30,22 @@ GOSUMDB ?= off
 
 all: vet test build
 
+# Two programs: retsin serves an artifact and reads nothing else; retsin-update collects the
+# documents from retsinformation.dk and compiles the artifact.
 build:
 	@mkdir -p bin
 	$(GO) build -o $(BIN) $(PKG)
+	$(GO) build -o $(UPDATER) $(UPDPKG)
 
 # Deploy is compile, replace, recycle. The artifact check is exact because the artifact is
-# stamped with its own build; the index check is a mtime guess because the index is not, and
-# nothing downstream complains when it is wrong.
+# stamped with its document model. The search index is not built here: the server keeps it,
+# rebuilding it from the artifact at startup when it is missing or was cut from another artifact
+# (a minute, during which lookups answer and search says it is on its way).
 deploy: build
 	@if $(BIN) artifact check --data-dir $(DATA); then \
 	  true; \
 	else echo "this build cannot serve the artifact on disk: rebuilding it"; \
-	  $(BIN) artifact build --data-dir $(DATA); fi
-	@if [ ! -f $(DATA)/search.idx ] || [ -n "$$(find $(INDEX_SRC) -name '*.go' -newer $(DATA)/search.idx | head -1)" ]; then \
-	  echo "index is older than the code that cuts its units: rebuilding"; \
-	  $(BIN) index build --data-dir $(DATA); \
-	else echo "index is newer than the code that cuts its units"; fi
+	  $(UPDATER) artifact build --data-dir $(DATA); fi
 	systemctl --user daemon-reload
 	systemctl --user restart $(SERVICE)
 

@@ -42,7 +42,14 @@ func secKey(s *Section) string {
 		}
 		return secKey(s.Parent) + fmt.Sprintf(",nr%d+%s", s.Nr, s.Litra)
 	case "kapitel":
-		return "kapitel:" + s.Number
+		// The model numbers a chapter with its letter ("7a") and, lacking a localId, by what it
+		// prints; the flat list keeps the digits of the localId. Compared on the model's rule,
+		// since that is the one addresses resolve against.
+		n := lexdoc.NumberWithLitra(s.Node.Attrs["localId"])
+		if n == "" {
+			n = lexdoc.NumberWithLitra(s.RawNumber)
+		}
+		return "kapitel:" + n
 	case "afsnit":
 		return "afsnit:" + s.Number
 	case "indledning":
@@ -176,6 +183,7 @@ func TestModelContentParityOnCorpus(t *testing.T) {
 
 	var parsed, provisions, stykker, items, groups, unmappedDocs int
 	var unmappedWords = map[string]int{}
+	derived := 0
 	for _, f := range files {
 		doc, err := Load(f)
 		if err != nil {
@@ -206,22 +214,23 @@ func TestModelContentParityOnCorpus(t *testing.T) {
 				f, strings.Join(oldForce, "\n"), strings.Join(newForce, "\n"))
 		}
 
-		// Same units, same order. A named provision group is the one allowed addition, and
-		// it is counted rather than hidden.
-		if len(oldOrder) != len(newOrder) {
-			t.Errorf("%s: unit count differs: flat list %d, model %d (%d groups added)\nold:\n%s\nmodel:\n%s",
-				f, len(oldOrder), len(newOrder), newGroups,
-				strings.Join(oldOrder, "\n"), strings.Join(newOrder, "\n"))
-			continue
-		}
-		for i := range oldOrder {
-			if oldOrder[i] != newOrder[i] {
-				t.Errorf("%s: unit %d differs: %q vs %q\nold:\n%s\nmodel:\n%s",
-					f, i, oldOrder[i], newOrder[i],
-					strings.Join(oldOrder, "\n"), strings.Join(newOrder, "\n"))
+		// Same units, same order: every unit the flat list has is in the model, in its place. The
+		// model may add units the flat list never made — named provision groups, and subsections
+		// and items read from printed labels where the markup gave none (Provision.Normalise) —
+		// and they are counted rather than hidden.
+		j := 0
+		for _, k := range oldOrder {
+			for j < len(newOrder) && newOrder[j] != k {
+				j++
+			}
+			if j == len(newOrder) {
+				t.Errorf("%s: the model lost the unit %q, or has it out of order\nold:\n%s\nmodel:\n%s",
+					f, k, strings.Join(oldOrder, "\n"), strings.Join(newOrder, "\n"))
 				break
 			}
+			j++
 		}
+		derived += len(newOrder) - len(oldOrder)
 
 		// Same characters behind each unit. This is the assertion that matters for
 		// consolidation: an amendment is located by matching text, so text that differs by
@@ -239,7 +248,7 @@ func TestModelContentParityOnCorpus(t *testing.T) {
 				continue
 			}
 			for i := range o {
-				if o[i] != n[i] {
+				if o[i] != n[i] && !rubricOnly(&m.Content, k, o[i], n[i]) {
 					t.Errorf("%s %s: text differs\nflat list: %q\nmodel:     %q",
 						f, k, cut(o[i], 160), cut(n[i], 160))
 					break
@@ -279,6 +288,7 @@ func TestModelContentParityOnCorpus(t *testing.T) {
 		words = append(words, w)
 	}
 	sort.Strings(words)
+	t.Logf("%d units the model read from printed labels that the flat list does not have", derived)
 	t.Logf("%d documents: %d provisions, %d stykker, %d items, %d named groups; %d documents carried unmapped content: %v",
 		parsed, provisions, stykker, items, groups, unmappedDocs, words)
 }
@@ -599,5 +609,40 @@ func TestRubricInsideParagraphGroupIsCarried(t *testing.T) {
 	}
 	if heading != "Definitioner" {
 		t.Errorf("group rubric = %q, want %q", heading, "Definitioner")
+	}
+}
+
+// rubricOnly reports texts that differ only by the provision's rubric, which the flat list prints
+// inline and the model carries as the provision's heading: the same words in their own field.
+func rubricOnly(c *lexdoc.Content, key, flat, model string) bool {
+	if !strings.HasPrefix(key, "p:") || strings.Contains(key, ",") {
+		return false
+	}
+	loc, ok := c.Find(lexdoc.ParseAddress("§ " + strings.TrimPrefix(key, "p:")))
+	if !ok || loc.Provision == nil || loc.Provision.Heading == "" {
+		return false
+	}
+	return strings.Join(strings.Fields(strings.Replace(flat, loc.Provision.Heading, "", 1)), " ") ==
+		strings.Join(strings.Fields(model), " ")
+}
+
+// Books and afsnit printed as loose lines, beside the chapters or inside the last provision of the
+// chapter before, hold the chapters after them.
+func TestLooseDivisionsGroupTheChapters(t *testing.T) {
+	ch := func(n string) lexdoc.Node {
+		return lexdoc.Node{Part: &lexdoc.Part{Kind: lexdoc.PartChapter, Number: n}}
+	}
+	divs := []division{
+		{at: 0, book: true, part: lexdoc.Part{Number: "1", Printed: "Første bog"}},
+		{at: 0, part: lexdoc.Part{Number: "1", Printed: "Første afsnit"}},
+		{at: 2, part: lexdoc.Part{Number: "2", Printed: "Andet afsnit"}},
+		{at: 3, book: true, part: lexdoc.Part{Number: "2", Printed: "Anden bog"}},
+	}
+	out := regroup([]lexdoc.Node{ch("1"), ch("2"), ch("3"), ch("4")}, divs)
+	if len(out) != 2 || out[0].Part.Kind != lexdoc.PartBook || len(out[0].Part.Order) != 2 || len(out[1].Part.Order) != 1 {
+		t.Fatalf("regrouped %+v", out)
+	}
+	if first := out[0].Part.Order[0].Part; len(first.Order) != 2 || first.Order[1].Part.Number != "2" {
+		t.Errorf("første afsnit = %+v", first)
 	}
 }

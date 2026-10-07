@@ -167,7 +167,7 @@ func (c *Crawler) Harvest(ctx context.Context) error {
 	}
 	slog.Info("harvest complete", "days", stored, "changes_seen", seen)
 	if gapDays > 0 {
-		return fmt.Errorf("%w: last harvested %s, %d days ago; only the newest %d days were collected, and the remaining %d are gone from the service. Run a sitemap inventory pass (retsin inventory) to find the changes by lastmod",
+		return fmt.Errorf("%w: last harvested %s, %d days ago; only the newest %d days were collected, and the remaining %d are gone from the service. Run a sitemap inventory pass (retsin-update inventory) to find the changes by lastmod",
 			ErrFeedGap, last.Format(time.DateOnly), gapDays, stored, gapDays-stored)
 	}
 	return nil
@@ -488,14 +488,24 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				return err
 			}
 			// The accession index powers harvest resolution and reporting: it
-			// answers "do we already hold the body the feed just told us about?"
+			// answers "do we already hold the body the feed just told us about?" —
+			// and, through FetchedAt, "did we fetch it after the feed said it changed?"
+			now := time.Now().UTC().Format(time.RFC3339)
 			if acc, found, err := c.store.GetAccession(ctx, meta.Accession); err != nil {
 				return err
-			} else if !found || acc.SHA256 != hash {
-				if err := c.store.PutAccession(ctx, store.Accession{
-					Accession: meta.Accession, ELIURL: row.ELIURL, SHA256: hash, Bytes: n,
-					ChangedAt: time.Now().UTC().Format(time.RFC3339),
-				}); err != nil {
+			} else {
+				rec := store.Accession{Accession: meta.Accession, ELIURL: row.ELIURL, SHA256: hash, Bytes: n, ChangedAt: acc.ChangedAt, FetchedAt: now}
+				if !found || acc.SHA256 != hash {
+					rec.ChangedAt = now
+					// New XML for a document we held: its body payload, where it has one,
+					// is the older text now, and a held payload is otherwise never asked for.
+					if found {
+						if err := c.markBodyStale(ctx, row.ELIURL); err != nil {
+							return err
+						}
+					}
+				}
+				if err := c.store.PutAccession(ctx, rec); err != nil {
 					return err
 				}
 			}
@@ -578,10 +588,10 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 	}
 	if !opt.Full && !opt.Force {
 		if !found {
-			return fmt.Errorf("%w: this mirror has never completed a collection pass, so there is nothing to refill incrementally. Run the full pass once: retsin update --full", ErrStaleSweep)
+			return fmt.Errorf("%w: this mirror has never completed a collection pass, so there is nothing to refill incrementally. Run the full pass once: retsin-update update --full", ErrStaleSweep)
 		}
 		if age := time.Since(last); age > MaxSweepAge {
-			return fmt.Errorf("%w: the last completed pass was %s (%.1f days ago), older than the %d-day change feed. The changes in between are no longer listed by the service, so a refill would only collect part of them and leave the mirror looking current. Run retsin update --full, which finds every change by sitemap lastmod",
+			return fmt.Errorf("%w: the last completed pass was %s (%.1f days ago), older than the %d-day change feed. The changes in between are no longer listed by the service, so a refill would only collect part of them and leave the mirror looking current. Run retsin-update update --full, which finds every change by sitemap lastmod",
 				ErrStaleSweep, last.Format(time.RFC3339), age.Hours()/24, harvest.MaxWindowDays)
 		}
 	}
@@ -602,6 +612,9 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 		slog.Warn("continuing past the feed gap: this run re-inventoried the sitemap, which covers the missing days")
 	}
 
+	if err := c.QueueFeedChanges(ctx); err != nil {
+		return fmt.Errorf("queue feed changes: %w", err)
+	}
 	if err := c.Fetch(ctx, FetchOptions{}); err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
@@ -630,7 +643,7 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 		slog.Warn("collection pass recorded with unresolved work",
 			"at", now.Format(time.RFC3339),
 			"owed", issues.Owed, "stalled", issues.Stalled, "issues", issues.Digest,
-			"remedy", "retsin fetch --state pending (and --bodies --state pending)")
+			"remedy", "retsin-update fetch --state pending (and --bodies --state pending)")
 	} else {
 		slog.Info("collection pass recorded", "at", now.Format(time.RFC3339))
 	}
@@ -850,4 +863,86 @@ func xmlURLFor(siteBase, eliURL string) string {
 		}
 	}
 	return strings.TrimSuffix(siteBase, "/") + path + "/xml"
+}
+
+// QueueFeedChanges marks for download every held document the change feed reported changed
+// after we last fetched it.
+//
+// The sitemap's lastmod is what marks a held document stale, and it does not move for every
+// change the feed reports: on 2026-10-06, 77 documents the feed listed as changed since
+// 2026-10-02 still carried lastmods from years earlier, and neither pass would have fetched
+// them. A metadata change is not cosmetic — it is how the register marks a law historic — so a
+// feed entry first seen after our last fetch makes the copy stale, and the body payload with
+// it when the document has one. A copy fetched after the entry was first seen already includes
+// the change.
+func (c *Crawler) QueueFeedChanges(ctx context.Context) error {
+	since := time.Now().UTC().AddDate(0, 0, -harvest.MaxWindowDays).Format(time.DateOnly)
+	changes, err := c.store.Changes(ctx, since, 0)
+	if err != nil {
+		return err
+	}
+	queued, bodies := 0, 0
+	seen := map[string]bool{}
+	for _, ch := range changes {
+		acc, found, err := c.store.GetAccession(ctx, ch.Accession)
+		if err != nil {
+			return err
+		}
+		if !found || seen[acc.ELIURL] || !HeldBefore(acc, ch) {
+			continue
+		}
+		row, ok, err := c.store.GetInventory(ctx, acc.ELIURL)
+		if err != nil {
+			return err
+		}
+		if !ok || row.State != store.StateFetched {
+			continue // pending, stale, failed or gone: already someone else's business
+		}
+		seen[acc.ELIURL] = true
+		row.State = store.StateStale
+		if err := c.store.PutInventory(ctx, row); err != nil {
+			return err
+		}
+		queued++
+		marked, err := c.markBodyStaleCount(ctx, acc.ELIURL)
+		if err != nil {
+			return err
+		}
+		bodies += marked
+	}
+	slog.Info("feed changes queued", "documents", queued, "bodies", bodies, "window_since", since)
+	return nil
+}
+
+// HeldBefore says whether the stored copy of a document predates a change the feed reported:
+// it was last fetched before the change was first seen.
+func HeldBefore(acc store.Accession, ch store.Change) bool {
+	held := acc.HeldSince()
+	return held == "" || ch.SeenAt == "" || held < ch.SeenAt
+}
+
+// bodyKey is the body queue's key for a document. The queue is seeded from archive paths under
+// the configured site origin (eliURLForPath), while the inventory and the accession index keep
+// the sitemap's spelling, which has no "www": the same document, two URLs.
+func (c *Crawler) bodyKey(eliURL string) string {
+	path := docapi.PathFromELIURL(eliURL)
+	if path == "" {
+		return eliURL
+	}
+	return strings.TrimSuffix(c.cfg.SiteBase, "/") + "/" + path
+}
+
+// markBodyStale queues a held body payload for download again.
+func (c *Crawler) markBodyStale(ctx context.Context, eliURL string) error {
+	_, err := c.markBodyStaleCount(ctx, eliURL)
+	return err
+}
+
+func (c *Crawler) markBodyStaleCount(ctx context.Context, eliURL string) (int, error) {
+	b, ok, err := c.store.GetBody(ctx, c.bodyKey(eliURL))
+	if err != nil || !ok || b.State != store.StateFetched {
+		return 0, err
+	}
+	b.State = store.StateStale
+	return 1, c.store.PutBody(ctx, b)
 }

@@ -134,7 +134,7 @@ func TestAddressResolutionIgnoresIkraftAppendix(t *testing.T) {
 		t.Errorf("the § 1 refusal should say the address is absent, got %q", v.Unresolved[0].Reason)
 	}
 
-	text := v.Doc.Root.PlainText()
+	text := v.Content.PlainText()
 	for _, want := range []string{
 		"Loven træder i kraft den 1. januar 2020",
 		"Tidspunktet for ikrafttræden fastsættes af transportministeren",
@@ -148,8 +148,8 @@ func TestAddressResolutionIgnoresIkraftAppendix(t *testing.T) {
 			t.Errorf("%q should have been repealed", gone)
 		}
 	}
-	if err := v.Doc.Root.checkInvariant(""); err != nil {
-		t.Errorf("derived tree broken: %v", err)
+	if err := v.Content.Validate(); err != nil {
+		t.Errorf("derived content broken: %v", err)
 	}
 }
 
@@ -225,23 +225,21 @@ func TestInsertionAnchorsOutsideAppendix(t *testing.T) {
 	if len(v.Applied) != 2 {
 		t.Fatalf("applied = %d, want 2", len(v.Applied))
 	}
-	newSec := v.Section("§ 3a")
-	if newSec == nil {
-		t.Fatal("the new § 3 a is missing: the inserted provision kept the amender's localId")
+	// Find reads the law's own series only, so finding § 3 a at all says it did not land among
+	// the entry-into-force provisions.
+	newText, ok := v.ProvisionText("§ 3a")
+	if !ok {
+		t.Fatal("the new § 3 a is missing from the law's own provisions: the inserted provision kept the amender's localId, or landed in the entry-into-force series")
 	}
-	if newSec.Appendix || containerName(newSec.Container) == "Ikraft" {
-		t.Errorf("the new § 3 a was inserted into the entry-into-force appendix (appendix=%v, container=%s)",
-			newSec.Appendix, containerName(newSec.Container))
+	if !strings.Contains(newText, "fast rutefart") {
+		t.Errorf("the new § 3 a has the wrong content: %q", newText)
 	}
-	if !strings.Contains(newSec.Display(), "fast rutefart") {
-		t.Errorf("the new § 3 a has the wrong content: %q", newSec.Display())
-	}
-	text := v.Doc.Root.PlainText()
+	text := v.Content.PlainText()
 	if !strings.Contains(text, "Tidspunktet for ikrafttræden fastsættes af transportministeren") {
 		t.Error("the appendix § 2 the anchor was *not* meant to find has gone")
 	}
-	if err := v.Doc.Root.checkInvariant(""); err != nil {
-		t.Errorf("derived tree broken: %v", err)
+	if err := v.Content.Validate(); err != nil {
+		t.Errorf("derived content broken: %v", err)
 	}
 }
 

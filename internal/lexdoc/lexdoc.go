@@ -44,6 +44,20 @@ type Document struct {
 
 	// Content is what the document says: its provisions, in the mirror's own structure.
 	Content Content
+
+	// Changes is what this document does to other laws, when it amends any: its change lists read
+	// into edits, each naming the law it is aimed at, and its own entry-into-force provisions. It is
+	// read once, when the document is compiled into the artifact, from the register's change markup
+	// where there is some and from the text where there is not; a law's state on a date is its own
+	// model with the Changes of the acts its metadata names applied (see lexdania.Chains).
+	Changes *Changes `json:",omitempty"`
+}
+
+// Changes is an amending document's patch: its edits, in the order it lists them, and when its
+// parts take effect as its own provisions say.
+type Changes struct {
+	Edits   []Edit
+	InForce InForce
 }
 
 // Identity is what a document is, as distinct from what it says.

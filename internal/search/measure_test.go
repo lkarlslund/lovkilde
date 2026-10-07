@@ -346,7 +346,10 @@ func TestMeasureIndex(t *testing.T) {
 		if err != nil {
 			t.Fatalf("build %s: %v", v.name, err)
 		}
-		idx.B = v.b
+		// The ranking's own B wins over the index's, so a variant's b is set there.
+		rk := DefaultRanking
+		rk.B = v.b
+		idx.Ranking = &rk
 		buildTime := time.Since(buildStart)
 
 		path := t.TempDir() + "/index.bin"
@@ -819,7 +822,7 @@ func sectionsUnits(t *testing.T, docs []DocMeta) []Unit {
 			if text == "" {
 				continue
 			}
-			out = append(out, Unit{Doc: docID, Addr: AddressOf(s), Text: text})
+			out = append(out, Unit{Doc: docID, Addr: lexdania.AddressOf(s), Text: text})
 		}
 	}
 	return out

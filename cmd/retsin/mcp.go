@@ -1,115 +1,280 @@
 // The mcp command: the mirror as a tool an agent can call.
-//
-// It deliberately does not use the shared runtime. The runtime opens the Badger state
-// store, which locks it: a serving process would then keep the nightly crawl out, or
-// fail to start while the crawl holds the lock. Serving needs the file archive and
-// nothing else, so that is all this opens — and a process that cannot write is a much
-// easier thing to trust in front of a legal corpus.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/lkarlslund/retsinformation/internal/artifactdir"
+	"github.com/lkarlslund/retsinformation/internal/artifactfetch"
 	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
 
 // serveOptions are the settings a serving process takes. One struct because every serving
-// command loads the same three things the same way: the file archive, the search index, and the
-// compiled artifact. A flag that meant something different in two commands would be the bug.
+// command loads the same two things the same way: the compiled artifact and the search index. A flag that meant something different in two commands would be the bug.
 type serveOptions struct {
 	MaxChars        int
 	Index           string
 	Artifact        string
 	ArtifactCacheMB int
+	// Publish is where a missing artifact is downloaded from, and a newer one looked for every
+	// AutoUpdate (0: never). Both apply only when following the current artifact.
+	Publish    artifactfetch.Source
+	AutoUpdate time.Duration
 }
 
-// openServingServer loads what a serving process reads and nothing it can write.
+// addFetchFlags registers the download settings serve and mcp share.
+func addFetchFlags(cmd *cobra.Command, o *serveOptions) {
+	cmd.Flags().StringVar(&o.Publish.Repo, "hf-repo", artifactfetch.DefaultRepo,
+		"Hugging Face dataset repository the artifact is downloaded from when there is none, and updated from (none is published yet)")
+	cmd.Flags().StringVar(&o.Publish.Revision, "hf-revision", artifactfetch.DefaultRevision, "branch or tag of --hf-repo to read")
+	cmd.Flags().DurationVar(&o.AutoUpdate, "auto-update", artifactfetch.DefaultEvery,
+		"check --hf-repo for a newer artifact this often, and install it; 0 turns it off")
+}
+
+// openServingServer loads what a serving process reads, which is an artifact and nothing else: it
+// opens no state store and reads no XML, and a process that cannot write is a much easier thing to
+// trust in front of a legal corpus.
 //
-// It deliberately does not use the shared runtime. The runtime opens the Badger state store,
-// which locks it: a serving process would then keep the nightly crawl out, or fail to start
-// while the crawl holds the lock. Serving needs the file archive and nothing else, so that is
-// all this opens — and a process that cannot write is a much easier thing to trust in front of
-// a legal corpus.
-//
-// Two of the three loads can downgrade and one cannot. A missing index or artifact is a
-// degradation the operator did not ask for by name, so the server says what it lost and keeps
-// going. A file that is there but unreadable is an error: it was named, and serving answers
-// compiled from something else is not a degradation anyone should miss.
+// Without an artifact there is nothing to serve, and that is an error naming the remedy. An
+// artifact that is unreadable, from another document model or without a catalogue is the same:
+// the operator built or installed it. The index is different: it is derived from the artifact,
+// never distributed, and the server keeps it itself — rebuilding one that is missing, unreadable
+// or cut from another artifact (buildServingIndex).
 func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) (*mcpserver.Server, error) {
 	cfg, err := resolve()
 	if err != nil {
 		return nil, err
 	}
-	a, err := lexdania.Scan(ctx, cfg.XMLDir())
-	if err != nil {
+	// With --artifact the server reads that one file for as long as it runs. Without it, it reads
+	// the current artifact (see internal/artifactdir) and follows the pointer when a new one is
+	// installed, swapping artifact, catalogue and index together.
+	artifact := o.Artifact
+	follow := artifact == ""
+	if follow {
+		artifact, err = artifactdir.Current(cfg.DataDir)
+		if errors.Is(err, artifactdir.ErrNone) {
+			artifact, err = downloadMissing(ctx, cfg.DataDir, o.Publish)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	srv := newServingServer(cfg, o)
+	if err := srv.UseArtifact(artifact, int64(o.ArtifactCacheMB)<<20); err != nil {
 		return nil, err
 	}
-	if a.Skipped > 0 {
-		slog.Warn("archive scan skipped unreadable files", "skipped", a.Skipped)
-	}
-	srv := mcpserver.New(a, cfg.SiteBase, version)
-	// The horizon comes from the file the collection pass publishes, not from this process's
-	// start time or the archive's mtimes: the server must state how current the data is, not
-	// how long it has been running.
-	srv.SweepStampPath = cfg.SweepStampPath()
-	if o.MaxChars > 0 {
-		srv.MaxChars = o.MaxChars
-	}
-	// Search is offered only if its index is actually there. Starting a server that advertises
-	// a tool it cannot honour would leave the client to discover that mid-conversation, so an
-	// unreadable index is an error here (the operator asked for it by name) while a missing one
-	// is a logged downgrade to lookup.
+	slog.Info("serving document text from the compiled artifact", "path", artifact)
+
+	// The index is the server's to keep: derived from the artifact, never distributed, and
+	// rebuilt in the background when the one on disk is missing, unreadable, from an older format,
+	// cut from another artifact or by older code. Lookups answer meanwhile.
 	index := o.Index
 	if index == "" {
-		index = cfg.DataDir + "/" + indexDefaultName
+		if index, err = artifactdir.IndexFor(artifact); err != nil {
+			return nil, err
+		}
 	}
-	idx, err := search.Load(index)
-	switch {
-	case err == nil:
+	want := search.SourceFor(srv.ArtifactIdentity())
+	if idx, ok := loadMatchingIndex(index, want); ok {
 		srv.UseIndex(idx)
-		slog.Info("search index loaded", "path", index, "terms", len(idx.Terms), "documents", len(idx.Docs))
-	case os.IsNotExist(err):
-		slog.Warn("no search index, serving lookup only", "looked_for", index, "remedy", "run `retsin index build`")
-	default:
-		return nil, fmt.Errorf("search index %s: %w — rebuild it with `retsin index build`, or omit --index to serve lookups only", index, err)
+	} else {
+		srv.IndexBuilding(true)
+		go func() {
+			defer srv.IndexBuilding(false)
+			if idx, err := buildServingIndex(ctx, artifact, index); err == nil {
+				srv.UseIndex(idx)
+			}
+		}()
 	}
-	// Document text comes from the artifact when one is there. A missing one downgrades to
-	// parsing the XML — correct, slower, and named in the status line a client reads — while an
-	// artifact from another build is an error: the operator asked for that file by name, and
-	// serving a model compiled from other code is not a degradation anyone should miss.
-	artifact := o.Artifact
-	if artifact == "" {
-		artifact = cfg.DataDir + "/" + artifactDefaultName
-	}
-	err = srv.UseArtifact(artifact, int64(o.ArtifactCacheMB)<<20)
-	switch {
-	case err == nil:
-		slog.Info("serving document text from the compiled artifact", "path", artifact)
-	case os.IsNotExist(err):
-		slog.Warn("no compiled artifact, serving lookups by parsing XML",
-			"looked_for", artifact, "remedy", "run `retsin artifact build`")
-	default:
-		return nil, err
+	if follow {
+		go followCurrent(ctx, srv, cfg.DataDir, artifact, o, followInterval)
+		if o.AutoUpdate > 0 && o.Publish.Repo != "" {
+			go autoUpdate(ctx, cfg.DataDir, o.Publish, o.AutoUpdate)
+		}
 	}
 	return srv, nil
 }
 
-// configFunc resolves the validated flags without opening any storage.
-type configFunc func() (config.Config, error)
+// downloadMissing installs the published artifact into a data directory that has none.
+func downloadMissing(ctx context.Context, dataDir string, from artifactfetch.Source) (string, error) {
+	if from.Repo == "" {
+		return "", fmt.Errorf("no compiled artifact in %s: build one with `retsin-update artifact build`, or download one with --hf-repo", artifactdir.Dir(dataDir))
+	}
+	slog.Info("no compiled artifact, downloading the published one", "repo", from.Repo, "into", artifactdir.Dir(dataDir))
+	res, err := from.Fetch(ctx, dataDir)
+	if err != nil {
+		return "", fmt.Errorf("no compiled artifact in %s, and downloading it from %s failed: %w", artifactdir.Dir(dataDir), from.Repo, err)
+	}
+	_ = artifactfetch.MarkChecked(dataDir)
+	slog.Info("downloaded the published artifact", "path", res.Path, "bytes", res.Manifest.Size)
+	return res.Path, nil
+}
+
+// autoCheckInterval is how often autoUpdate asks whether a check is due. The schedule itself is
+// kept on disk (artifactfetch.Due), so a restart neither resets nor repeats it.
+var autoCheckInterval = time.Hour
+
+// autoUpdate installs a newer published artifact when one is due to be looked for. It only
+// installs: followCurrent moves the server to it as to any other new current artifact, and
+// prunes. A failed check is logged and tried again at the next due time, not sooner, so an
+// unreachable repository costs one line a week.
+func autoUpdate(ctx context.Context, dataDir string, from artifactfetch.Source, every time.Duration) {
+	tick := time.NewTicker(min(every, autoCheckInterval))
+	defer tick.Stop()
+	for {
+		if artifactfetch.Due(dataDir, every, time.Now()) {
+			res, err := from.Fetch(ctx, dataDir)
+			if ctx.Err() != nil {
+				return
+			}
+			switch {
+			case err != nil:
+				slog.Warn("checking for a newer published artifact failed", "repo", from.Repo, "err", err)
+			case res.Installed:
+				slog.Info("installed a newer published artifact", "path", res.Path)
+			default:
+				slog.Info("the published artifact is the current one", "file", res.Manifest.File)
+			}
+			_ = artifactfetch.MarkChecked(dataDir)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+// newServingServer is a server with the settings every serving process shares.
+func newServingServer(cfg config.Config, o serveOptions) *mcpserver.Server {
+	srv := mcpserver.New(nil, cfg.SiteBase, version)
+	if o.MaxChars > 0 {
+		srv.MaxChars = o.MaxChars
+	}
+	return srv
+}
+
+// loadMatchingIndex loads the index at path if it was cut from the artifact named by want, by
+// this build's cut, and says why not otherwise.
+func loadMatchingIndex(path, want string) (*search.Index, bool) {
+	idx, err := search.Load(path)
+	switch {
+	case err == nil && idx.Source == want:
+		slog.Info("search index loaded", "path", path, "terms", len(idx.Terms), "documents", len(idx.Docs))
+		return idx, true
+	case err == nil:
+		slog.Info("search index was built from another artifact or by older code, rebuilding it", "path", path, "index_source", idx.Source, "want", want)
+	case os.IsNotExist(err):
+		slog.Info("no search index, building it from the artifact", "path", path)
+	default:
+		slog.Info("search index unreadable, rebuilding it from the artifact", "path", path, "err", err)
+	}
+	return nil, false
+}
+
+// buildServingIndex builds the search index from the artifact and saves it. The build's memory is
+// held to its own share: a soft limit of what the server already uses plus the 4 GiB the build
+// needs, lifted afterwards, so the collector works harder during the build instead of the process
+// growing by twice the build's live heap.
+func buildServingIndex(ctx context.Context, artifact, index string) (*search.Index, error) {
+	start := time.Now()
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	if os.Getenv("GOMEMLIMIT") == "" {
+		prev := debug.SetMemoryLimit(int64(ms.HeapInuse) + 4<<30)
+		defer debug.SetMemoryLimit(prev)
+	}
+	idx, err := indexFromArtifact(ctx, artifact, search.Options{}, 0)
+	if err != nil {
+		slog.Error("building the search index failed", "artifact", artifact, "err", err)
+		return nil, err
+	}
+	if err := saveIndex(idx, index); err != nil {
+		// Serving it is still right; the next start builds it again.
+		slog.Warn("search index built but not saved", "path", index, "err", err)
+	}
+	debug.FreeOSMemory()
+	slog.Info("search index ready", "path", index, "documents", len(idx.Docs), "terms", len(idx.Terms), "elapsed", time.Since(start).Round(time.Second))
+	return idx, nil
+}
+
+// followInterval is how often a serving process looks at the pointer for a new artifact.
+var followInterval = 30 * time.Second
+
+// followCurrent watches for a new current artifact and moves the server to it: the new artifact is
+// opened and checked and its index loaded or built while the old pair is still served, then both
+// are swapped at once, and the artifacts no longer kept are pruned. A new artifact that cannot be
+// served is reported once and the old pair kept.
+func followCurrent(ctx context.Context, srv *mcpserver.Server, dataDir, serving string, o serveOptions, every time.Duration) {
+	refused := ""
+	tick := time.NewTicker(every)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		next, err := artifactdir.Current(dataDir)
+		if err != nil || next == serving || next == refused {
+			continue
+		}
+		slog.Info("a new artifact is current, preparing it", "path", next, "serving", serving)
+		c, err := srv.PrepareArtifact(next, int64(o.ArtifactCacheMB)<<20)
+		if err != nil {
+			slog.Error("the new artifact cannot be served, keeping the current one", "path", next, "err", err)
+			refused = next
+			continue
+		}
+		index := artifactdir.IndexPath(next, c.Artifact().Header.Stamp)
+		idx, ok := loadMatchingIndex(index, search.SourceFor(c.Artifact().Identity()))
+		if !ok {
+			if idx, err = buildServingIndex(ctx, next, index); err != nil {
+				c.Close()
+				refused = next
+				continue
+			}
+		}
+		srv.SwapCorpus(c, idx)
+		slog.Info("now serving the new artifact", "path", next, "was", serving)
+		serving, refused = next, ""
+		if removed, err := artifactdir.Prune(dataDir); err == nil && len(removed) > 0 {
+			slog.Info("pruned artifacts no longer kept", "removed", removed)
+		}
+	}
+}
+
+// saveIndex writes the index under a temporary name and renames it, so a reader never sees half.
+func saveIndex(idx *search.Index, path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".writing"
+	if err := idx.Save(tmp); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
+}
 
 func mcpCmd(resolve configFunc) *cobra.Command {
 	var maxChars int
 	var index string
 	var artifact string
 	var artifactCacheMB int
+	var o serveOptions
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "Serve the mirror over the Model Context Protocol on stdin/stdout",
@@ -136,19 +301,18 @@ whose XML has none, text our reader recovered from the site's HTML. The paired s
 says the recovered text reproduces the canonical wording byte for byte in 84.9 % of
 documents, which is worth reading and not worth quoting without saying so.
 
-The document text is read from the compiled artifact ("retsin artifact build") when one is
-there, which is what makes a lookup a seek and a decompression instead of an XML parse; without
-one the server parses and says so in every answer's dataset line. An artifact written by another
-build is refused outright, with a message naming which side is stale: the artifact holds the
-document model as JSON, so a file from another revision decodes into this server's types with
-another revision's meaning.
+Everything is read from the compiled artifact ("retsin-update artifact build"): the catalogue,
+each document's model, and the amending acts' changes that as_of applies. Without one it
+downloads the published artifact from --hf-repo, and refuses to start when it cannot. While it
+runs it checks --hf-repo for a newer artifact every --auto-update and moves to it. An artifact of another document model is refused too, with a message
+naming which side is stale: the artifact holds the model as JSON, so a file from another
+revision decodes into this server's types with another revision's meaning.
 
 Stdout is reserved for the protocol; logs go to stderr either way.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			srv, err := openServingServer(cmd.Context(), resolve, serveOptions{
-				MaxChars: maxChars, Index: index, Artifact: artifact, ArtifactCacheMB: artifactCacheMB,
-			})
+			o.MaxChars, o.Index, o.Artifact, o.ArtifactCacheMB = maxChars, index, artifact, artifactCacheMB
+			srv, err := openServingServer(cmd.Context(), resolve, o)
 			if err != nil {
 				return err
 			}
@@ -162,10 +326,11 @@ Stdout is reserved for the protocol; logs go to stderr either way.`,
 		fmt.Sprintf("cap every answer at this many characters (default %d; an answer larger than this is truncated and says so)",
 			mcpserver.DefaultMaxChars))
 	cmd.Flags().StringVar(&index, "index", "",
-		"full-text index to serve (default <data-dir>/"+indexDefaultName+"); if it is missing, only lookup is advertised")
+		"where the search index is kept (default: beside the artifact, named for its stamp); built from the artifact when it is missing or from another artifact")
 	cmd.Flags().StringVar(&artifact, "artifact", "",
-		"compiled document artifact to read text from (default <data-dir>/"+artifactDefaultName+"); if it is missing, lookups parse the XML instead and say so")
+		"serve this artifact file and no other (default: the current one, followed as new ones are installed)")
 	cmd.Flags().IntVar(&artifactCacheMB, "artifact-cache-mb", mcpserver.DefaultArtifactCacheBytes>>20,
 		"megabytes of artifact payloads the serving cache may hold; the bound is in bytes, because that is what a cached document costs")
+	addFetchFlags(cmd, &o)
 	return cmd
 }

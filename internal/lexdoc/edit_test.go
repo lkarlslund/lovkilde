@@ -86,7 +86,12 @@ func TestReplaceKeepsBreaksAndFootnotesItEmpties(t *testing.T) {
 			{Text: "Slut."},
 		},
 	}
-	if !p.Replace("Fodnote om EU-forordning.", "") {
+	// An edit over the provision's own text leaves the note alone; one aimed at the note, by a
+	// span that starts in it, empties it.
+	if p.Replace("Fodnote om EU-forordning.", "") {
+		t.Fatal("an edit of the provision's text reached into its footnote")
+	}
+	if !p.ReplaceSpan(Span{From: 1, To: 3}, "Fodnote om EU-forordning.", "") {
 		t.Fatal("deleting a whole segment's text failed")
 	}
 	if p.Segments[1].Note != "id42" || !p.Segments[1].Break {

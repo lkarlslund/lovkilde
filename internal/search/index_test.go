@@ -75,9 +75,9 @@ func TestAddressOfRoundTripsThroughParseAddress(t *testing.T) {
 		{&lexdania.Section{Kind: "nr", Nr: 2, Stk: 3, Parent: para}, "§ 267, stk. 3 nr. 2"},
 	}
 	for _, c := range cases {
-		got := AddressOf(c.sec)
+		got := lexdania.AddressOf(c.sec)
 		if got != c.want {
-			t.Errorf("AddressOf(%s) = %q, want %q", c.sec.Kind, got, c.want)
+			t.Errorf("lexdania.AddressOf(%s) = %q, want %q", c.sec.Kind, got, c.want)
 			continue
 		}
 		addr := lexdania.ParseAddress(got)
@@ -90,8 +90,8 @@ func TestAddressOfRoundTripsThroughParseAddress(t *testing.T) {
 			t.Errorf("round-trip of %q gave %+v, want § 267 stk 3", got, addr)
 		}
 	}
-	if got := AddressOf(nil); got != "" {
-		t.Errorf("AddressOf(nil) = %q, want empty", got)
+	if got := lexdania.AddressOf(nil); got != "" {
+		t.Errorf("lexdania.AddressOf(nil) = %q, want empty", got)
 	}
 }
 

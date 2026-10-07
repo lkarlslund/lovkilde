@@ -1,0 +1,747 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="id5743a42a-e4de-4fa1-a49c-4a8fecdedd8e" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2022/05/17/BEKH.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="idb8d0209e-aa9a-47b4-ba04-4786c2bfba4c">
+    <DocumentType>BEK H#LOKDOK04</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20240046905</AccessionNumber>
+    <DocumentId>DG000856</DocumentId>
+    <UniqueDocumentId>243264</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om overvågning, samordnet procedure og offentliggørelse ved vurdering af virkning på miljøet (VVM) samt om administration af internationale naturbeskyttelsesområder og beskyttelse af visse arter for så vidt angår statslige vej- og jernbaneprojekter</DocumentTitle>
+    <Year>2024</Year>
+    <DiesSigni>2024-05-08</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2024-05-21</StartDate>
+    <EndDate REFid="submit_1">2026-06-23</EndDate>
+    <Status>Valid</Status>
+    <Number>469</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2024-05-21</DiesEdicti>
+    <EuReferences>32011L0092</EuReferences>
+    <EuReferences>32009L0147</EuReferences>
+    <EuReferences>31992L0043</EuReferences>
+    <Concerns id="concerns_1" />
+    <Ref_Accn REFid="concerns_1">A20230109129</Ref_Accn>
+    <Ref_Af REFid="concerns_1">2023-08-11</Ref_Af>
+    <Ref_Text REFid="concerns_1">Bekendtgørelse af jernbaneloven</Ref_Text>
+    <Concerns id="concerns_2" />
+    <Ref_Accn REFid="concerns_2">A20240043529</Ref_Accn>
+    <Ref_Af REFid="concerns_2">2024-04-24</Ref_Af>
+    <Ref_Text REFid="concerns_2">Bekendtgørelse af lov om offentlige veje m.v.</Ref_Text>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Thomas Danielsen</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Kirstine F. Hindsberger</Signature>
+    <PlaceOfSignature>Transportministeriet</PlaceOfSignature>
+    <JournalNumber>Transportmin., j.nr. 2021-809</JournalNumber>
+    <Ministry>By-, Land- og Transportministeriet</Ministry>
+  </Meta>
+  <TitelGruppe id="ide2a09c64-6b0a-480d-ae38-63314e3fbd6b">
+    <Titel id="id41f95b78-ab21-498c-b7d8-f314973699f5">
+      <Linea>
+        <Char>Bekendtgørelse om overvågning, samordnet procedure og offentliggørelse ved vurdering af virkning på miljøet (VVM) samt om administration af internationale naturbeskyttelsesområder og beskyttelse af visse arter for så vidt angår statslige vej- og jernbaneprojekter</Char>
+      </Linea>
+      <Nota id="idbe0fdad4-91aa-49e2-93f9-3c85999aef5b" formaNo="EU">
+        <Explicatus>1)</Explicatus>
+        <Exitus>
+          <Linea>
+            <Char>Bekendtgørelsen indeholder bestemmelser, der gennemfører dele af Europa-Parlamentets og Rådets direktiv 2011/92/EU af 13. december 2011 om vurdering af visse offentlige og private projekters indvirkning på miljøet, EU-Tidende 2012, nr. L 26, side 1, som ændret ved Europa-Parlamentets og Rådets direktiv 2014/52/EU af 16. april 2014 om ændring af direktiv 2011/92/EU af 13. december 2011 om vurdering af visse offentlige og private projekters indvirkning på miljøet, EU-Tidende 2014, nr. L 124, side 1, dele af Europa-Parlamentets og Rådets direktiv 2009/147/EF af 30. november 2009 om beskyttelse af vilde fugle, EU-Tidende 2010, nr. L 20, side 7, som ændret ved Rådets direktiv 2013/17/EU af 13. maj 2013, EU-Tidende 2013, nr. L 158, side 193, og dele af Rådets direktiv 92/43/EØF af 21. maj 1992 om bevaring af naturtyper samt vilde dyr og planter , EF-Tidende 1992, nr. L 206, side 7, som ændret senest ved Rådets direktiv 2013/17/EU af 13. maj 2013, EU-Tidende 2013, nr. L 158, side 193.</Char>
+          </Linea>
+        </Exitus>
+      </Nota>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="id42861859-d45d-44de-b0ca-e29845a99f7b">
+    <Indledning id="id26871c9c-a3ce-4719-9a82-24a3d92a78f2">
+      <Exitus>
+        <Linea>
+          <Char>I medfør af § 17 a, stk. 5, § 17 h, stk. 8, § 17 k, stk. 5, § 17 p, § 17 q, § 130, stk. 1, § 131, § 132, stk. 9, og § 135, stk. 2 og 3, i lov  om offentlige veje m.v., jf. lovbekendtgørelse nr. 435 af 24. april 2024, og § 38 a, stk. 5, § 38 h, stk. 8, § 38 k, stk. 4, § 38 p, § 38 q, § 102, stk. 1, § 113, stk. 1, § 115 a, stk. 4, § 117 og § 119 i jernbaneloven, jf. lovbekendtgørelse nr. 1091 af 11. august 2023, fastsættes:</Char>
+        </Linea>
+      </Exitus>
+    </Indledning>
+    <Afsnit id="id17596cb5-69cb-4de2-a670-780ab10bcab3" localId="1">
+      <Kapitel id="id0e1b41da-4d0c-4afc-8d53-1e57b83b1cf7" localId="1">
+        <ParagrafGruppe>
+          <Rubrica id="idcc75f38d-cb0a-4f11-a159-6a85c1a70b84">
+            <Linea>
+              <Char formaChar="Italic">Anvendelsesområde</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id322f05c2-d36f-42a6-bf8c-ba64599c80f1" localId="1">
+            <Explicatus>§ 1.</Explicatus>
+            <Stk id="id88c82276-5a32-4178-8811-1bd6e528b65b">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen finder anvendelse på Trafikstyrelsens behandling af sager om vurdering af virkning på miljøet i forbindelse med statslige vejprojekter, jf. lov om offentlige veje kapitel 2 a, og statslige jernbaneprojekter, jf. jernbanelovens kapitel 6 a, dog ikke når projekter opnår tilladelse ved anlægslove, jf. § 17 a, stk. 3, i lov om offentlige veje og § 38 a, stk. 3, i jernbaneloven.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id0df2c4cc-45ca-4188-a7b0-aad7b7b2e8d6">
+            <Linea>
+              <Char formaChar="Italic">Konsekvensvurdering af internationale naturbeskyttelsesområder (Natura 2000-områder)</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="ide859987a-241e-4e64-b7ea-c2aa8b41b7d2" localId="2">
+            <Explicatus>§ 2.</Explicatus>
+            <Stk id="idf238b0d6-58e3-4bf1-863c-7208dfe3630b">
+              <Exitus>
+                <Linea>
+                  <Char>Alle projekter, jf. § 1, der i sig selv eller i forbindelse med andre planer og projekter kan påvirke et internationalt naturbeskyttelsesområde væsentligt, skal konsekvensvurderes i forhold til virkningerne på det internationale naturbeskyttelsesområde under hensyn til bevaringsmålsætningen for det pågældende område.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id9e04193e-eaa2-4f37-9434-634047d3acf1" localId="3">
+            <Explicatus>§ 3.</Explicatus>
+            <Stk id="id4bb9cd3c-696a-467b-a80f-a3af090d7ac2">
+              <Exitus>
+                <Linea>
+                  <Char>Når Trafikstyrelsen modtager en ansøgning, der er omfattet af § 2 i denne bekendtgørelse, foretager styrelsen høring af berørte myndigheder med henblik på afgørelse efter § 4.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idca94b28f-2248-4ed9-a47b-8b315fd4939d" localId="4">
+            <Explicatus>§ 4.</Explicatus>
+            <Stk id="id82308c84-566e-4e41-b265-f25d86f40132">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen træffer afgørelse om, hvorvidt der skal udarbejdes en konsekvensvurdering af internationale naturbeskyttelsesområder på grundlag af oplysninger i ansøgningen og de indkomne høringssvar.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id2dcd98fe-a0a4-4ed7-a898-27095c16a1bb" localId="5">
+            <Explicatus>§ 5.</Explicatus>
+            <Stk id="id61c1824c-286d-4400-81fb-932307a35544">
+              <Exitus>
+                <Linea>
+                  <Char>Konsekvensvurderingerne af de internationale naturbeskyttelsesområder udarbejdes af projektansøger.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idb69b9a08-0c9e-4149-a44c-b6fc0b99c8a9">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Der skal foretages en konsekvensvurdering af projektets virkning på det internationale naturbeskyttelsesområde under hensyn til bevaringsmålsætningen for det pågældende område.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idb97e2514-05b7-4c87-a4c2-3817f6f9c9d0" localId="6">
+            <Explicatus>§ 6.</Explicatus>
+            <Stk id="id33810d73-a386-42b5-9265-b115983109ad">
+              <Exitus>
+                <Linea>
+                  <Char>Hvis konsekvensvurderingen viser, at det ikke kan udelukkes, at projektet i sig selv eller i forbindelse med andre planer og projekter vil skade et internationalt naturbeskyttelsesområde, kan Trafikstyrelsen ikke give tilladelse, dispensation eller godkendelse til det ansøgte, jf. dog § 7.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idb3521c6e-9e61-4c43-88c5-9c222b720aa8" localId="7">
+            <Explicatus>§ 7.</Explicatus>
+            <Stk id="id77526002-5646-45a6-a3c8-137c8e5dce1a">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen kan træffe afgørelse om at fravige § 6, når der foreligger bydende nødvendige hensyn til væsentlige samfundsinteresser, herunder af social eller økonomisk art, hvis der ikke findes nogen alternativ løsning.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id44f22def-6423-44ba-af3f-d3426b1e13f7">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>I internationale naturbeskyttelsesområder, der indeholder prioriterede naturtyper eller dyre- eller plantearter efter bekendtgørelse om udpegning og administration af internationale naturbeskyttelsesområder samt beskyttelse af visse arter, kan fravigelse som nævnt i stk. 1 dog kun ske, når der foreligger bydende nødvendige hensyn til menneskers sundhed og den offentlige sikkerhed eller væsentlige gavnlige virkninger på miljøet, eller, efter udtalelse fra Europa-Kommissionen, andre bydende nødvendige hensyn til væsentlige samfundsinteresser.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idff2251a1-98de-4e4b-a35b-52edd4550f24">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Fravigelse efter stk. 1 forudsætter, at der træffes alle nødvendige kompensationsforanstaltninger for at sikre, at sammenhængen i netværket for de internationale naturbeskyttelsesområder bevares.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Europa-Kommissionen skal underrettes om, hvilke kompensationsforanstaltninger, der træffes.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idc2aac8c2-4e94-4788-95d3-349c4a445400">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Afgørelse om fravigelse efter stk. 1 træffes af Trafikstyrelsen efter høring af berørte myndigheder.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id4de9b940-6ace-4eb1-b1c6-ff369f2468ca">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen forestår den i stk. 2 og 3 nævnte kontakt til Europa-Kommissionen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="ide78263df-34cb-4c2d-8656-a53f8ab599c5" localId="8">
+            <Explicatus>§ 8.</Explicatus>
+            <Stk id="id24c4537c-fc7d-4982-925d-ac874377ce87">
+              <Exitus>
+                <Linea>
+                  <Char>Ved behandling af de i § 1 nævnte sager kan Trafikstyrelsen ikke give tilladelse, dispensation, godkendelse m.v., hvis det ansøgte kan:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id2d5b1d61-1ec6-4d70-bdab-606898a41795">
+                <Index>
+                  <Indentatio id="idce3fe788-be3c-4ed3-819c-bdfa3a6c52ae" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>beskadige eller ødelægge yngle- eller rasteområder i det naturlige udbredelsesområde for de dyrearter, der er optaget i Europa-Parlamentets og Rådets direktiv 92/43/EØF af 21. maj 1992 om bevaring af naturtyper samt vilde dyr og planter (habitatdirektivet) bilag IV, litra a), eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idcef8372d-e9d0-4f60-9116-3550501ddb78" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>ødelægge de plantearter, som er optaget i habitatdirektivets bilag IV, litra b) i alle livsstadier.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="id7adb6877-1e13-4a23-9702-179bbee3b5c4">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Bestemmelserne i stk. 1 gælder uanset, om de pågældende arter forekommer inden for et internationalt naturbeskyttelsesområde eller ej.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="ide7783333-ba7f-4e85-a4b4-3552420c74eb" localId="9">
+            <Explicatus>§ 9.</Explicatus>
+            <Stk id="id06b1b988-1ad9-44d4-9a28-8534435b50f5">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen kan dog fravige § 8, hvis et tilfredsstillende alternativ ikke foreligger, og hvis fravigelsen ikke hindrer, at den pågældende bestands bevaringsstatus opretholdes i dens naturlige udbredelsesområde.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Fravigelse kan kun ske i de situationer, hvor det ansøgte har til formål at:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="idcf1134a0-a723-401c-bc2d-52f085b5804b">
+                <Index>
+                  <Indentatio id="id7e618078-6309-457a-8d99-665eaa80c8da" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>beskytte vilde dyr og planter og bevare naturtyperne,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id427f872f-dad9-46f9-9c71-9ab38237c285" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>forhindre alvorlig skade navnlig på afgrøder, besætning, skove, fiskeri, vand og andre former for ejendom,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id3fd369fc-4426-4b8c-a7b4-da831718b6dd" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>sikre hensyn til den offentlige sundhed og sikkerhed eller af andre bydende nødvendige hensyn til væsentlige samfundsinteresser, herunder af social og økonomisk art, og hensyn til væsentlige gavnlige virkninger på miljøet, eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id1ae07264-5b08-4f10-8149-5fa7d6e6d665" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>fremme forskning og undervisning, genopretning af en bestand, genudsætning af disse arter og opdræt med henblik herpå, herunder kunstig opformering af planter.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="id7890531b-a7db-4771-ac75-37ac20476804">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Beslutning om at fravige stk. 1 træffes af Trafikstyrelsen efter høring af berørte myndigheder.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id668477ec-72b5-4680-88c6-7ad4082bddef">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen underretter Europa-Kommissionen om fravigelser efter stk. 1.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id0437dc4f-d173-461c-9499-3aa4504acce1" localId="10">
+            <Explicatus>§ 10.</Explicatus>
+            <Stk id="idddf610e6-a56d-41e7-bd3a-e0fa47bfb008">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen kan fastsætte vilkår i tilladelse, dispensation eller godkendelse med henblik på opretholdelse af bevaringsmålsætninger for internationale naturbeskyttelsesområder og beskyttelse af visse arter, herunder om de nødvendige kompensationsforanstaltninger, som nævnt i § 7, stk. 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id6a43ada5-e4b4-42ef-8e20-0b05f867001e">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Overtrædes vilkår som nævnt i stk. 1, så der opstår risiko for negativ påvirkning af det internationale naturbeskyttelsesområde under hensyn til bevaringsmålsætningen for det pågældende område eller beskyttelsen af visse arter, kan Trafikstyrelsen meddele påbud eller forbud om at:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id3244f21e-5ea7-4f6a-a523-25886bd4982c">
+                <Index>
+                  <Indentatio id="id821f3ff4-e92e-4cb1-a35a-6d1563e22261" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>overtrædelsen bringes til ophør,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idbe18f0ac-136f-4c4b-bcaf-516dd9f1b871" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>der gennemføres foranstaltninger for at ophæve den negative påvirkning,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idceed48ce-b4ff-4737-a3a0-674cf48c3ee2" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>planen eller projektet ændres, og</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id4d8030d7-a86b-4914-b3a4-9044b2451064" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>alt arbejde vedrørende gennemførelse af projektet indstilles.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="idbb76da57-6f59-4ab8-95e1-56d0296b1b45">
+            <Linea>
+              <Char formaChar="Italic">Fastsættelse af vilkår om overvågning</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="idf8f07c35-abc1-4094-8233-add678224c0d" localId="11">
+            <Explicatus>§ 11.</Explicatus>
+            <Stk id="idcea15b83-324b-44a3-a5ea-863406e57741">
+              <Exitus>
+                <Linea>
+                  <Char>Hvis et projekt, jf. § 1, har væsentlig skadelig indvirkning på miljøet, fastsætter Trafikstyrelsen vilkår om overvågning heraf i tilladelsen til statslige vejprojekter, jf. lov om offentlige veje § 17 k, stk. 2, og statslige jernbaneprojekter, jf. jernbanelovens § 38 k, stk. 2.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id680ac7c8-da79-45b9-b4bf-3662573573df">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Vilkårene fastsættes konkret under hensyn til projektets væsentlige indvirkninger på miljøet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="idb42bdd1e-9033-41a1-be76-34844441e262">
+            <Linea>
+              <Char formaChar="Italic">Overvågningens indhold</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id47351129-1a52-4af5-b0b8-931995aaf644" localId="12">
+            <Explicatus>§ 12.</Explicatus>
+            <Stk id="id4392b22d-91a5-4500-b093-0c652aec9cc8">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen fastsætter i vilkårene de relevante mål og parametre, samt perioden for overvågningen, herunder om overvågningen skal foretages i intervaller.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Vilkårene skal stå i et rimeligt forhold til projektets art, placering, økonomi og dimensioner, samt omfanget af dets indvirkninger på miljøet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id17808beb-c12e-4001-9674-edf70791e81f">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen kan beslutte, at eksisterende overvågningsordninger kan anvendes som vilkår.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="idac1cfdc7-621d-4f64-b8af-7ce8da036e55">
+            <Linea>
+              <Char formaChar="Italic">Overvågningens gennemførelse</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="ida5689672-c419-46e4-8927-916bf7eefe2b" localId="13">
+            <Explicatus>§ 13.</Explicatus>
+            <Stk id="id9d9392ea-830e-4510-a00a-444f36ee071f">
+              <Exitus>
+                <Linea>
+                  <Char>Vejdirektoratet varetager overvågningen ved statslige vejprojekter, og Banedanmark varetager overvågningen ved statslige jernbaneprojekter.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id53b0695e-9d74-4254-9a3a-b4866fc998ca">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Vejdirektoratet og Banedanmark skal indhente alle relevante oplysninger til brug for overvågningen.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id4442d51c-cf54-4d5c-b65f-4ec7b76ef9f4">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen kan pålægge Vejdirektoratet og Banedanmark at foretage nødvendige dispositioner for at sikre, at overvågningen gennemføres, og kan beslutte, at overvågning skal udøves af andre end Vejdirektoratet og Banedanmark.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id2e43d7b2-a663-49a0-90cc-400afc45daf9">
+            <Linea>
+              <Char formaChar="Italic">Afrapportering af overvågning</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id16cd6504-9b2e-4be5-ae42-8cf3889f13e0" localId="14">
+            <Explicatus>§ 14.</Explicatus>
+            <Stk id="id08208106-0525-45c4-863c-133099d6ac87">
+              <Exitus>
+                <Linea>
+                  <Char>Vejdirektoratet og Banedanmark skal, hvis der pålægges vilkår om overvågning, løbende indberette resultaterne af overvågningen til Trafikstyrelsen.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Trafikstyrelsen fastsætter de nærmere krav til hyppighed og arten af indberetning i vilkår om overvågning.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id4bd9b45e-4741-4b14-be0b-7354afc24f57">
+            <Linea>
+              <Char formaChar="Italic">Samordnet procedure, fælles procedure og fælles miljøkonsekvensrapport</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="idd1fba168-3b03-49d8-92a4-988849f163f9" localId="15">
+            <Explicatus>§ 15.</Explicatus>
+            <Stk id="id455b6506-57db-4c65-af06-fe8bef181a1a">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen anvender en samordnet procedure, jf. stk. 2, eller en fælles procedure, jf. stk. 4, hvis et projekt både forudsætter, at der foretages en miljøkonsekvensvurdering efter henholdsvis § 17 a, stk. 1 og 2, i lov om offentlige veje og henholdsvis § 38 a, stk. 1 og 2, i jernbaneloven, og at en eller flere statslige myndigheder, regioner eller kommuner som kompetente myndigheder skal foretage en vurdering efter bestemmelser, som gennemfører habitatdirektivet og Europa-Parlamentets og Rådets direktiv 2009/147/EF af 30. november 2009 om beskyttelse af vilde fugle , EU-Tidende 2010, nr. L 20, side 7 (fuglebeskyttelsesdirektivet).</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id51c8e426-f342-40d2-9280-bf13bec0936d">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ved den samordnede procedure fungerer Trafikstyrelsen som kontaktpunkt for såvel ansøger som de kompetente myndigheder, når et projekt omfattet af denne bekendtgørelse kræver miljøvurdering efter bestemmelser, som gennemfører habitatdirektivet og fuglebeskyttelsesdirektivet.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="iddcdee34a-0933-4cf4-9ed0-a7ce684dc016">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen sikrer, at miljøvurderingsprocessen koordineres mellem de kompetente myndigheder og samler de enkelte myndigheders vurderinger af projektet med henblik på at sikre, at eventuelle uenigheder mellem myndighederne om vurderingen af projektet afklares hurtigst muligt.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id8d57e6b3-201b-4b40-8144-7efe97e20559">
+              <Explicatus>Stk. 4.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Ved anvendelse af den fælles procedure gennemfører Trafikstyrelsen den samlede miljøvurderingsproces og udarbejder den samlede vurdering af ansøgningen, medmindre andet aftales i den konkrete sag.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idadc6d89e-94b1-4047-a373-c00176238423">
+              <Explicatus>Stk. 5.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Vurderinger efter bestemmelser, der gennemfører habitatdirektivet og fuglebeskyttelsesdirektivet, skal tydeligt kunne identificeres i miljøkonsekvensvurderingsrapporten.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id82cb7c6b-b7a0-4f76-98d0-a2fc5a7b16f6" localId="16">
+            <Explicatus>§ 16.</Explicatus>
+            <Stk id="idb7f99326-9760-4593-bfc3-f87c0cd1294d">
+              <Exitus>
+                <Linea>
+                  <Char>Hvis et anlæg eller en foranstaltning omfattet af denne bekendtgørelse udgør en del af et samlet projekt, der tillige omfatter anlæg og foranstaltninger omfattet af en anden bekendtgørelse eller lov om VVM, kan de berørte myndigheder indbyrdes aftale, at ansøger kan udarbejde og fremlægge en fælles miljøkonsekvensrapport for projektet.</Char>
+                </Linea>
+                <Linea>
+                  <Char>Miljøkonsekvensrapporten skal forelægges alle berørte myndigheder.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="idcc69fd6a-35fb-40bb-a1e3-15d74f9c37f9">
+            <Linea>
+              <Char formaChar="Italic">Fritagelse af projekter fra miljøkonsekvensvurdering</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="ida9a1dedb-fddc-4533-8c25-70ce0738d474" localId="17">
+            <Explicatus>§ 17.</Explicatus>
+            <Stk id="idb94c5ef6-14b4-41bb-97d9-7cd30746b042">
+              <Exitus>
+                <Linea>
+                  <Char>Ved vurderingen af, om et statsligt vejprojekt eller jernbaneprojekt i undtagelsestilfælde kan fritages helt eller delvist fra lov om offentlige veje og jernbanelovens bestemmelser om miljøkonsekvensvurdering, jf. lov om offentlige veje § 17 a, stk. 4, og jernbanelovens § 38 a, stk. 4, skal Trafikstyrelsen undersøge, om der bør foretages en miljøkonsekvensvurdering, som ikke opfylder alle krav til miljøkonsekvensvurdering i lov om offentlige veje og jernbaneloven, men som er i overensstemmelse med formålet med kapitel 2 a i lov om offentlige veje, jf. lov om offentlige veje § 1, nr. 6, og kapitel 6 a i jernbaneloven, jf. jernbanelovens § 1, stk. 3.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id0e646b75-a0dd-46b1-84ef-194b66bd3c44">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen skal stille alle oplysninger indhentet som led i den vurdering, der er gennemført efter stk. 1, oplysninger vedrørende afgørelsen om at indrømme fritagelsen samt grundene til, at den er blevet indrømmet, til rådighed for offentligheden.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="idb0c0b60d-5205-450e-9247-79d900999755">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen skal forud for meddelelse af fritagelse efter stk. 1 underrette Europa-Kommissionen om begrundelsen for den indrømmede fritagelse samt give Europa-Kommissionen de oplysninger, som Trafikstyrelsen i givet fald stiller til rådighed for offentligheden.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id2d59025e-d588-49aa-a976-1127357d4f33">
+            <Linea>
+              <Char formaChar="Italic">Offentliggørelse</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id72832165-986d-4f90-b81b-e57987d08263" localId="18">
+            <Explicatus>§ 18.</Explicatus>
+            <Stk id="id2f6ff49e-08e3-4d6c-afe8-031249032044">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen offentliggør afgørelser og høringsmateriale efter lov om offentlige veje, kapitel 2 a, samt jernbanelovens kapitel 6 a, på en central elektronisk portal eller på Trafikstyrelsens hjemmeside.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id9e5ca613-a39d-447e-8d95-7255148e7e72">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Følgende oplysninger offentliggøres, jf. § 17 m i lov om offentlige veje og § 38 m i jernbaneloven:</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id60e9e4e3-2298-439d-b1e8-bfab47d2d093">
+                <Index>
+                  <Indentatio id="idf942c541-dc83-4de2-b527-cb4599633119" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Indholdet af afgørelsen og de betingelser, der eventuelt er knyttet hertil.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id26f8a3d0-d794-44ed-b45c-5bfc61650ef6" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>De vigtigste begrundelser og overvejelser, der ligger til grund for afgørelsen, herunder oplysninger om proceduren for offentlig deltagelse.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id8eb84ccd-52d9-4c32-8ecc-9a7d2ad466fa" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Resuméet af resultaterne af de høringer, der er foretaget.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id075bf76a-9541-4144-9a54-da789961fb2c" formaInd="Nummer">
+                    <Explicatus>4)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>De oplysninger, der er indsamlet i henhold til lov om offentlige veje § 17 h, stk. 1, 2. pkt., § 17 h, stk. 2, og § 17 i, og jernbanelovens § 38 h, stk. 1, 2. pkt., § 38 h, stk. 2, og § 38 i.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idfa8fafa9-6dc0-4616-a4dc-6407bc5748ac" formaInd="Nummer">
+                    <Explicatus>5)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>Hvorledes resultaterne og oplysningerne, der er nævnt i nr. 3 og 4, er indarbejdet i afgørelsen eller på anden måde taget i betragtning, navnlig eventuelle bemærkninger fra berørte stater, jf. lov om offentlige veje § 17 i og jernbanelovens § 38 i.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+            <Stk id="id0624c136-25b7-4ef1-87c1-a50100773683">
+              <Explicatus>Stk. 3.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen skal, jf. lov om offentlige veje § 17 m, stk. 2, og jernbanelovens § 38 m, stk. 2, underrette alle stater, der er blevet hørt, jf. lov om offentlige veje § 17 i, stk. 3, og jernbanelovens § 38 i, stk. 3, og fremsende de oplysninger, der er nævnt i stk. 2 til staterne.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id8ec97415-9e71-4325-9253-02030d48d76b" localId="19">
+            <Explicatus>§ 19.</Explicatus>
+            <Stk id="id801edc7a-3269-40a6-a6ec-9f4ac03d7fe2">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen offentliggør praktiske oplysninger om adgang til domstolsprøvelse, jf. lov om offentlige veje § 132, stk. 6-8, og jernbanelovens § 115 a, stk. 1-3, på Trafikstyrelsens hjemmeside eller en anden lignende hjemmeside.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id8f85e8c8-8e86-484a-96c0-861bbe49cf7a">
+            <Linea>
+              <Char formaChar="Italic">Tilsyn</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id6900e869-0a76-4dc0-a652-861ba9e12f2f" localId="20">
+            <Explicatus>§ 20.</Explicatus>
+            <Stk id="idb61b487e-4c0b-4064-9316-cbfa9eef1e3a">
+              <Exitus>
+                <Linea>
+                  <Char>Efter lov om offentlige veje § 17 o og jernbanelovens § 38 o fører Trafikstyrelsen tilsyn med overholdelse af bestemmelserne i denne bekendtgørelse og med, at de fastsatte vilkår overholdes.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id2bfadbce-b38a-4ff8-949c-4ce06d5b3fad">
+            <Linea>
+              <Char formaChar="Italic">Forbud, påbud, genoptagelse m.v.</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="id5f281799-6786-4414-bd3e-14ad86225334" localId="21">
+            <Explicatus>§ 21.</Explicatus>
+            <Stk id="idaeedb03c-5bd7-4f31-9446-dd277cca9da4">
+              <Exitus>
+                <Linea>
+                  <Char>Trafikstyrelsen kan, jf. § 17 l i lov om offentlige veje og § 38 l i jernbaneloven, blandt andet på baggrund af overvågningens resultater genoptage en afgørelse om at tillade et ansøgt projekt, og om nødvendigt meddele forbud og påbud, herunder tilbagekalde en tilladelse eller fastsætte særlige vilkår til en eksisterende tilladelse, hvis</Char>
+                </Linea>
+              </Exitus>
+              <Exitus id="id7bc24ef5-71f4-462b-ba75-e0df2970dba8">
+                <Index>
+                  <Indentatio id="id188a480c-4e5d-4b7e-ae17-6242a6429d75" formaInd="Nummer">
+                    <Explicatus>1)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>der fremkommer nye oplysninger om projektets væsentlige skadelige indvirkning på miljøet,</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="id9de2b706-608d-415b-9ead-35f8c4b0017b" formaInd="Nummer">
+                    <Explicatus>2)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektets væsentlige skadelige indvirkning ikke kunne forudses ved Trafikstyrelsens meddelelse af tilladelsen, eller</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                  <Indentatio id="idaca2dd95-aa31-4b88-b98e-e253df63d7c1" formaInd="Nummer">
+                    <Explicatus>3)</Explicatus>
+                    <Exitus>
+                      <Linea>
+                        <Char>projektets skadelige indvirkning i øvrigt går ud over det, som blev lagt til grund ved Trafikstyrelsens meddelelse af tilladelse.</Char>
+                      </Linea>
+                    </Exitus>
+                  </Indentatio>
+                </Index>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id5829b094-8779-43cc-9b19-355f38d4b6cc">
+            <Linea>
+              <Char formaChar="Italic">Klage</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="idec612b45-3d89-4e49-9241-f9a009ba2163" localId="22">
+            <Explicatus>§ 22.</Explicatus>
+            <Stk id="id54b347f4-95c2-441c-ad5e-67667cc870eb">
+              <Exitus>
+                <Linea>
+                  <Char>Afgørelser truffet af Trafikstyrelsen efter denne bekendtgørelse kan ikke påklages til transportministeren eller anden administrativ myndighed.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+        <ParagrafGruppe>
+          <Rubrica id="id5971610a-6e44-498c-84df-1475620fa5c0">
+            <Linea>
+              <Char formaChar="Italic">Ikrafttræden</Char>
+            </Linea>
+          </Rubrica>
+          <Paragraf id="idf7097a17-f337-483f-b4bf-c0973bcb3e7e" localId="23">
+            <Explicatus>§ 23.</Explicatus>
+            <Stk id="id112ed412-ab02-49e2-be12-674ba9b01d02">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen træder i kraft den 15. juni 2024.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+            <Stk id="id14286720-48c8-4ad5-bd31-af0832e5dc65">
+              <Explicatus>Stk. 2.</Explicatus>
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelse nr. 451 af 8. maj 2017 om overvågning, samordnet procedure og offentliggørelse ved vurdering af virkning på miljøet (VVM) af statslige vej- og jernbaneprojekter ophæves.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+    </Afsnit>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="id9e79d5c3-864d-4d52-90ce-52ed014de537">
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

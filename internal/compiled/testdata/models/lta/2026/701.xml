@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dokument id="id49725e91-443f-49ce-8ead-a91de18dd5df" SchemaLocation="http://www.retsinformation.dk/offentlig/xml/schemas/2025/08/19/BEKH.Retsinfo.LexDania_2.1.xsd">
+  <Meta id="id91c80a0b-8007-418a-a4fb-77e9ed4538de">
+    <DocumentType>BEK H#LOKDOK04</DocumentType>
+    <Rank>B</Rank>
+    <AccessionNumber>B20260070105</AccessionNumber>
+    <DocumentId>AE003462</DocumentId>
+    <UniqueDocumentId>257310</UniqueDocumentId>
+    <DocumentTitle>Bekendtgørelse om satsreguleringsprocenten, tilpasningsprocenten og satstilpasningsprocenten for finansåret 2027</DocumentTitle>
+    <Year>2026</Year>
+    <DiesSigni>2026-08-24</DiesSigni>
+    <DateOfSubmit id="submit_1" />
+    <StartDate REFid="submit_1">2026-08-26</StartDate>
+    <EndDate REFid="submit_1">2026-08-27</EndDate>
+    <Status>Valid</Status>
+    <Number>701</Number>
+    <AnnouncedIn>Lovtidende A</AnnouncedIn>
+    <DiesEdicti>2026-08-26</DiesEdicti>
+    <Concerns id="concerns_1" />
+    <Ref_Accn REFid="concerns_1">A20200023729</Ref_Accn>
+    <Ref_Af REFid="concerns_1">2020-02-27</Ref_Af>
+    <Ref_Text REFid="concerns_1">Bekendtgørelse af lov om en satsreguleringsprocent</Ref_Text>
+    <Republished>Nej</Republished>
+    <Sign id="sign" />
+    <Signature REFid="sign">Peter Hummelgaard</Signature>
+    <Sub-Sign id="subsign" />
+    <Signature REFid="subsign">Mikkel Nørlem Hermansen</Signature>
+    <PlaceOfSignature>Finansministeriet</PlaceOfSignature>
+    <JournalNumber>Finansmin., j.nr. 2026 – 3358</JournalNumber>
+    <Ministry>Finansministeriet</Ministry>
+  </Meta>
+  <TitelGruppe id="id9997903a-e087-481d-be83-ff7dbf39a87d">
+    <Titel id="idbc01cb10-c6f0-4e31-9cfa-ab783d9198f4">
+      <Linea>
+        <Char>Bekendtgørelse om satsreguleringsprocenten, tilpasningsprocenten og satstilpasningsprocenten for finansåret 2027</Char>
+      </Linea>
+    </Titel>
+  </TitelGruppe>
+  <DokumentIndhold id="id8028597c-3511-420d-98d2-bf080afe06f3">
+    <Indledning id="id5d969cd1-8eae-4718-a198-bcad7861dc4c">
+      <Exitus>
+        <Linea>
+          <Char>I medfør af § 6 i lov om en satsreguleringsprocent, jf. lovbekendtgørelse nr. 237 af 27. februar 2020 om en satsreguleringsprocent, fastsættes i overensstemmelse med bekendtgørelse nr. 850 af 20. august 2019 om beregning af satsreguleringsprocenten m.v.:</Char>
+        </Linea>
+      </Exitus>
+    </Indledning>
+    <Afsnit id="idd3448f7d-0f8b-41f2-8ad9-6500629490ea" localId="1">
+      <Kapitel id="idae16b98f-91c7-4b41-a87d-03ce482f7d54" localId="1">
+        <ParagrafGruppe>
+          <Paragraf id="ide7cbd216-13dc-4acc-b51f-2ce0767e1744" localId="1">
+            <Explicatus>§ 1.</Explicatus>
+            <Stk id="idb18178ca-b91e-4936-a4f0-f5806348ec19">
+              <Exitus>
+                <Linea>
+                  <Char>Satsreguleringsprocenten for finansåret 2027 udgør 2,6, jf. § 2 i lov om en satsreguleringsprocent.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="id912a5b88-d175-414c-aeba-b9fb5988e3d4" localId="2">
+            <Explicatus>§ 2.</Explicatus>
+            <Stk id="id058d262c-9dbb-4cee-9cde-689f28413856">
+              <Exitus>
+                <Linea>
+                  <Char>Tilpasningsprocenten for finansåret 2027 udgør 0,9, jf. § 3 i lov om en satsreguleringsprocent.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idd37cf2b0-db33-4769-916f-945a41bb7152" localId="3">
+            <Explicatus>§ 3.</Explicatus>
+            <Stk id="idf994c682-7bb6-456b-a8ab-f1e86b53dd78">
+              <Exitus>
+                <Linea>
+                  <Char>Satstilpasningsprocenten for finansåret 2027 udgør 0,6, jf. § 4 i lov om en satsreguleringsprocent.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+          <Paragraf id="idda5c0333-ec53-480f-95e8-118602e37010" localId="4">
+            <Explicatus>§ 4.</Explicatus>
+            <Stk id="id7bfb6321-2076-4ab5-98b3-4376126ca007">
+              <Exitus>
+                <Linea>
+                  <Char>Bekendtgørelsen træder i kraft den 31. august 2026.</Char>
+                </Linea>
+              </Exitus>
+            </Stk>
+          </Paragraf>
+        </ParagrafGruppe>
+      </Kapitel>
+    </Afsnit>
+  </DokumentIndhold>
+  <UnderskriftGruppe id="id859f9f55-80f9-4bf5-a1ce-398f6007533e">
+    <UnderskriftStedDato />
+    <Underskriver />
+  </UnderskriftGruppe>
+</Dokument>

@@ -3,6 +3,7 @@ package lexdoc
 import (
 	"fmt"
 	"html"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -222,8 +223,14 @@ func renderWhole(r renderer, c *Content) {
 	if len(c.EntryIntoForce) > 0 {
 		// These are provisions, and they are cited — but their numbering is its own series, so
 		// they are not shown as part of the law's sequence.
-		r.heading(2, "ikraft", "Entry into force and transitional provisions")
-		r.emphasis("Numbered in their own series: citing them as a section of the law would reach a different provision.")
+		if r.mode == htmlText {
+			// The reading page is Danish; the text forms an agent reads stay in English.
+			r.heading(2, "ikraft", "Ikrafttrædelses- og overgangsbestemmelser")
+			r.emphasis("Nummereret i deres egen række: at citere dem som en paragraf i loven ville ramme en anden bestemmelse.")
+		} else {
+			r.heading(2, "ikraft", "Entry into force and transitional provisions")
+			r.emphasis("Numbered in their own series: citing them as a section of the law would reach a different provision.")
+		}
 		for i := range c.EntryIntoForce {
 			writeEntryIntoForce(r, &c.EntryIntoForce[i])
 		}
@@ -285,6 +292,20 @@ func writeNodes(r renderer, nodes []Node, depth int) {
 // Where it printed nothing, the mirror's own word for the kind stands in, so the answer still says
 // what the thing is instead of leaving it to be guessed from a heading's font size.
 func writePart(r renderer, p *Part) {
+	if r.mode == htmlText && strings.TrimSpace(p.Printed) == "" {
+		// A page shows what the document prints. A division it neither numbers nor heads keeps
+		// its anchor and nothing else; one with only a heading shows the heading. The text forms
+		// still name the kind, so an agent can tell a chapter from a group.
+		id := r.ids.partID(p)
+		if strings.TrimSpace(p.Heading) == "" {
+			if id != "" {
+				fmt.Fprintf(r.b, "<div id=%q></div>\n", id)
+			}
+			return
+		}
+		r.heading(2, id, p.Heading)
+		return
+	}
 	label := strings.TrimSpace(p.Printed)
 	if label == "" {
 		kind := "section"
@@ -293,6 +314,8 @@ func writePart(r renderer, p *Part) {
 			kind = "chapter"
 		case PartAfsnit:
 			kind = "division"
+		case PartBook:
+			kind = "book"
 		case PartGroup:
 			kind = "group of provisions"
 		}
@@ -345,6 +368,10 @@ func writeProvisionHead(r renderer, p *Provision) {
 // make the break — nothing here re-reads the text for a "Stk." which would turn one written inside
 // a sentence into a subsection.
 func writeProvisionBody(r renderer, p *Provision) {
+	if r.mode == htmlText && len(p.Stykker) > 0 {
+		writeProvisionBodyHTML(r, p)
+		return
+	}
 	boundary := map[int]bool{}
 	for i := range p.Stykker {
 		st := &p.Stykker[i]
@@ -377,12 +404,174 @@ func writeProvisionBody(r renderer, p *Provision) {
 	r.paragraph(out.String())
 }
 
+// writeProvisionBodyHTML lays a provision out as a reader expects a law to look: each subsection a
+// paragraph opening with its label, each condition its own line indented under it with the label
+// hanging, lettered conditions inside numbered ones indented once more, and the sentences of a
+// paragraph run together as prose. The words are the plain text's, in its order
+// (TestHTMLSaysWhatPlainTextSays); only where a block starts and how it is set differ.
+func writeProvisionBodyHTML(r renderer, p *Provision) {
+	// Blocks start at the provision's start, at every subsection and condition, and where a
+	// condition ends inside its subsection, so text after a list is not set as the last condition.
+	type block struct {
+		depth int
+		stk   bool
+	}
+	starts := map[int]block{0: {stk: true}}
+	var items []Span
+	for _, st := range p.Stykker {
+		if st.Span.From > 0 {
+			starts[st.Span.From] = block{stk: true}
+		}
+		for _, it := range st.Items {
+			items = append(items, it.Span)
+		}
+	}
+	depthAt := func(i int) int {
+		d := 0
+		for _, sp := range items {
+			if sp.From <= i && i < sp.To {
+				d++
+			}
+		}
+		return d
+	}
+	if first := p.Stykker[0].Span.From; first > 0 && labelsOnly(p.Segments[:first]) {
+		delete(starts, first) // "§ 9 a." printed apart: the first subsection's text follows it
+	}
+	for _, sp := range items {
+		starts[sp.From] = block{depth: depthAt(sp.From)}
+	}
+	for _, st := range p.Stykker {
+		numbered := false
+		for _, it := range st.Items {
+			numbered = numbered || it.Litra == "" && it.Nr > 0
+		}
+		for _, it := range st.Items {
+			// "a)" listed beside "1)" rather than inside it: in a list of numbers, letters are
+			// the number's conditions.
+			if b := starts[it.Span.From]; numbered && it.Litra != "" && b.depth == 1 {
+				starts[it.Span.From] = block{depth: 2}
+			}
+		}
+	}
+	for _, sp := range items {
+		if _, taken := starts[sp.To]; !taken && sp.To < len(p.Segments) && !isStykkeStart(p, sp.To) {
+			starts[sp.To] = block{depth: depthAt(sp.To)}
+		}
+	}
+
+	open := false
+	labelNext := false // the block's first segment is checked for a printed label
+	cur := ""          // the class of the block being written
+	for i, sg := range p.Segments {
+		if b, ok := starts[i]; ok {
+			if open {
+				r.b.WriteString("</p>\n")
+			}
+			class := "stk"
+			if !b.stk {
+				class = "item d" + strconv.Itoa(min(b.depth, 3))
+				if b.depth == 0 {
+					class = "cont"
+				}
+			}
+			fmt.Fprintf(r.b, "<p class=%q>", class)
+			open, labelNext, cur = true, true, class
+		}
+		text := sg.Text
+		if labelNext {
+			labelNext = false
+			lbl, rest, kind := printedLabel(text)
+			if lbl == "" && cur != "cont" {
+				// No label printed: an empty cell keeps the text in its column.
+				r.b.WriteString(`<span class="lbl"></span>`)
+			}
+			if lbl != "" {
+				fmt.Fprintf(r.b, "<span class=%q>", "lbl "+kind)
+				r.text(lbl)
+				r.b.WriteString("</span>")
+				if strings.TrimSpace(rest) == "" {
+					// a label printed on a line of its own: the text follows on the same line
+					r.b.WriteString(" ")
+					labelNext = kind == "par" && i+1 < len(p.Segments) && !isStartAt(starts, i+1) && isStykkeLabelOnly(p.Segments[i+1].Text)
+					continue
+				}
+				text = rest
+			}
+		}
+		r.text(text)
+		if sg.Break {
+			r.b.WriteString(" ")
+		}
+	}
+	if open {
+		r.b.WriteString("</p>\n")
+	}
+}
+
+// labelsOnly reports lines that print labels and nothing else.
+func labelsOnly(segs []Segment) bool {
+	for _, sg := range segs {
+		if lbl, rest, _ := printedLabel(sg.Text); lbl == "" || strings.TrimSpace(rest) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// isStartAt reports a block starting at segment i.
+func isStartAt[T any](starts map[int]T, i int) bool {
+	_, ok := starts[i]
+	return ok
+}
+
+// isStykkeStart reports a segment where one of the provision's subsections begins.
+func isStykkeStart(p *Provision, i int) bool {
+	for _, st := range p.Stykker {
+		if st.Span.From == i {
+			return true
+		}
+	}
+	return false
+}
+
+// isStykkeLabelOnly reports a line holding a subsection's label alone: "Stk. 1." printed after
+// the provision's own number.
+func isStykkeLabelOnly(text string) bool {
+	m := reStkLabelLead.FindStringIndex(text)
+	return m != nil && strings.TrimSpace(text[m[1]:]) == ""
+}
+
+// rePrintedLabel is the label a block of a provision opens with: the provision's "§ 9 a.", a
+// subsection's "Stk. 2.", a condition's "1)", "5 a)" or "b)".
+var rePrintedLabel = regexp.MustCompile(`^([\s\x{a0}]*)(§[\s\x{a0}]*[0-9]+(?:[\s\x{a0}]*[a-zæøå])?\.|Stk\.[\s\x{a0}]*[0-9]+[\s\x{a0}]*[a-zæøå]?\.|\(?[0-9]+(?:[\s\x{a0}]*[a-zæøå])?\)|[a-zæøå]\))([\s\x{a0}]|$)`)
+
+// printedLabel splits a block's first line into the label it opens with and the rest, and says
+// which kind of label it is: "par", "stk" or "nr".
+func printedLabel(text string) (label, rest, kind string) {
+	m := rePrintedLabel.FindStringSubmatchIndex(text)
+	if m == nil {
+		return "", text, ""
+	}
+	label = text[m[4]:m[5]]
+	rest = text[m[5]:]
+	switch {
+	case strings.HasPrefix(label, "§"):
+		kind = "par"
+	case strings.HasPrefix(label, "Stk"):
+		kind = "stk"
+	default:
+		kind = "nr"
+	}
+	return label, rest, kind
+}
+
 // appendixLabel names an annex the way the document shows it.
 func appendixLabel(ap *Appendix) string {
 	if ap.Label != "" {
 		return ap.Label
 	}
-	return "Annex " + ap.Number
+	return "Bilag " + ap.Number // the document's own word for it
 }
 
 // writeUnmapped prints the content the model has no concept for, counted by what the mirror called
@@ -404,8 +593,12 @@ func writeUnmapped(r renderer, unmapped []Unmapped) {
 	for _, k := range kinds {
 		labels = append(labels, fmt.Sprintf("%s ×%s", k, strconv.Itoa(counts[k])))
 	}
-	r.heading(2, "ovrigt", fmt.Sprintf("Other content the model has no concept for (%d pieces)", len(unmapped)))
-	r.emphasis(strings.Join(labels, ", "))
+	if r.mode == htmlText {
+		r.heading(2, "ovrigt", fmt.Sprintf("Indhold modellen ikke har et begreb for (%d stykker)", len(unmapped)))
+	} else {
+		r.heading(2, "ovrigt", fmt.Sprintf("Other content the model has no concept for (%d pieces)", len(unmapped)))
+		r.emphasis(strings.Join(labels, ", "))
+	}
 	for _, u := range unmapped {
 		if strings.TrimSpace(u.Text) == "" {
 			continue

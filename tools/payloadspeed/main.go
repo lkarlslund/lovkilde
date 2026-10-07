@@ -23,6 +23,7 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/retsinformation/internal/parallel"
 )
 
 func main() {
@@ -116,7 +117,7 @@ func run(a *lexdania.Archive, want []string, path string, chunk int) time.Durati
 		for lo := 0; lo < len(want); lo += chunk {
 			hi := min(lo+chunk, len(want))
 			frames := make([]compiled.CompiledFrame, hi-lo)
-			lexdania.Parallel(context.Background(), hi-lo, func(i int) {
+			parallel.For(context.Background(), hi-lo, func(i int) {
 				doc, _, ok := a.Open(want[lo+i])
 				if !ok {
 					return
@@ -138,6 +139,7 @@ func run(a *lexdania.Archive, want []string, path string, chunk int) time.Durati
 			}
 		}
 	}
+	wr.SetCatalogue([]byte("[]")) // no archive: an empty catalogue
 	if err := wr.Close(); err != nil {
 		f.Close()
 		log.Fatal(err)

@@ -26,9 +26,15 @@
 // unamended order -- 0 applied / 0 refused on tools/engines, so a consolidation test on such a
 // pair compares one document with itself. A base has to have had a change of its own first.
 //
+// A law has the same kind of truth in its own next consolidation: `-pairs base=successor` with two
+// lovbekendtgørelser of one law consolidates the base as of the day the successor was signed and
+// classifies the successor against it, through the chain production uses (earlier consolidations'
+// acts included).
+//
 // Usage:
 //
 //	go run ./tools/goldenpair [-budget N] [-min-overlap 0.5] [-check N] [-workers N]
+//	go run ./tools/goldenpair -pairs A20190098129=A20210024129,…
 //
 // -budget strides rather than truncates, since archive order starts in 1852; -check caps how
 // many of the best pairs are reconstructed and classified end to end.

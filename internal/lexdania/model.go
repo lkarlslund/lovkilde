@@ -1,6 +1,10 @@
 package lexdania
 
-import "github.com/lkarlslund/retsinformation/internal/lexdoc"
+import (
+	"regexp"
+
+	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+)
 
 // Model converts a parsed document into the mirror's own representation.
 //
@@ -57,6 +61,22 @@ func (d *Document) Model() *lexdoc.Document {
 		Diagnostics: lexdoc.Diagnostics{Warnings: d.Warnings()},
 	}
 	out.Content = contentOf(d.Root)
+	if d.Source == TextFromHTML && len(out.Content.Provisions()) == 0 {
+		// An amending act printed by the site as a flat run of paragraphs, its own "§ 13" a line
+		// like any other: grouped under the numbers it prints, its transitional provisions are
+		// provisions a later act can amend.
+		if r := groupFlatProvisions(d.Root); r != d.Root {
+			out.Content = contentOf(r)
+		}
+	}
+	out.Content.JoinLabelOnlyProvision()
+	out.Content.MarkContinuingEntryIntoForce()
+	out.Content.SplitInlineStykker()
+	if d.Source == TextFromHTML {
+		// The site's markup is sometimes broken enough to nest a law inside one provision; its
+		// printed labels are not.
+		out.Content.SplitRunawayProvisions()
+	}
 
 	// A date the register wrote but nobody can read is a finding, not a zero: a zero
 	// time sorts like 1 January year 1 and would silently order a version chain wrong.
@@ -135,4 +155,52 @@ func modelSource(s TextSource) lexdoc.Source {
 	default:
 		return lexdoc.SourceUnknown
 	}
+}
+
+// reFlatProvisionMarker is a provision number printed on a line of its own: "§ 13", "§ 2 a.".
+var reFlatProvisionMarker = regexp.MustCompile(`^§\s*[0-9]+\s*[a-zæøå]?\.?$`)
+
+// groupFlatProvisions returns the tree with each run that starts at a printed provision number
+// wrapped in a <Paragraf>, or the tree itself when no element holds such a run. The document's
+// own tree is never edited: an amending act's change lists are read from it as they are.
+func groupFlatProvisions(n *Node) *Node {
+	markers := 0
+	for _, c := range n.Elems {
+		if c.Name == "Explicatus" && reFlatProvisionMarker.MatchString(lexdoc.Squeeze(c.PlainText())) {
+			markers++
+		}
+	}
+	if markers >= 2 {
+		out := &Node{Name: n.Name, Space: n.Space, Attrs: n.Attrs, Runs: []string{n.Runs[0]}}
+		var open *Node
+		for i, c := range n.Elems {
+			if c.Name == "Explicatus" && reFlatProvisionMarker.MatchString(lexdoc.Squeeze(c.PlainText())) {
+				open = &Node{Name: "Paragraf", Attrs: map[string]string{}, Runs: []string{""}}
+				out.Elems = append(out.Elems, open)
+				out.Runs = append(out.Runs, n.Runs[i+1])
+			}
+			if k := concepts[c.Name].kind; k == conceptAppendix || k == conceptSignature {
+				// The act's annexes and signature end its last provision: grouped into it, the
+				// tables of limits an act brings "som angivet i bilag 1" were nowhere.
+				open = nil
+			}
+			if open == nil {
+				out.Elems = append(out.Elems, c)
+				out.Runs = append(out.Runs, n.Runs[i+1])
+				continue
+			}
+			open.Elems = append(open.Elems, c)
+			open.Runs = append(open.Runs, "")
+		}
+		return out
+	}
+	for i, c := range n.Elems {
+		if g := groupFlatProvisions(c); g != c {
+			out := *n
+			out.Elems = append([]*Node(nil), n.Elems...)
+			out.Elems[i] = g
+			return &out
+		}
+	}
+	return n
 }

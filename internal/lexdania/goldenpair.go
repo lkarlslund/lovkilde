@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/lkarlslund/retsinformation/internal/chain"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
@@ -106,6 +107,17 @@ func GoldenPair(a *Archive, base, successor string) (*GoldenPairVerdict, bool) {
 		}
 	}
 	if asOf.IsZero() {
+		// A later consolidation of the same law is no change of the base's: it prints the law
+		// as in force the day it was signed.
+		if e, ok := a.Find(successor); ok {
+			if d, ok := ParseDate(e.DiesSigni); ok && chain.ConsolidationTitle(e.Title) != "" {
+				if b, ok := a.Find(base); ok && chain.ConsolidationTitle(b.Title) == chain.ConsolidationTitle(e.Title) {
+					asOf = d
+				}
+			}
+		}
+	}
+	if asOf.IsZero() {
 		return nil, false
 	}
 
@@ -118,7 +130,9 @@ func GoldenPair(a *Archive, base, successor string) (*GoldenPairVerdict, bool) {
 		promulgated[t] = true
 	}
 
-	view := LawAsOfModel(baseDoc, asOf, a.Open)
+	// The successor prints the law as amended by the acts passed when it was signed, the parts
+	// that take effect later included, as most consolidations do.
+	view := a.chain().ResolveAdopted(baseDoc.Law(""), asOf)
 	if view == nil || view.Content == nil {
 		return nil, false
 	}
@@ -195,7 +209,7 @@ func ProvisionTexts(c *lexdoc.Content) []string {
 		if ref.Provision == nil {
 			continue
 		}
-		t := normProvisionText(ref.Provision.Text())
+		t := normProvisionText(ref.Provision.OwnText())
 		if len(t) < 40 {
 			continue
 		}
@@ -214,13 +228,18 @@ func normProvisionText(s string) string {
 			space = true
 			continue
 		}
-		if space && b.Len() > 0 {
+		// "førstegangsansøgning ." and "førstegangsansøgning." are the same words: a space before
+		// a closing mark is the typesetter's, and so is one missing after it, "stk. 6.Stk. 2.".
+		if space && b.Len() > 0 && !strings.ContainsRune(".,;:)", r) {
 			b.WriteByte(' ')
 		}
 		space = false
 		b.WriteRune(r)
+		if r == '.' || r == ',' || r == ';' {
+			space = true
+		}
 	}
-	return b.String()
+	return strings.TrimSpace(b.String())
 }
 
 // stripDigits removes the digits so "Stk. 3." and "Stk. 2." compare equal, which is what makes
