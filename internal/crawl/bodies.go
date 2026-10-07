@@ -78,7 +78,7 @@ type BodyScanReport struct {
 // ScanBodies walks the archive and queues every document that has no XML body and
 // no sidecar yet.
 //
-// Detection comes from the files, not from Badger, because the archive is the
+// Detection comes from the files, not from the state store, because the archive is the
 // product and the store is derived: after a store loss the rebuild path has to be
 // able to re-derive the queue from disk alone.
 func (c *Crawler) ScanBodies(ctx context.Context, opt FetchOptions) (BodyScanReport, error) {

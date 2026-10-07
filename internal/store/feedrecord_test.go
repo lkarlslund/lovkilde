@@ -4,8 +4,6 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-
-	badger "github.com/dgraph-io/badger/v4"
 )
 
 // TestAChangeKeepsItsFirstSighting: the current day is harvested again on every run, and a
@@ -31,8 +29,7 @@ func TestAChangeKeepsItsFirstSighting(t *testing.T) {
 	}
 }
 
-// TestAnAccessionRecordsWhenItWasFetched: FetchedAt survives the store, and a record written
-// before the field existed still reads, with ChangedAt as its HeldSince.
+// TestAnAccessionRecordsWhenItWasFetched: FetchedAt survives the store and is its HeldSince.
 func TestAnAccessionRecordsWhenItWasFetched(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "kv"))
 	if err != nil {
@@ -47,13 +44,5 @@ func TestAnAccessionRecordsWhenItWasFetched(t *testing.T) {
 	back, _, err := s.GetAccession(ctx, "A1")
 	if err != nil || back.FetchedAt != a.FetchedAt || back.HeldSince() != a.FetchedAt {
 		t.Fatalf("read back %+v (%v)", back, err)
-	}
-	old := "u\th\t3\t2026-09-01T00:00:00Z\tB2" // the five-field form
-	if err := s.db.Update(func(tx *badger.Txn) error { return tx.Set([]byte(prefixAccession+"B2"), []byte(old)) }); err != nil {
-		t.Fatal(err)
-	}
-	b, _, err := s.GetAccession(ctx, "B2")
-	if err != nil || b.FetchedAt != "" || b.HeldSince() != "2026-09-01T00:00:00Z" {
-		t.Fatalf("old record read as %+v (%v)", b, err)
 	}
 }

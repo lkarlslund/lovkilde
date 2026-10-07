@@ -12,7 +12,7 @@
 //     availability, editorial notes, references). It is fetched per document, not
 //     per change: the body backfill (internal/crawl/bodies.go) requests it only for
 //     documents whose canonical XML has no <DokumentIndhold>, and records the outcome
-//     in Badger, so the volume is bounded by the corpus rather than by the update
+//     in the state store, so the volume is bounded by the corpus rather than by the update
 //     rate. It is the site's own endpoint, not the third-party API, and does not
 //     draw on that request budget.
 package docapi

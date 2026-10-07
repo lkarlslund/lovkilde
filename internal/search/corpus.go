@@ -1,12 +1,10 @@
 // Package search indexes the retsinformation mirror and answers full-text queries
 // against it.
 //
-// The index is derived data, like data/meta/kv: it is rebuilt from the mirror at
-// zero HTTP cost, and it is a plain file rather than a second database. Two reasons,
-// both measured rather than stylistic. Badger takes an exclusive lock per process,
-// and `retsin mcp` deliberately never opens the state store so the nightly crawl is
-// never blocked by a server; anything the server reads has to be openable
-// read-only alongside the crawl. And the store's own rejection of SQLite still
+// The index is derived data: it is cut from the artifact at zero HTTP cost, and it is
+// a plain file rather than a database. Two reasons, both measured rather than
+// stylistic. The server reads the artifact and nothing else, so anything it reads has
+// to be a file it can open read-only. And the store's own rejection of SQLite still
 // applies here: a second engine would bring its own dependency weight and its own
 // corruption story for data that is a rebuildable view of files we already have.
 //

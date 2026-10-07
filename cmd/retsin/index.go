@@ -1,10 +1,8 @@
 // The index and search commands: building the derived full-text index, and asking it
 // questions from a terminal.
 //
-// Neither opens the Badger state store. The index is derived from the mirror the same
-// way data/meta/kv is — rebuildable from files at zero HTTP cost — and Badger locks
-// exclusively per process, so a command that opened it would block the nightly crawl
-// for the length of a full-corpus build, and `retsin mcp` could not start alongside it.
+// Neither opens anything but the artifact: the index is cut from it, and is never
+// distributed.
 package main
 
 import (

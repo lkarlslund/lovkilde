@@ -291,10 +291,9 @@ func TestFailingPassRecordsThePullAndTheProblem(t *testing.T) {
 	}
 }
 
-// The store row is the authority on when a collection pass pulled, but it sits behind
-// Badger's exclusive per-process lock, so the same fact has to reach readers that
-// cannot open the store: the MCP server answers "how current is this?" from the
-// published file. The two must not be allowed to drift apart.
+// The store row is the authority on when a collection pass pulled, but the store is
+// locked to one process, so the same fact has to reach readers that cannot open it:
+// the artifact build copies it from the published file into the artifact's header. The two must not be allowed to drift apart.
 func TestUpdatePublishesTheRecord(t *testing.T) {
 	f := newUpdateFixture(t)
 	ctx := context.Background()

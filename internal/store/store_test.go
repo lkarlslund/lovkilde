@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/dgraph-io/badger/v4"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -365,71 +363,6 @@ func TestPendingKeysAndInventories(t *testing.T) {
 	}
 }
 
-// TestScanStart proves a descending batch resumes on its own cursor. Getting this
-// wrong is not visible in the rows a scan returns -- pastCursor drops everything on
-// the covered side either way -- so the seek target itself is the thing under test:
-// restarting at the top of the prefix would re-walk every row above the cursor once
-// per batch, which is the quadratic scan that already bit the ascending path.
-func TestScanStartFollowsDirectionAndCursor(t *testing.T) {
-	cases := []struct {
-		name          string
-		sel           selector
-		wantLastBytes string
-		wantCeiling   bool
-	}{
-		{"ascending, nothing covered", selector{}, "", false},
-		{"ascending, cursor", selector{cursor: "https://x/eli/ft/1"}, "https://x/eli/ft/1", false},
-		{"descending, nothing covered", selector{reverse: true}, "", true},
-		{"descending, cursor", selector{reverse: true, cursor: "https://x/eli/ft/1"}, "https://x/eli/ft/1", false},
-	}
-	for _, tc := range cases {
-		got := string(tc.sel.scanStart())
-		if !strings.HasPrefix(got, prefixInventory) {
-			t.Errorf("%s: start %q is outside the inventory prefix", tc.name, got)
-			continue
-		}
-		rest := strings.TrimPrefix(got, prefixInventory)
-		switch {
-		case tc.wantCeiling:
-			// The start of an uncovered descending walk must sit above every ELI URL
-			// yet below the next key prefix, or the scan begins on manifest rows.
-			if rest != "\xff\xff\xff\xff" {
-				t.Errorf("%s: start tail = %q, want the 0xff ceiling above every inventory key", tc.name, rest)
-			}
-		default:
-			if rest != tc.wantLastBytes {
-				t.Errorf("%s: start tail = %q, want %q", tc.name, rest, tc.wantLastBytes)
-			}
-		}
-	}
-}
-
-// TestBadgerPrefixAndReverseDoNotMix records why scanInventory bounds a reverse walk
-// by hand: this Badger version returns no keys at all when ops.Prefix and Reverse are
-// combined, which would otherwise look like an empty catalogue. If this test starts
-// failing, Badger has fixed the pairing and the hand-rolled bound can be deleted.
-func TestBadgerPrefixAndReverseDoNotMix(t *testing.T) {
-	s := newTestStore(t)
-	ctx := context.Background()
-	if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/a/1", State: StatePending, Kind: "a"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.db.View(func(tx *badger.Txn) error {
-		ops := badger.DefaultIteratorOptions
-		ops.PrefetchValues = false
-		ops.Reverse = true
-		ops.Prefix = []byte(prefixInventory)
-		it := tx.NewIterator(ops)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			t.Errorf("Prefix+Reverse yielded %q, so scanInventory's hand-rolled reverse bound is now unnecessary", it.Item().Key())
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestCountByState(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
@@ -709,26 +642,6 @@ func TestPendingBodiesPagesAfterCursor(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].ELIURL != "https://x/eli/a/5" {
 		t.Errorf("descending first page = %+v, want the newest body rows", got)
-	}
-}
-
-// A short record has to decode, not error: the queue is written by a future version
-// of this program with more fields, and a decode failure mid-scan aborts the run
-// with nothing fetched.
-func TestDecodeBodyToleratesShortRecord(t *testing.T) {
-	s := newTestStore(t)
-	ctx := context.Background()
-	if err := s.db.Update(func(tx *badger.Txn) error {
-		return tx.Set([]byte(prefixBody+"https://x/eli/lta/1"), []byte("lta"))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	got, found, err := s.GetBody(ctx, "https://x/eli/lta/1")
-	if err != nil {
-		t.Fatalf("short record errored: %v", err)
-	}
-	if !found || got.Kind != "lta" || got.State != StatePending {
-		t.Errorf("short record decoded to %+v found=%v, want kind lta and pending", got, found)
 	}
 }
 

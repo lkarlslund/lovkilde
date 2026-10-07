@@ -1,37 +1,39 @@
-// Package store persists the mirror's mutable bookkeeping in Badger: which ELI
-// resources exist, which bodies are on disk, and how far the harvest feed has
-// been consumed.
+// Package store keeps the mirror's mutable bookkeeping: which ELI resources exist, which
+// bodies are on disk, and how far the harvest feed has been consumed.
 //
-// Deliberate boundary: Badger holds STATE, not the ARCHIVE. Legal document bytes
-// live as plain XML files under data/xml (see internal/archive), because those
-// files are the product and must stay greppable, diffable and portable. The
-// database is a derived index: if meta/kv is lost, `retsin-update rebuild` reconstructs
-// it offline by re-scanning the XML, costing zero requests.
+// Deliberate boundary: this is STATE, not the ARCHIVE. Legal document bytes live as plain
+// XML files under data/xml (see internal/archive), because those files are the product and
+// must stay greppable, diffable and portable. The state is a derived index: if it is lost,
+// `retsin-update rebuild` reconstructs it offline by re-scanning the XML, costing zero
+// requests.
 //
-// Key layout (all values are tab-separated text so the store remains readable
-// with ordinary tools):
+// The whole state is a few hundred thousand small rows, so it is held in memory and kept on
+// disk as JSON in one directory (see files.go):
 //
-//	i|<eli_url>   lastmod  kind  state  attempts  accession  sha256  bytes  error
-//	a|<accession> eli_url  sha256  bytes  changed_at
-//	h|<date>|<accn>|<reason>  doc_id  type  href  seen_at
-//	H|<YYYY-MM-DD>            "1"    fully harvested day checkpoint
-//	m|<key>       value
+//	current.json    what the mirror holds and knows: every row, every stored body, the feed
+//	                changes, the harvested days and the pull record. It is what a fresh
+//	                machine needs to carry on collecting, and what gets published with it.
+//	queue.json      retry bookkeeping: attempts and the last error, per row. Local; losing it
+//	                only resets the counters, because a row still owed says so in current.json
+//	                (pending, failed or stale).
+//	journal.jsonl   every change since the files were last written, one per line, so a run
+//	                that is killed loses nothing. Close folds it into the two files.
+//
+// Both JSON files are written one row per line in key order, so two states diff line by
+// line and a content-chunked store (Hugging Face's) keeps the rows that did not change.
 package store
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"sort"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
-
-	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/badger/v4/options"
 )
 
 // State of an inventory row.
@@ -61,98 +63,68 @@ const (
 	StateEmpty State = "empty"
 )
 
-// Key prefixes. Single-character prefixes keep the keyspace small and make
-// prefix scans cheap.
-const (
-	prefixInventory = "i|"
-	prefixAccession = "a|"
-	prefixChange    = "h|"
-	prefixDay       = "H|"
-	prefixMeta      = "m|"
-	// prefixBody keys the second-representation queue: one row per document whose
-	// canonical XML has no body, tracking the site JSON payload that does. It is a
-	// separate keyspace rather than another State on the inventory row because the
-	// two questions are independent -- an inventory row says "we hold the canonical
-	// XML" (StateFetched) and that must stay true while the same document is still
-	// pending a body. Overloading one State field would make PendingInventory
-	// offer already-archived XML again, which is the one thing the fetch loop's
-	// idempotency depends on.
-	prefixBody = "b|"
-)
-
-// Store is the Badger-backed manifest.
+// Store is the in-memory state with its files. Every method is safe for concurrent use.
 type Store struct {
-	db *badger.DB
+	mu  sync.RWMutex
+	dir string
+
+	// inventory is the sitemap queue: one row per ELI resource, holding the canonical XML.
+	inventory table[Inventory]
+	// bodies is the second-representation queue: one row per document whose canonical XML
+	// has no body, tracking the site JSON payload that does. It is a separate table rather
+	// than another State on the inventory row because the two questions are independent --
+	// an inventory row says "we hold the canonical XML" (StateFetched) and that must stay
+	// true while the same document is still pending a body. Overloading one State field
+	// would make PendingInventory offer already-archived XML again, which is the one thing
+	// the fetch loop's idempotency depends on.
+	bodies     table[Body]
+	accessions map[string]Accession
+	changes    table[Change] // keyed date|accession|reason, so key order is date order
+	days       map[string]bool
+	meta       map[string]string
+
+	journal *journal
+	unlock  func()
 }
 
-// Open opens (creating if needed) the Badger store at dir.
-func Open(dir string) (*Store, error) {
-	opts := badger.DefaultOptions(dir)
-	// This workload is millions of tiny records, read mostly by prefix scan.
-	// Compression buys little (metadata compresses well but is small) and costs
-	// CPU on every scan, so keep it off for predictable pacing.
-	opts.Compression = options.None
-	opts.NumVersionsToKeep = 1
-	opts.NumMemtables = 2
-	opts.NumLevelZeroTables = 1
-	opts.NumLevelZeroTablesStall = 2
-	opts.ValueLogFileSize = 32 << 20
-	// Silence Badger's own logging: the fetch loop reports progress itself and
-	// must not interleave with library chatter.
-	opts.Logger = nil
-	db, err := badger.Open(opts)
-	if err != nil {
-		return nil, fmt.Errorf("open state store %s: %w", dir, err)
+// table is one keyed set of rows with its keys sorted on demand. Scans walk the keys in
+// order, which is what makes cursor paging and the issue fingerprint reproducible.
+type table[T any] struct {
+	rows map[string]T
+	keys []string // sorted; nil after a new key is added
+}
+
+func newTable[T any]() table[T] { return table[T]{rows: map[string]T{}} }
+
+func (t *table[T]) put(key string, v T) {
+	if _, ok := t.rows[key]; !ok {
+		t.keys = nil
 	}
-	return &Store{db: db}, nil
+	t.rows[key] = v
 }
 
-// Close flushes and closes the store.
-func (s *Store) Close() error { return s.db.Close() }
-
-// DB exposes the raw handle for maintenance commands (value-log GC).
-func (s *Store) DB() *badger.DB { return s.db }
+func (t *table[T]) sorted() []string {
+	if t.keys == nil {
+		t.keys = make([]string, 0, len(t.rows))
+		for k := range t.rows {
+			t.keys = append(t.keys, k)
+		}
+		slices.Sort(t.keys)
+	}
+	return t.keys
+}
 
 // Inventory is one ELI resource's manifest record.
 type Inventory struct {
-	ELIURL    string
-	LastMod   string
-	Kind      string
-	State     State
-	Attempts  int
-	Accession string
-	SHA256    string
-	Bytes     int64
-	Error     string
-}
-
-func (in Inventory) encode() string {
-	return strings.Join([]string{
-		in.LastMod, in.Kind, string(in.State), strconv.Itoa(in.Attempts),
-		in.Accession, in.SHA256, strconv.FormatInt(in.Bytes, 10), in.Error,
-	}, "\t")
-}
-
-func decodeInventory(eliURL, v string) (Inventory, error) {
-	f := strings.Split(v, "\t")
-	// Tolerate short records so a future field addition does not break reads.
-	pad := &f
-	if len(f) < 8 {
-		g := make([]string, 8)
-		copy(g, f)
-		*pad = g
-		f = g
-	}
-	attempts, _ := strconv.Atoi(f[3])
-	bytes, _ := strconv.ParseInt(f[6], 10, 64)
-	state := State(f[2])
-	if state == "" {
-		state = StatePending
-	}
-	return Inventory{
-		ELIURL: eliURL, LastMod: f[0], Kind: f[1], State: state, Attempts: attempts,
-		Accession: f[4], SHA256: f[5], Bytes: bytes, Error: f[7],
-	}, nil
+	ELIURL    string `json:"url,omitempty"`
+	LastMod   string `json:"lastmod,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	State     State  `json:"state,omitempty"`
+	Attempts  int    `json:"attempts,omitempty"`
+	Accession string `json:"accession,omitempty"`
+	SHA256    string `json:"sha256,omitempty"`
+	Bytes     int64  `json:"bytes,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 // head reports the fields a scan selects on, so the shared scan code can serve
@@ -161,15 +133,25 @@ func (in Inventory) head() rowHead {
 	return rowHead{kind: in.Kind, state: string(in.State), attempts: in.Attempts}
 }
 
-// PutInventory upserts one inventory record.
-func (s *Store) PutInventory(ctx context.Context, in Inventory) error {
-	return s.db.Update(func(tx *badger.Txn) error {
-		return tx.Set([]byte(prefixInventory+in.ELIURL), []byte(in.encode()))
-	})
+// normal fills what an absent field means: a row without a state is pending.
+func (in Inventory) normal() Inventory {
+	if in.State == "" {
+		in.State = StatePending
+	}
+	return in
 }
 
-// PutInventoryBatch upserts many records in one Badger batch, which is the
-// efficient path for the ~200k-row sitemap import.
+// PutInventory upserts one inventory record.
+func (s *Store) PutInventory(ctx context.Context, in Inventory) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in = in.normal()
+	s.inventory.put(in.ELIURL, in)
+	return s.log(entry{Inv: &in})
+}
+
+// PutInventoryBatch upserts many records at once, which is the path for the ~200k-row
+// sitemap import.
 //
 // Known rows are merged, not replaced. The sitemap reports every resource it has
 // ever advertised on every pass, so a blind write would re-pend the whole
@@ -178,51 +160,25 @@ func (s *Store) PutInventory(ctx context.Context, in Inventory) error {
 // stored hash would be thrown away until re-derived. The only change signal the
 // sitemap carries is lastmod, so that is what re-pends a row.
 func (s *Store) PutInventoryBatch(ctx context.Context, rows []Inventory) error {
-	if len(rows) == 0 {
-		return nil
-	}
-
-	// One read snapshot for the page rather than a transaction per row: the
-	// sitemap arrives in pages of thousands, and each row needs its current
-	// state to be merged.
-	known := make(map[string]Inventory, len(rows))
-	err := s.db.View(func(tx *badger.Txn) error {
-		for _, in := range rows {
-			item, err := tx.Get([]byte(prefixInventory + in.ELIURL))
-			if errors.Is(err, badger.ErrKeyNotFound) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			v, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			cur, err := decodeInventory(in.ELIURL, string(v))
-			if err != nil {
-				return fmt.Errorf("inventory %s: %w", in.ELIURL, err)
-			}
-			known[in.ELIURL] = cur
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	b := s.db.NewWriteBatch()
-	defer b.Cancel()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var changed []entry
 	for _, in := range rows {
-		merged := mergeInventory(known[in.ELIURL], in)
-		if err := b.Set([]byte(prefixInventory+merged.ELIURL), []byte(merged.encode())); err != nil {
-			return err
-		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		cur, ok := s.inventory.rows[in.ELIURL]
+		if !ok {
+			cur = Inventory{}
+		}
+		merged := mergeInventory(cur, in.normal())
+		if ok && merged == cur {
+			continue // the observation changed nothing, so there is nothing to record
+		}
+		s.inventory.put(merged.ELIURL, merged)
+		changed = append(changed, entry{Inv: &merged})
 	}
-	return b.Flush()
+	return s.log(changed...)
 }
 
 // mergeInventory decides what a sitemap observation means for a row already in
@@ -265,25 +221,10 @@ func mergeInventory(cur, observed Inventory) Inventory {
 
 // GetInventory reads one record.
 func (s *Store) GetInventory(ctx context.Context, eliURL string) (Inventory, bool, error) {
-	var out Inventory
-	var found bool
-	err := s.db.View(func(tx *badger.Txn) error {
-		item, err := tx.Get([]byte(prefixInventory + eliURL))
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		v, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		out, err = decodeInventory(eliURL, string(v))
-		found = true
-		return err
-	})
-	return out, found, err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	in, ok := s.inventory.rows[eliURL]
+	return in, ok, nil
 }
 
 // rowHead is the part of a stored record a selection decision is made from. Both
@@ -299,51 +240,29 @@ type rowHead struct {
 // without the caller knowing which record type it is holding.
 type row interface{ head() rowHead }
 
-func pendingByKind[T row](s *Store, ctx context.Context, prefix string, sel selector, decode func(key, value string) (T, error)) (map[string]int64, error) {
-	counts := map[string]int64{}
-	err := s.scanAll(ctx, prefix, func(key, value string) (bool, error) {
-		r, err := decode(key, value)
-		if err != nil {
-			return false, err
+// scanAll walks every row of a table in key order. The caller holds the lock.
+func scanAll[T any](ctx context.Context, t *table[T], fn func(key string, r T) (stop bool)) error {
+	for _, k := range t.sorted() {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		h := r.head()
-		if !sel.wantState(h.state) || !sel.wantKind(h.kind) {
-			return false, nil
+		if fn(k, t.rows[k]) {
+			return nil
 		}
-		counts[h.kind]++
-		return false, nil
-	})
-	return counts, err
+	}
+	return nil
 }
 
-// scanAll is a forward key-and-value walk over one prefix, for the counting and
-// selection paths that do not need direction or a cursor.
-func (s *Store) scanAll(ctx context.Context, prefix string, fn func(key, value string) (stop bool, err error)) error {
-	return s.db.View(func(tx *badger.Txn) error {
-		ops := badger.DefaultIteratorOptions
-		ops.PrefetchValues = false
-		ops.Prefix = []byte(prefix)
-		it := tx.NewIterator(ops)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			key := string(it.Item().Key())
-			v, err := it.Item().ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			stop, err := fn(strings.TrimPrefix(key, prefix), string(v))
-			if err != nil {
-				return err
-			}
-			if stop {
-				return nil
-			}
+func pendingByKind[T row](ctx context.Context, t *table[T], sel selector) (map[string]int64, error) {
+	counts := map[string]int64{}
+	err := scanAll(ctx, t, func(_ string, r T) bool {
+		h := r.head()
+		if sel.wantState(h.state) && sel.wantKind(h.kind) {
+			counts[h.kind]++
 		}
-		return nil
+		return false
 	})
+	return counts, err
 }
 
 // PendingByKind counts resources still needing a fetch, grouped by ELI kind. It
@@ -356,7 +275,9 @@ func (s *Store) PendingByKind(ctx context.Context, f Filter) (map[string]int64, 
 	if err != nil {
 		return nil, err
 	}
-	return pendingByKind(s, ctx, prefixInventory, sel, decodeInventory)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingByKind(ctx, &s.inventory, sel)
 }
 
 // Order in which a scan hands out rows. --order exposes all three because they
@@ -484,235 +405,136 @@ func (sel selector) wantAttempts(attempts int) bool {
 	return sel.exact || attempts < sel.maxAttempt
 }
 
-// pastCursor reports whether a key is on the already-covered side of the cursor,
-// which depends on the direction being walked.
-func (sel selector) pastCursor(eliURL string) bool {
-	if sel.cursor == "" {
-		return false
-	}
-	if sel.reverse {
-		return eliURL >= sel.cursor
-	}
-	return eliURL <= sel.cursor
-}
-
-// scanInventory walks the selection in the filter's direction and hands each
-// matching row to fn, stopping when fn says it has had enough. PendingInventory and
-// PendingKeys are thin wrappers so the direction and cursor handling exists once.
-func (s *Store) scanInventory(ctx context.Context, sel selector, fn func(eliURL, value string) (stop bool, err error)) error {
-	return s.scanRows(ctx, prefixInventory, sel, fn)
-}
-
-// scanRows is scanInventory for any key prefix. The body queue (prefixBody)
-// needs the same cursor paging, the same reverse-walk bound and the same
-// attempt/state narrowing as the XML inventory, and the subtleties in here --
-// the hand-rolled reverse bound, Seek landing on the cursor, the 0xff start
-// sentinel -- are exactly the parts that must not be reimplemented and got subtly
-// wrong a second time.
-func (s *Store) scanRows(ctx context.Context, prefix string, sel selector, fn func(eliURL, value string) (stop bool, err error)) error {
-	return s.db.View(func(tx *badger.Txn) error {
-		// Bigger value threshold keeps small records inline in the LSM, making
-		// this scan read only the LSM rather than the value log.
-		// (No per-transaction tuning is needed; Badger handles it.)
-		ops := badger.DefaultIteratorOptions
-		ops.PrefetchValues = false
-		if sel.reverse {
-			// Reverse + Prefix together iterated empty in this Badger version --
-			// a bug that once silently broke harvest resumption -- so the bound
-			// is enforced by hand: start above every key in the prefix and stop
-			// as soon as a key falls out of it.
-			ops.Reverse = true
-		} else {
-			ops.Prefix = []byte(prefix)
+// scanRows walks the rows on the far side of the selection's cursor, in its direction, and
+// hands each to fn until fn says it has had enough. Both queues share it, so the cursor and
+// direction handling exists once. The caller holds the lock.
+func scanRows[T any](ctx context.Context, t *table[T], sel selector, fn func(key string, r T) (stop bool)) error {
+	keys := t.sorted()
+	if !sel.reverse {
+		i := 0
+		if sel.cursor != "" {
+			i, _ = slices.BinarySearch(keys, sel.cursor)
+			if i < len(keys) && keys[i] == sel.cursor {
+				i++
+			}
 		}
-		it := tx.NewIterator(ops)
-		defer it.Close()
-
-		for it.Seek(sel.scanStartAt(prefix)); it.Valid(); it.Next() {
+		for ; i < len(keys); i++ {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			item := it.Item()
-			key := string(item.Key())
-			if sel.reverse && !strings.HasPrefix(key, prefix) {
-				return nil // walked out of the bottom of the range
-			}
-			eliURL := strings.TrimPrefix(key, prefix)
-			// Seek lands *on* the target, so the cursor row itself needs dropping
-			// in both directions.
-			if sel.pastCursor(eliURL) {
-				continue
-			}
-			v, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			stop, err := fn(eliURL, string(v))
-			if err != nil {
-				return err
-			}
-			if stop {
+			if fn(keys[i], t.rows[keys[i]]) {
 				return nil
 			}
 		}
 		return nil
-	})
-}
-
-// scanStart is the key a walk begins from. It is a separate function only so the
-// cursor case can be asserted directly: a descending batch that starts at the top of
-// the prefix instead of at its cursor still returns the right rows -- pastCursor drops
-// everything above -- but re-walks every row above the cursor once per batch, which
-// over a 200k catalogue is the quadratic scan that already bit the ascending path
-// once. Cost like that is invisible to result assertions.
-func (sel selector) scanStart() []byte { return sel.scanStartAt(prefixInventory) }
-
-// scanStartAt is scanStart for a given prefix.
-func (sel selector) scanStartAt(prefix string) []byte {
-	switch {
-	case sel.reverse && sel.cursor != "":
-		// Badger's reverse Seek lands at or below the target, so aiming at the
-		// cursor itself starts the walk on its near side; pastCursor drops the row
-		// the cursor names.
-		return []byte(prefix + sel.cursor)
-	case sel.reverse:
-		// 0xff cannot appear in an ELI URL, so this sits above every key with this
-		// prefix and below the next one (the keyspace uses single-letter prefixes),
-		// which is where a backwards walk with nothing covered yet should begin.
-		return append([]byte(prefix), 0xff, 0xff, 0xff, 0xff)
-	case sel.cursor != "":
-		return []byte(prefix + sel.cursor)
 	}
-	return []byte(prefix)
+	i := len(keys) - 1
+	if sel.cursor != "" {
+		j, _ := slices.BinarySearch(keys, sel.cursor) // first key >= cursor; the walk starts below it
+		i = j - 1
+	}
+	for ; i >= 0; i-- {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if fn(keys[i], t.rows[keys[i]]) {
+			return nil
+		}
+	}
+	return nil
 }
 
 // pendingRows is the shared selection loop behind PendingInventory and
-// PendingBodies: same filter, same cursor paging, same attempt ceiling, one
-// decode function each. Two independent copies of this loop is where a queue
-// would drift out of agreement with the other.
-func pendingRows[T row](s *Store, ctx context.Context, prefix string, limit int, f Filter, decode func(key, value string) (T, error)) ([]T, error) {
+// PendingBodies: same filter, same cursor paging, same attempt ceiling. Two
+// independent copies of this loop is where a queue would drift out of agreement
+// with the other.
+func pendingRows[T row](ctx context.Context, t *table[T], limit int, f Filter) ([]T, error) {
 	sel, err := f.selector()
 	if err != nil {
 		return nil, err
 	}
 	var out []T
-	err = s.scanRows(ctx, prefix, sel, func(key, value string) (bool, error) {
-		r, err := decode(key, value)
-		if err != nil {
-			return false, err
-		}
+	err = scanRows(ctx, t, sel, func(_ string, r T) bool {
 		h := r.head()
 		if !sel.wantState(h.state) || !sel.wantAttempts(h.attempts) || !sel.wantKind(h.kind) {
-			return false, nil
+			return false
 		}
 		out = append(out, r)
 		// Zero means unlimited here, as it does for --limit; comparing directly
 		// would stop after the first row.
-		return limit > 0 && len(out) >= limit, nil
+		return limit > 0 && len(out) >= limit
 	})
 	return out, err
 }
 
 // PendingInventory returns up to limit resources the filter selects, in the order
-// the filter asks for. A filtered call still walks the keyspace from the cursor --
-// a few tens of milliseconds over the whole catalogue, which is noise next to the
-// paced requests it feeds.
+// the filter asks for.
 func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]Inventory, error) {
-	return pendingRows(s, ctx, prefixInventory, limit, f, decodeInventory)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingRows(ctx, &s.inventory, limit, f)
 }
 
-// PendingKeys returns the ELI URLs the filter selects, without decoding the rows.
-// Order=random needs the whole selection in memory to shuffle it: paging a shuffled
-// order is impossible from a keyspace that is stored in ELI URL order, and
-// re-scanning per batch to re-derive it would put the quadratic walk back. At
-// roughly 60 bytes per URL, the full catalogue costs a few tens of megabytes --
-// paid once, on a run that asked for it.
+// PendingKeys returns the ELI URLs the filter selects. Order=random needs the whole
+// selection to shuffle it, and paging a shuffled order is impossible from a table kept in
+// ELI URL order, so it is materialised once per run.
 func (s *Store) PendingKeys(ctx context.Context, f Filter) ([]string, error) {
-	return pendingKeys(s, ctx, prefixInventory, f, decodeInventory)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingKeys(ctx, &s.inventory, f)
 }
 
 // Inventories returns the rows for specific ELI URLs, in the order given, skipping
 // any that have disappeared. It is the point-lookup path Order=random uses after
-// shuffling, instead of re-scanning the keyspace per batch.
+// shuffling.
 func (s *Store) Inventories(ctx context.Context, eliURLs []string) ([]Inventory, error) {
-	return rowsByKeys(s, ctx, prefixInventory, eliURLs, decodeInventory)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return rowsByKeys(&s.inventory, eliURLs), nil
 }
 
-func pendingKeys[T row](s *Store, ctx context.Context, prefix string, f Filter, decode func(key, value string) (T, error)) ([]string, error) {
+func pendingKeys[T row](ctx context.Context, t *table[T], f Filter) ([]string, error) {
 	sel, err := f.selector()
 	if err != nil {
 		return nil, err
 	}
 	var out []string
-	err = s.scanRows(ctx, prefix, sel, func(key, value string) (bool, error) {
-		r, err := decode(key, value)
-		if err != nil {
-			return false, err
-		}
-		// Decoding the row costs nothing extra -- the value has to be read to apply
-		// the filter either way -- and going through the same decoder PendingRows
-		// uses keeps this selection identical to its rather than a second parse.
+	err = scanRows(ctx, t, sel, func(key string, r T) bool {
 		h := r.head()
-		if !sel.wantState(h.state) || !sel.wantAttempts(h.attempts) || !sel.wantKind(h.kind) {
-			return false, nil
+		if sel.wantState(h.state) && sel.wantAttempts(h.attempts) && sel.wantKind(h.kind) {
+			out = append(out, key)
 		}
-		out = append(out, key)
-		return false, nil
+		return false
 	})
 	return out, err
 }
 
-// rowsByKeys returns the decoded rows for specific keys, in the order given,
-// skipping any that have disappeared. It is the point-lookup path Order=random
-// uses after shuffling, instead of re-scanning the keyspace per batch.
-func rowsByKeys[T any](s *Store, ctx context.Context, prefix string, keys []string, decode func(key, value string) (T, error)) ([]T, error) {
+func rowsByKeys[T any](t *table[T], keys []string) []T {
 	var out []T
-	err := s.db.View(func(tx *badger.Txn) error {
-		for _, u := range keys {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			item, err := tx.Get([]byte(prefix + u))
-			if errors.Is(err, badger.ErrKeyNotFound) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			v, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			r, err := decode(u, string(v))
-			if err != nil {
-				return err
-			}
+	for _, k := range keys {
+		if r, ok := t.rows[k]; ok {
 			out = append(out, r)
 		}
-		return nil
-	})
-	return out, err
+	}
+	return out
 }
 
-// countByState tallies records per state using a key-and-value scan over one prefix.
-func countByState[T row](s *Store, ctx context.Context, prefix string, decode func(key, value string) (T, error)) (map[State]int64, int64, error) {
+func countByState[T row](ctx context.Context, t *table[T]) (map[State]int64, int64, error) {
 	counts := map[State]int64{}
 	var total int64
-	err := s.scanAll(ctx, prefix, func(key, value string) (bool, error) {
-		r, err := decode(key, value)
-		if err != nil {
-			return false, err
-		}
+	err := scanAll(ctx, t, func(_ string, r T) bool {
 		counts[State(r.head().state)]++
 		total++
-		return false, nil
+		return false
 	})
 	return counts, total, err
 }
 
-// CountByState tallies inventory records per state using a key-only scan.
+// CountByState tallies inventory records per state.
 func (s *Store) CountByState(ctx context.Context) (map[State]int64, int64, error) {
-	return countByState(s, ctx, prefixInventory, decodeInventory)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return countByState(ctx, &s.inventory)
 }
 
 // Body is one document's second-representation record: the site JSON payload that
@@ -725,14 +547,14 @@ func (s *Store) CountByState(ctx context.Context) (map[State]int64, int64, error
 // future pass. That is the same mistake the XML path guards against by recording a
 // dead representation as gone rather than failed.
 type Body struct {
-	ELIURL    string
-	Kind      string
-	State     State
-	Attempts  int
-	SHA256    string
-	Bytes     int64
-	TextChars int64
-	Error     string
+	ELIURL    string `json:"url,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	State     State  `json:"state,omitempty"`
+	Attempts  int    `json:"attempts,omitempty"`
+	SHA256    string `json:"sha256,omitempty"`
+	Bytes     int64  `json:"bytes,omitempty"`
+	TextChars int64  `json:"text_chars,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 // head reports the selection fields, which is what lets Body share the inventory
@@ -741,100 +563,64 @@ func (b Body) head() rowHead {
 	return rowHead{kind: b.Kind, state: string(b.State), attempts: b.Attempts}
 }
 
-func (b Body) encode() string {
-	return strings.Join([]string{
-		b.Kind, string(b.State), strconv.Itoa(b.Attempts),
-		b.SHA256, strconv.FormatInt(b.Bytes, 10),
-		strconv.FormatInt(b.TextChars, 10), b.Error,
-	}, "\t")
-}
-
-func decodeBody(eliURL, v string) (Body, error) {
-	f := strings.Split(v, "\t")
-	// Tolerate short records so a future field addition does not break reads,
-	// exactly as decodeInventory does.
-	if len(f) < 7 {
-		g := make([]string, 7)
-		copy(g, f)
-		f = g
+func (b Body) normal() Body {
+	if b.State == "" {
+		b.State = StatePending
 	}
-	attempts, _ := strconv.Atoi(f[2])
-	bytes, _ := strconv.ParseInt(f[4], 10, 64)
-	chars, _ := strconv.ParseInt(f[5], 10, 64)
-	state := State(f[1])
-	if state == "" {
-		state = StatePending
-	}
-	return Body{
-		ELIURL: eliURL, Kind: f[0], State: state, Attempts: attempts,
-		SHA256: f[3], Bytes: bytes, TextChars: chars, Error: f[6],
-	}, nil
+	return b
 }
 
 // PutBody upserts one body-queue record.
 func (s *Store) PutBody(ctx context.Context, b Body) error {
-	return s.db.Update(func(tx *badger.Txn) error {
-		return tx.Set([]byte(prefixBody+b.ELIURL), []byte(b.encode()))
-	})
+	return s.PutBodyBatch(ctx, []Body{b})
 }
 
-// PutBodyBatch upserts many body rows in one Badger batch, which is the path the
-// detection scan uses: it queues tens of thousands of documents in one pass.
+// PutBodyBatch upserts many body rows at once, which is the path the detection scan
+// uses: it queues tens of thousands of documents in one pass.
 func (s *Store) PutBodyBatch(ctx context.Context, rows []Body) error {
-	if len(rows) == 0 {
-		return nil
-	}
-	b := s.db.NewWriteBatch()
-	defer b.Cancel()
-	for _, row := range rows {
-		if err := b.Set([]byte(prefixBody+row.ELIURL), []byte(row.encode())); err != nil {
-			return err
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	es := make([]entry, 0, len(rows))
+	for _, b := range rows {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		b = b.normal()
+		s.bodies.put(b.ELIURL, b)
+		es = append(es, entry{Body: &b})
 	}
-	return b.Flush()
+	return s.log(es...)
 }
 
 // GetBody reads one body-queue record.
 func (s *Store) GetBody(ctx context.Context, eliURL string) (Body, bool, error) {
-	var out Body
-	var found bool
-	err := s.db.View(func(tx *badger.Txn) error {
-		item, err := tx.Get([]byte(prefixBody + eliURL))
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		v, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		out, err = decodeBody(eliURL, string(v))
-		found = true
-		return err
-	})
-	return out, found, err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	b, ok := s.bodies.rows[eliURL]
+	return b, ok, nil
 }
 
 // PendingBodies returns up to limit documents the filter selects from the body
 // queue, in the order the filter asks for. Selection semantics are the inventory
 // queue's by construction: both go through pendingRows.
 func (s *Store) PendingBodies(ctx context.Context, limit int, f Filter) ([]Body, error) {
-	return pendingRows(s, ctx, prefixBody, limit, f, decodeBody)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingRows(ctx, &s.bodies, limit, f)
 }
 
 // PendingBodyKeys is PendingKeys for the body queue, for --order random sampling.
 func (s *Store) PendingBodyKeys(ctx context.Context, f Filter) ([]string, error) {
-	return pendingKeys(s, ctx, prefixBody, f, decodeBody)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingKeys(ctx, &s.bodies, f)
 }
 
 // Bodies reads specific body rows by ELI URL.
 func (s *Store) Bodies(ctx context.Context, eliURLs []string) ([]Body, error) {
-	return rowsByKeys(s, ctx, prefixBody, eliURLs, decodeBody)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return rowsByKeys(&s.bodies, eliURLs), nil
 }
 
 // PendingBodiesByKind is the body queue's denominator for the progress bar.
@@ -843,28 +629,32 @@ func (s *Store) PendingBodiesByKind(ctx context.Context, f Filter) (map[string]i
 	if err != nil {
 		return nil, err
 	}
-	return pendingByKind(s, ctx, prefixBody, sel, decodeBody)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingByKind(ctx, &s.bodies, sel)
 }
 
 // CountBodiesByState reports the queue's state totals, which after a run is also
 // the census: fetched rows have text, empty rows are the documents the site has no
 // text for either.
 func (s *Store) CountBodiesByState(ctx context.Context) (map[State]int64, int64, error) {
-	return countByState(s, ctx, prefixBody, decodeBody)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return countByState(ctx, &s.bodies)
 }
 
 // Accession is a stored document body keyed by accession number, which is the
 // deduplication unit: several ELI resources can resolve to the same accession.
 type Accession struct {
-	Accession string
-	ELIURL    string
-	SHA256    string
-	Bytes     int64
-	ChangedAt string // when the stored bytes last changed
+	Accession string `json:"accession,omitempty"`
+	ELIURL    string `json:"url,omitempty"`
+	SHA256    string `json:"sha256,omitempty"`
+	Bytes     int64  `json:"bytes,omitempty"`
+	ChangedAt string `json:"changed_at,omitempty"` // when the stored bytes last changed
 
 	// FetchedAt is when the document was last downloaded, whether or not the bytes changed.
 	// Empty on records written before it existed, where ChangedAt is the best lower bound.
-	FetchedAt string
+	FetchedAt string `json:"fetched_at,omitempty"`
 }
 
 // HeldSince is the latest time the stored copy is known to have been current.
@@ -877,75 +667,50 @@ func (a Accession) HeldSince() string {
 
 // GetAccession reads a stored-body record.
 func (s *Store) GetAccession(ctx context.Context, accession string) (Accession, bool, error) {
-	var out Accession
-	var found bool
-	err := s.db.View(func(tx *badger.Txn) error {
-		item, err := tx.Get([]byte(prefixAccession + accession))
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		v, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		f := strings.Split(string(v), "\t")
-		if len(f) < 6 {
-			g := make([]string, 6)
-			copy(g, f)
-			f = g
-		}
-		out = Accession{Accession: accession, ELIURL: f[0], SHA256: f[1], ChangedAt: f[3], FetchedAt: f[5]}
-		out.Bytes, _ = strconv.ParseInt(f[2], 10, 64)
-		found = true
-		return nil
-	})
-	return out, found, err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	a, ok := s.accessions[accession]
+	return a, ok, nil
 }
 
 // PutAccession records a stored body.
 func (s *Store) PutAccession(ctx context.Context, a Accession) error {
-	v := strings.Join([]string{a.ELIURL, a.SHA256, strconv.FormatInt(a.Bytes, 10), a.ChangedAt, a.Accession, a.FetchedAt}, "\t")
-	return s.db.Update(func(tx *badger.Txn) error { return tx.Set([]byte(prefixAccession+a.Accession), []byte(v)) })
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accessions[a.Accession] = a
+	return s.log(entry{Acc: &a})
 }
 
 // Change is one harvesting-feed entry.
 type Change struct {
-	Date       string // change date, YYYY-MM-DD
-	Accession  string
-	Reason     string
-	DocumentID string
-	DocType    string
-	Href       string
-	SeenAt     string
+	Date       string `json:"date"` // change date, YYYY-MM-DD
+	Accession  string `json:"accession"`
+	Reason     string `json:"reason"`
+	DocumentID string `json:"document_id,omitempty"`
+	DocType    string `json:"doc_type,omitempty"`
+	Href       string `json:"href,omitempty"`
+	SeenAt     string `json:"seen_at,omitempty"`
 }
+
+func (c Change) key() string { return c.Date + "|" + c.Accession + "|" + c.Reason }
 
 // PutChanges stores harvesting-feed entries. Re-recording the same change is a
 // no-op, which makes re-running the harvest window harmless.
 func (s *Store) PutChanges(ctx context.Context, changes []Change) error {
-	if len(changes) == 0 {
-		return nil
-	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	// A change already recorded keeps its first sighting: SeenAt is what a held copy is
 	// compared against to decide whether it predates the change (see crawl.QueueFeedChanges),
 	// and the current day is harvested again on every run.
-	return s.db.Update(func(tx *badger.Txn) error {
-		for _, c := range changes {
-			key := []byte(prefixChange + c.Date + "|" + c.Accession + "|" + c.Reason)
-			if _, err := tx.Get(key); err == nil {
-				continue
-			} else if !errors.Is(err, badger.ErrKeyNotFound) {
-				return err
-			}
-			v := strings.Join([]string{c.DocumentID, c.DocType, c.Href, c.SeenAt}, "\t")
-			if err := tx.Set(key, []byte(v)); err != nil {
-				return err
-			}
+	var es []entry
+	for _, c := range changes {
+		if _, ok := s.changes.rows[c.key()]; ok {
+			continue
 		}
-		return nil
-	})
+		s.changes.put(c.key(), c)
+		es = append(es, entry{Chg: &c})
+	}
+	return s.log(es...)
 }
 
 // Issues is the work a collection pass could not finish, and a fingerprint of which
@@ -988,7 +753,7 @@ func (i Issues) Merge(j Issues) Issues {
 	return out
 }
 
-// String is the form both the state store and the published file carry.
+// String is the form both the state and the published file carry.
 func (i Issues) String() string {
 	if i.Total() == 0 {
 		return "clean"
@@ -999,43 +764,51 @@ func (i Issues) String() string {
 	return fmt.Sprintf("owed=%d stalled=%d issues=%s", i.Owed, i.Stalled, i.Digest)
 }
 
+// The table tags the fingerprint hashes ahead of each key. They are the key prefixes of
+// the store this one replaced, kept so that a digest computed before and after the move
+// agrees: the digest is how two runs are compared, and a format change is not a change in
+// which documents are outstanding.
+const (
+	digestInventory = "i|"
+	digestBody      = "b|"
+)
+
 // InventoryIssues walks the sitemap queue once and reports what it still intends to
 // fetch.
 func (s *Store) InventoryIssues(ctx context.Context, maxAttempts int) (Issues, error) {
-	return pendingIssues(s, ctx, prefixInventory, maxAttempts, decodeInventory)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingIssues(ctx, &s.inventory, digestInventory, maxAttempts)
 }
 
 // BodyIssues is InventoryIssues for the body sidecar queue, where empty is also a
 // conclusion: the payload genuinely had no text.
 func (s *Store) BodyIssues(ctx context.Context, maxAttempts int) (Issues, error) {
-	return pendingIssues(s, ctx, prefixBody, maxAttempts, decodeBody)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return pendingIssues(ctx, &s.bodies, digestBody, maxAttempts)
 }
 
-// pendingIssues is the shared scan: one walk per queue. Rows come back in key order,
-// so the fingerprint is reproducible without collecting anything.
-func pendingIssues[T row](s *Store, ctx context.Context, prefix string, maxAttempts int, decode func(key, value string) (T, error)) (Issues, error) {
+// pendingIssues is the shared scan: one walk per queue, in key order, so the fingerprint
+// is reproducible.
+func pendingIssues[T row](ctx context.Context, t *table[T], tag string, maxAttempts int) (Issues, error) {
 	var out Issues
 	h := fnv.New64a()
-	err := s.scanAll(ctx, prefix, func(key, value string) (bool, error) {
-		r, err := decode(key, value)
-		if err != nil {
-			return false, err
-		}
+	err := scanAll(ctx, t, func(key string, r T) bool {
 		hh := r.head()
-		// An empty state is a pre-state-column record, which means pending.
 		switch hh.state {
 		case "", string(StatePending), string(StateFailed), string(StateStale):
 		default:
-			return false, nil
+			return false
 		}
 		if hh.attempts < maxAttempts {
 			out.Owed++
 		} else {
 			out.Stalled++
 		}
-		_, _ = h.Write([]byte(prefix))
+		_, _ = h.Write([]byte(tag))
 		_, _ = h.Write([]byte(key))
-		return false, nil
+		return false
 	})
 	if err != nil {
 		return Issues{}, err
@@ -1055,27 +828,20 @@ func pendingIssues[T row](s *Store, ctx context.Context, prefix string, maxAttem
 // way to know whether the mirror is a current law library or a snapshot that
 // quietly stopped being one.
 func (s *Store) HeldSince(ctx context.Context, since string, limit int) ([]Inventory, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	var out []Inventory
-	err := s.scanAll(ctx, prefixInventory, func(key, value string) (bool, error) {
-		in, err := decodeInventory(key, value)
-		if err != nil {
-			return false, err
-		}
+	err := scanAll(ctx, &s.inventory, func(_ string, in Inventory) bool {
 		// Stale rows belong here: they are exactly the ones the publisher says were
 		// republished while we hold an older version.
-		if (in.State != StateFetched && in.State != StateStale) || in.LastMod < since {
-			return false, nil
+		if (in.State == StateFetched || in.State == StateStale) && in.LastMod >= since {
+			out = append(out, in)
 		}
-		out = append(out, in)
-		return limit > 0 && len(out) >= limit*4, nil
+		return false
 	})
 	if err != nil {
 		return nil, err
 	}
-	// The scan stops after a handful of times the limit rather than walking all
-	// 200k rows, so it then needs the newest ones: sorting what it collected and
-	// keeping the top limit. Collecting more than limit keeps that truncation
-	// honest even when the early keyspace is dominated by one medium.
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].LastMod != out[j].LastMod {
 			return out[i].LastMod > out[j].LastMod
@@ -1089,73 +855,36 @@ func (s *Store) HeldSince(ctx context.Context, since string, limit int) ([]Inven
 }
 
 // Changes lists recorded feed changes from a date (YYYY-MM-DD, inclusive) onward,
-// oldest first. Keys start with the date, so the range is a prefix scan rather
-// than a filter over every change the feed has ever reported.
+// oldest first.
 //
 // It exists because a change row is otherwise write-only data: the feed's value
 // is knowing *which* documents moved, and that is only useful if it can be read
 // back next to what the mirror actually did about them.
 func (s *Store) Changes(ctx context.Context, since string, limit int) ([]Change, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	var out []Change
-	err := s.scanAll(ctx, prefixChange, func(key, value string) (bool, error) {
-		f := strings.SplitN(key, "|", 3)
-		if len(f) < 3 {
-			return false, nil
-		}
-		c := Change{Date: f[0], Accession: f[1], Reason: f[2]}
+	err := scanAll(ctx, &s.changes, func(_ string, c Change) bool {
 		if since != "" && c.Date < since {
-			return false, nil
-		}
-		if vf := strings.Split(value, "\t"); len(vf) >= 4 {
-			c.DocumentID, c.DocType, c.Href, c.SeenAt = vf[0], vf[1], vf[2], vf[3]
+			return false
 		}
 		out = append(out, c)
-		return limit > 0 && len(out) >= limit, nil
+		return limit > 0 && len(out) >= limit
 	})
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+	return out, err
 }
 
 // UnresolvedAccessions lists change entries whose accession is not stored yet.
 func (s *Store) UnresolvedAccessions(ctx context.Context, limit int) ([]Change, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	var out []Change
-	err := s.db.View(func(tx *badger.Txn) error {
-		ops := badger.DefaultIteratorOptions
-		ops.PrefetchValues = false
-		ops.Prefix = []byte(prefixChange)
-		it := tx.NewIterator(ops)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			key := string(it.Item().Key())
-			f := strings.Split(strings.TrimPrefix(key, prefixChange), "|")
-			if len(f) < 3 {
-				continue
-			}
-			c := Change{Date: f[0], Accession: f[1], Reason: f[2]}
-			v, err := it.Item().ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			vf := strings.Split(string(v), "\t")
-			if len(vf) >= 4 {
-				c.DocumentID, c.DocType, c.Href, c.SeenAt = vf[0], vf[1], vf[2], vf[3]
-			}
-			if _, found, err := s.GetAccession(ctx, c.Accession); err != nil {
-				return err
-			} else if found {
-				continue
-			}
-			out = append(out, c)
-			if len(out) >= limit {
-				return nil
-			}
+	err := scanAll(ctx, &s.changes, func(_ string, c Change) bool {
+		if _, ok := s.accessions[c.Accession]; ok {
+			return false
 		}
-		return nil
+		out = append(out, c)
+		return len(out) >= limit
 	})
 	return out, err
 }
@@ -1164,32 +893,26 @@ func (s *Store) UnresolvedAccessions(ctx context.Context, limit int) ([]Change, 
 // This is the gap-detection checkpoint: the 10-day window means a multi-day
 // outage must be backfilled before entries silently expire.
 func (s *Store) MarkDayHarvested(ctx context.Context, day time.Time) error {
-	return s.db.Update(func(tx *badger.Txn) error {
-		return tx.Set([]byte(prefixDay+day.UTC().Format(time.DateOnly)), []byte("1"))
-	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := day.UTC().Format(time.DateOnly)
+	if s.days[d] {
+		return nil
+	}
+	s.days[d] = true
+	return s.log(entry{Day: d})
 }
 
 // LastHarvestedDay returns the newest recorded day checkpoint.
 func (s *Store) LastHarvestedDay(ctx context.Context) (time.Time, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	var newest string
-	// Forward scan rather than Reverse+Prefix: there are at most a few hundred
-	// day keys ever, and combining Reverse with Prefix is an easy way to get an
-	// empty iteration.
-	err := s.db.View(func(tx *badger.Txn) error {
-		ops := badger.DefaultIteratorOptions
-		ops.PrefetchValues = false
-		ops.Prefix = []byte(prefixDay)
-		it := tx.NewIterator(ops)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			if k := strings.TrimPrefix(string(it.Item().Key()), prefixDay); k > newest {
-				newest = k
-			}
-		}
-		return nil
-	})
-	if err != nil || newest == "" {
-		return time.Time{}, false, err
+	for d := range s.days {
+		newest = max(newest, d)
+	}
+	if newest == "" {
+		return time.Time{}, false, nil
 	}
 	t, err := time.Parse(time.DateOnly, newest)
 	if err != nil {
@@ -1200,31 +923,18 @@ func (s *Store) LastHarvestedDay(ctx context.Context) (time.Time, bool, error) {
 
 // SetMeta stores an arbitrary marker.
 func (s *Store) SetMeta(ctx context.Context, key, value string) error {
-	return s.db.Update(func(tx *badger.Txn) error {
-		return tx.Set([]byte(prefixMeta+key), []byte(value))
-	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.meta[key] = value
+	return s.log(entry{Meta: &metaEntry{Key: key, Value: value}})
 }
 
 // GetMeta reads an arbitrary marker.
 func (s *Store) GetMeta(ctx context.Context, key string) (string, bool, error) {
-	var out string
-	var found bool
-	err := s.db.View(func(tx *badger.Txn) error {
-		item, err := tx.Get([]byte(prefixMeta + key))
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		v, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		out, found = string(v), true
-		return nil
-	})
-	return out, found, err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.meta[key]
+	return v, ok, nil
 }
 
 // Sha256Hex is the content hash used for change detection and deduplication.

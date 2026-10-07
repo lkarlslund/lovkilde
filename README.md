@@ -181,7 +181,7 @@ upstream response — keeping only `documentHtml` would throw away `isHistorical
 PDF-only.
 
 **Implemented as `fetch --bodies-scan` / `fetch --bodies`** (`internal/crawl/bodies.go`).
-Detection is a file walk, not a Badger query — the archive is the product and the store is
+Detection is a file walk, not a state-store query — the archive is the product and the store is
 derived, so after a store loss the queue has to be re-derivable from disk. A file is work when
 it has no `<DokumentIndhold` element and no sidecar; `accn/` paths are skipped as aliases, since
 an accession file is a second route to a document the archive also stores under its own ELI
@@ -731,32 +731,52 @@ flowchart LR
   PACE --> RI2["api.retsinformation.dk"]
   H --> RI2
   H --> A["data/xml/… (plain files)"]
-  S --> K["data/meta/kv (Badger)"]
+  S --> K["data/state (JSON)"]
 ```
 
-### Storage: Badger for state, filesystem for the archive
+### Storage: JSON files for state, plain files for the archive
 
-**Badger holds mutable bookkeeping. Legal document bytes live as ordinary files.**
+**The state is a few hundred thousand small rows, held in memory and kept as JSON. Legal
+document bytes live as ordinary files.**
 
 The XML files *are* the product — they must stay greppable, diffable, rsync-able and
-readable without this program. So `data/meta/kv` is a *derived* index: if it corrupts,
+readable without this program. So `data/state` is a *derived* index: if it is lost,
 `retsin-update rebuild` reconstructs it from the XML on disk at **zero HTTP cost**. Verified:
 deleting the store and running `rebuild` recovered every stored document, and the next
 `fetch` issued no requests for them.
 
+It is three files (`internal/store`):
+
+```
+state/current.json    what the mirror holds and knows: every catalogue row (lastmod, kind,
+                      state, accession, sha256, bytes), every stored body, the feed changes,
+                      the harvested days and the pull record
+state/queue.json      retry bookkeeping: attempts and the last error of every row not yet
+                      answered with content
+state/journal.jsonl   every change since those two were written, one per line
+```
+
+`current.json` is what a fresh machine needs to carry on collecting, so it is the part that
+travels; `queue.json` is local, and losing it only resets retry counters — a row still owed
+says so in `current.json` (`pending`, `failed` or `stale`), and rows past the retry ceiling
+are simply tried again. The journal is why a killed run loses nothing: every write appends a
+line before the method returns, opening replays it (a torn last line is ignored), and closing
+folds it into the two files, each written to a temporary name and renamed. Both files are
+written one row per line in key order, so two states diff line by line and a
+content-chunked store keeps the rows that did not change. A lock file keeps it to one
+collecting process at a time.
+
+Measured on the live mirror (201,800 catalogue rows, 101,727 body rows, 191,612 accessions,
+1,397 feed changes): `current.json` is 103 MB and 21.7 MB under `zstd -19`; `queue.json` is
+0.9 MB (15 KB compressed); loading both takes about a second. It replaced a Badger store, and
+the move was checked row by row — every field of every row identical, except the attempt
+counts of fetched rows, which nothing read — with the pull record's fingerprint unchanged
+(`eb14429b`).
+
 Considered and rejected: SQLite (`modernc.org` drags ~40 MB of generated `libc` and the
-payload still wouldn't belong in a DB) and a TSV-plus-append-log design, which Badger's
-transactions replace outright.
-
-Key layout — all values are tab-separated text, so the store stays readable with
-`strings`:
-
-```
-i|<eli_url>   lastmod  kind  state  attempts  accession  sha256  bytes  error
-a|<accession> eli_url  sha256  bytes  changed_at
-h|<date>|<accn>|<reason>  doc_id  type  href  seen_at
-H|<YYYY-MM-DD>            "1"    fully-harvested day checkpoint
-```
+payload still wouldn't belong in a DB) and Badger, which this replaced: a database is a lot
+of machinery for state that fits in memory, and its files cannot be published, diffed or
+read by anything else.
 
 ### Data layout
 
@@ -764,7 +784,7 @@ H|<YYYY-MM-DD>            "1"    fully-harvested day checkpoint
 <data-dir>/
   xml/<kind>/<year>/<id>.xml   canonical documents — the archive
   xml/accn/<rank>/<year>/<accn>.xml
-  meta/kv/                     Badger state (derived, rebuildable)
+  state/                       collection state as JSON (derived, rebuildable)
 ```
 
 Example: `xml/fob/1980/100.xml`, `xml/retsinfo/2026/10019.xml`.
@@ -862,7 +882,7 @@ exactly what a run will do. Run `retsin-update --help` (or `retsin --help` for t
 --request-timeout 1m     per-request timeout
 --log-level info         debug, info, warn, error
 --progress auto          live bar: auto (terminals only), always, or never
---limit / --batch N      on fetch: trial size and Badger commit batch
+--limit / --batch N      on fetch: trial size and rows per selection batch
 --kind KINDS             on fetch: restrict to ELI series, e.g. retsinfo or lta,ltb
 --state STATES           on fetch: restrict to inventory states, e.g. failed or gone
 --bodies                 on fetch: work document *bodies* instead of canonical XML
@@ -916,16 +936,16 @@ Subcommands: `inventory`, `harvest`, `fetch`, `update`, `status`, `rebuild`.
 go build -o retsin ./cmd/retsin
 
 # 1. Full catalogue — ~22 requests, ~50 seconds, ~203k resources
-./retsin --data-dir /storage/retsinformation inventory
+retsin-update --data-dir /storage/retsinformation inventory
 
 # 2. Official change feed — 10 days × 12s ≈ 2 minutes
-./retsin --data-dir /storage/retsinformation harvest
+retsin-update --data-dir /storage/retsinformation harvest
 
 # 3. Documents — 1 request per document
-./retsin --data-dir /storage/retsinformation fetch
+retsin-update --data-dir /storage/retsinformation fetch
 
 # Daily thereafter (cron):
-./retsin --data-dir /storage/retsinformation update
+retsin-update --data-dir /storage/retsinformation update
 ```
 
 Flags go before or after the subcommand, either form works.
@@ -987,7 +1007,7 @@ The fingerprint does what the counts cannot. `owed=0 stalled=14` on two consecut
 nights says nothing about whether anything changed; the same digest says it is the same
 fourteen documents the site refuses, and a moving digest says something new broke. The
 counts and digest travel in the state store row, in `data/sweep.stamp` for readers that
-cannot open Badger, in `retsin-update status`, into the header of the next artifact built
+cannot open the locked store, in `retsin-update status`, into the header of the next artifact built
 (`compiled.ArtifactHeader.Collection`), and from there into the dataset line of every answer
 served from it.
 
@@ -1256,11 +1276,9 @@ one stored version.
 
 Three properties are deliberate:
 
-- **Read-only, and not by convention.** The command never opens the Badger state store.
-  Badger takes an exclusive lock, so a long-lived server process would lock the nightly
-  crawl out, or fail to start while the crawl runs. Serving needs the file archive, so
-  that is all it opens — and a process that cannot write is easier to trust in front of
-  a legal corpus.
+- **Read-only, and not by convention.** The command never opens the state store, which
+  is locked to the collecting process; serving needs the artifact, so that is all it
+  opens — and a process that cannot write is easier to trust in front of a legal corpus.
 - **Text comes from the compiled artifact when one exists.** `retsin mcp` reads
   the current artifact (`<data-dir>/artifact.current` names it; `--artifact` pins one file instead,
   `--artifact-cache-mb` sizes its cache) — so a lookup is a
@@ -1426,12 +1444,9 @@ artifact's data is better: 191 titles the mirror's header scan left HTML-escaped
 judgments score identically. `retsin index build --sample N --out file` indexes a
 stratum-balanced sample of the artifact (up to N per kind and decade), for measurements.
 
-The index is derived data, like `data/meta/kv`: rebuilt from the files at zero HTTP cost,
-written to a temporary name and renamed so a reader never sees a half-built one. It is a
-plain file rather than a second database for two reasons — Badger's exclusive lock would
-keep the crawl and the server from running at the same time, and SQLite was already
-considered and rejected for the state store (see *Storage* above) for reasons that apply
-at least as strongly here.
+The index is derived data: cut from the artifact at zero HTTP cost, written to a temporary
+name and renamed so a reader never sees a half-built one. It is a plain file rather than a
+database for the reasons the state store is (see *Storage* above).
 
 Measured on the whole mirror: **191,429 documents → 5,343,351 units, 4,493,745 terms,
 867,402,982 bytes, 1 m 19.7 s to build, 26.24 GB peak RSS**. The build is parallel, and
@@ -2516,12 +2531,12 @@ frequency everywhere.
 
 ## Recovery
 
-If `meta/kv` is lost or suspect, in this exact order:
+If `data/state` is lost or suspect, in this exact order:
 
 ```bash
-./retsin --data-dir /storage/retsinformation rebuild     # relink on-disk XML → zero requests
-./retsin --data-dir /storage/retsinformation inventory   # re-discover the catalogue (~22 req)
-./retsin --data-dir /storage/retsinformation fetch       # resume; already-held docs are skipped
+retsin-update --data-dir /storage/retsinformation rebuild     # relink on-disk XML → zero requests
+retsin-update --data-dir /storage/retsinformation inventory   # re-discover the catalogue (~22 req)
+retsin-update --data-dir /storage/retsinformation fetch       # resume; already-held docs are skipped
 ```
 
 `rebuild` alone recovers only what is on disk; the catalogue comes back from the cheap
@@ -2540,7 +2555,7 @@ bucket and clamped), live learner integration against a throttling fake server,
 one-request-per-call throttle handling, flag parsing on either side
 of the subcommand, gzip handling, non-retryable errors, UA
 identity, context cancellation (including a cancelled throttle wait), ELI path↔archive-path mapping (including
-path-traversal rejection), Badger round-trips and pending/limit semantics, harvest
+path-traversal rejection), state round-trips (close and reopen, a killed run replayed from the journal, carrying on from `current.json` alone, the lock) and pending/limit semantics, harvest
 checkpointing, XML parsing against **three genuine fixture schemas**, the log/bar
 writer gate (a record must erase the frame, and never add a clear of its own),
 bar modes including silent-off-a-terminal, and end-to-end `Fetch` progress
@@ -2715,11 +2730,8 @@ XML class above, seen from the outside.
 - **Manual `Accept-Encoding: gzip`** disabled Go's auto-decompression, so the sitemap
   arrived as 241 raw gzip bytes and failed XML decoding with a misleading syntax error.
 - **Badger `Reverse` + `Prefix`** iterated empty, which would have silently broken
-  harvest resumption. Replaced with a forward scan. `--order desc` needs reverse
-  anyway, so `scanInventory` bounds the range by hand (seek above the last key of the
-  prefix, stop at the first key outside it) and
-  `TestBadgerPrefixAndReverseDoNotMix` pins the upstream behaviour: if that pairing
-  ever starts returning rows, the hand-rolled bound can go.
+  harvest resumption. The store bounded the reverse walk by hand until Badger was
+  replaced by the JSON state, whose scans walk a sorted key list.
 - **`xml:"Meta>AccessionNumber"` inside a struct already bound to `Meta`** made the
   decoder look for `Dokument/Meta/Meta/AccessionNumber`. Go reports this by leaving the
   field *empty with no error*, so every document looked like it had no accession.
@@ -2949,7 +2961,7 @@ XML class above, seen from the outside.
 - The harvest feed only covers a rolling 10 days. An outage longer than that can only
   be repaired via `inventory`, which the tool warns about explicitly.
 - `inventory` reports ingested rows including any cross-page duplicates; unique
-  resources are ~201,600 (Badger is keyed by ELI URL, so duplicates collapse).
+  resources are ~201,600 (the state is keyed by ELI URL, so duplicates collapse).
 - Only the XML pass is implemented. `docapi.FetchJSON` exists as a working client for
   the site's JSON representation, but there is no sidecar crawl; XML is a superset for
   practical purposes.

@@ -20,9 +20,9 @@ func artifactCmd(resolve configFunc) *cobra.Command {
 	return cmd
 }
 
-// Nothing here opens the Badger state store: the artifact is derived data, rebuilt from the files
-// at zero network cost, and Badger locks exclusively per process, so a command that opened it would
-// block the nightly crawl.
+// Nothing here opens the state store: the artifact is derived data, rebuilt from the files at zero
+// network cost, and the store is locked to one process, so a command that opened it would block the
+// nightly crawl.
 func artifactBuildCmd(resolve configFunc) *cobra.Command {
 	var out string
 

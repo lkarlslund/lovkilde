@@ -2,8 +2,8 @@
 //
 // This is deliberately not a database. The XML files are the product of the
 // mirror: they must stay greppable, diffable, rsync-able and readable by
-// anything, decades from now, without this program. Badger (internal/store)
-// holds only derived state, so losing meta/kv costs an offline rescan and zero
+// anything, decades from now, without this program. The state store (internal/store)
+// holds only derived state, so losing data/state costs an offline rescan and zero
 // HTTP requests.
 //
 // Most documents are one file. Half of the law corpus is not: the canonical XML

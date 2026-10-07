@@ -89,8 +89,8 @@ func ParseSweepRecord(v string) (SweepRecord, error) {
 
 // PublishSweepRecord writes the record for readers that cannot open the state store.
 //
-// The store row is the authority, but Badger takes an exclusive per-process lock, so a
-// long-lived reader such as the MCP server cannot have it while a crawl runs. This file
+// The store row is the authority, but the store is locked to one process, so another
+// reader -- the artifact build -- cannot have it while a crawl runs. This file
 // is the same fact in a form anything can read; nothing else should be derived from it,
 // and if the two ever disagree the store is right.
 func PublishSweepRecord(path string, rec SweepRecord) error {

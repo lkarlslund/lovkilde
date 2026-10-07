@@ -6,8 +6,7 @@
 // "current" means, and the only reliable way to guarantee that is one process with one archive,
 // one index, and one artifact.
 //
-// Like "mcp", this command never opens the Badger state store. It locks the exclusive lock the
-// nightly crawl needs, so a serving process opens the file archive and nothing else.
+// Like "mcp", this command reads the artifact and nothing else: no state store, no XML.
 package main
 
 import (

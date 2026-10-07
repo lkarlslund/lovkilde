@@ -88,7 +88,7 @@ func newRootCmd() *cobra.Command {
 
 	// resolve validates the flags and sets up logging without opening any storage.
 	// The artifact build takes this instead of the runtime: opening the store would
-	// take Badger's exclusive lock, and a build that held it would keep the crawl out.
+	// take its lock, and a build that held it would keep the crawl out.
 	resolve := func() (config.Config, error) {
 		if err := cfg.Validate(); err != nil {
 			return cfg, err
@@ -149,7 +149,9 @@ Pacing:
 
 Data layout:
   <data-dir>/xml/<kind>/<year>/<id>.xml   canonical documents (the archive)
-  <data-dir>/meta/kv/                     Badger state store (derived, rebuildable)`,
+  <data-dir>/state/current.json           what the mirror holds and knows (rebuildable)
+  <data-dir>/state/queue.json             retry counters and errors of unfinished rows
+  <data-dir>/state/journal.jsonl          changes since those were written`,
 		SilenceUsage: true,
 		// main prints the error once, through the gate that keeps it off a progress frame.
 		SilenceErrors: true,

@@ -94,16 +94,16 @@ func Default() Config {
 // XMLDir returns the directory holding downloaded ELI XML documents.
 func (c Config) XMLDir() string { return c.DataDir + "/xml" }
 
-// StoreDir returns the directory holding the Badger state store.
-func (c Config) StoreDir() string { return c.DataDir + "/meta/kv" }
+// StoreDir returns the directory holding the collection state (internal/store).
+func (c Config) StoreDir() string { return c.DataDir + "/state" }
 
 // SweepStampPath returns the file holding the timestamp of the last collection
 // sweep that left nothing owed.
 //
 // The authority is a row in the state store. This file exists because the store is
-// Badger, which takes an exclusive per-process lock: a long-lived reader such as
-// the MCP server cannot open it without locking out the nightly crawl, so the
-// collection pass mirrors the one fact readers need into a plain file. Same value,
+// locked to one process: a reader cannot open it without locking out the nightly
+// crawl, so the collection pass mirrors the one fact readers need into a plain file
+// (and the artifact build copies it into the artifact's header). Same value,
 // readable by anything -- and nothing else should be derived from it. If it ever
 // disagrees with the store, the store is right.
 func (c Config) SweepStampPath() string { return c.DataDir + "/sweep.stamp" }
