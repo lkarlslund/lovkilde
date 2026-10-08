@@ -17,6 +17,10 @@ on:
         type: choice
         options: [layer, patch, full]
         default: layer
+      squash:
+        description: "squash the dataset's history into one commit after publishing"
+        type: boolean
+        default: false
 
 # One release at a time: two would both continue the same published state.
 concurrency:
@@ -37,9 +41,21 @@ jobs:
           go-version-file: go.mod
       - name: Install the hf command
         run: python3 -m pip install --user --upgrade huggingface_hub
+      - name: Today
+        id: today
+        run: echo "day=$(date -u +%d)" >> "$GITHUB_OUTPUT"
       - name: Release
         run: scripts/hf-release.sh
         env:
           HF_REPO: ${{ secrets.HF_REPO }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           MODE: ${{ inputs.mode || 'layer' }}
+      # Every release is a commit and the Hub keeps every file one names, so once a month (and
+      # when asked) the history is squashed into the current release. Here, after publishing and
+      # in the same job, so it never rewrites the branch while a release is being committed.
+      - name: Squash the history (monthly)
+        if: (github.event_name == 'schedule' && steps.today.outputs.day == '01') || inputs.squash
+        run: scripts/hf-squash.py
+        env:
+          HF_REPO: ${{ secrets.HF_REPO }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}

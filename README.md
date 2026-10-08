@@ -1878,6 +1878,13 @@ The data directory is `data`, because documents record paths under the archive r
 Releases live at `hf://lkarlslund/retsinformation`, the server's default `--release`; a server
 checks it for a newer artifact daily.
 
+Every release is a commit, and the Hub keeps every file a commit names, so on the first of each
+month (or when the workflow is run with `squash`) the release job squashes the dataset's history
+into the current release after publishing (`scripts/hf-squash.py`). A release is whatever
+`latest.json` names, so servers and the next release do not notice; only fetching an earlier
+release by commit is given up. The script reports the large files the Hub still stores that the
+current release does not use, and deletes none of them.
+
 **The server is built daily too**: `.github/workflows/server-builds.yml` runs the tests and
 `scripts/build-server.sh` (retsin for Linux, macOS and Windows on amd64 and arm64, one archive
 each and a `SHA256SUMS`), and publishes them as the rolling `nightly` GitHub release, whose
