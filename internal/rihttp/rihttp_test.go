@@ -17,7 +17,7 @@ import (
 	"github.com/lkarlslund/retsinformation/internal/limiter"
 )
 
-// testClient builds a client against h. Buckets are pinned at millisecond scale
+// testClient builds a client against h. Buckets are held at millisecond scale
 // so these tests assert how the client reacts to a status code, not how fast it
 // paces: the learner's arithmetic has its own package test.
 func testClient(t *testing.T, h http.Handler) (*Client, string) {
@@ -27,7 +27,8 @@ func testClient(t *testing.T, h http.Handler) (*Client, string) {
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	ms := limiter.Spec{Start: time.Millisecond, Floor: time.Millisecond, Max: time.Second, Pinned: true}
+	// Max equal to the floor keeps a throttled test from slowing itself down.
+	ms := limiter.Spec{Start: time.Millisecond, Floor: time.Millisecond, Max: time.Millisecond}
 	lim := limiter.New(map[string]limiter.Spec{
 		limiter.BucketDocument: ms,
 		limiter.BucketHarvest:  ms,

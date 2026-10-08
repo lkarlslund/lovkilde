@@ -4,6 +4,7 @@ package rihttp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -25,6 +26,19 @@ type StatusCodeError struct {
 	URL        string
 	RetryAfter time.Duration
 	Body       string
+}
+
+// Throttled says the server asked to be called less often (429, 503, 504): the request was
+// not refused, and the same request will be answered once the pacing has slowed down.
+func (e *StatusCodeError) Throttled() bool {
+	return e.StatusCode == http.StatusTooManyRequests || e.StatusCode == http.StatusServiceUnavailable ||
+		e.StatusCode == http.StatusGatewayTimeout
+}
+
+// Throttled says err is a throttle answer (StatusCodeError.Throttled).
+func Throttled(err error) bool {
+	var sc *StatusCodeError
+	return errors.As(err, &sc) && sc.Throttled()
 }
 
 func (e *StatusCodeError) Error() string {
@@ -150,9 +164,11 @@ func (c *Client) do(ctx context.Context, bucket, method, url, accept string, bod
 		return nil, &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url, RetryAfter: ra}
 
 	case resp.StatusCode >= 500:
-		// A server fault is a load signal even without a 429, so treat it as
-		// throttling: staying polite after a 5xx is the safe reading.
-		c.limiter.Feedback(bucket, limiter.OutcomeThrottled)
+		// Any other server fault is about the request, not the pace: the site answers
+		// 500 for the same handful of documents every time, and treating that as
+		// pushback doubled the interval per broken document until a run crawled at
+		// minutes per request. Neutral breaks the success streak and nothing more.
+		c.limiter.Feedback(bucket, limiter.OutcomeNeutral)
 		drain(resp)
 		slog.Warn("server error", "url", url, "status", resp.StatusCode)
 		return nil, &StatusCodeError{StatusCode: resp.StatusCode, Status: resp.Status, URL: url}

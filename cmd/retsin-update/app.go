@@ -31,37 +31,19 @@ type app struct {
 	client *rihttp.Client
 }
 
-// newLimiter builds the process-wide pacing schedule.
-//
-// One limiter for the whole process makes the published "once per 10 seconds"
-// harvesting limit a structural guarantee rather than a convention. The harvest
-// bucket is pinned: that limit is an obligation, not an observation, so there is
-// nothing to learn from success and no room to be faster.
-//
-// Document and sitemap buckets are adaptive: the service publishes no limit for
-// them and sends no Retry-After header, so the safe interval can only be found by
-// probing, and must back off the moment it is told to slow down. Only their floors
-// and the jitter come from the caller; the learner's shape is fixed in the limiter.
+// newLimiter builds the process-wide pacing schedule: one bucket per service, every one of
+// them adaptive from the same floor (see internal/limiter). Only the floor and the jitter come
+// from the caller; the learner's shape is fixed in the limiter.
 //
 // This is a function rather than inline code in newApp so a test can assert the
 // flags actually reach the limiter: a flag that is parsed and then dropped is worse
 // than no flag at all.
 func newLimiter(cfg config.Config) *limiter.Limiter {
+	spec := limiter.Spec{Floor: cfg.Floor, Max: limiter.MaxInterval}
 	lim := limiter.New(map[string]limiter.Spec{
-		limiter.BucketHarvest: {
-			Start:  config.HarvestInterval,
-			Floor:  config.HarvestInterval,
-			Max:    config.HarvestInterval,
-			Pinned: true,
-		},
-		limiter.BucketDocument: {
-			Floor: cfg.DocumentFloor,
-			Max:   limiter.MaxInterval,
-		},
-		limiter.BucketSitemap: {
-			Floor: config.SitemapInterval,
-			Max:   config.SitemapInterval * 8,
-		},
+		limiter.BucketHarvest:  spec,
+		limiter.BucketDocument: spec,
+		limiter.BucketSitemap:  spec,
 	})
 	lim.SetJitterPercent(cfg.JitterPercent)
 	return lim
@@ -103,12 +85,13 @@ func (a *app) Close() {
 	}
 }
 
-// currentDocumentInterval reports the interval the learner has settled on.
-func currentDocumentInterval(l *limiter.Limiter) string {
-	if d, ok := l.Current(limiter.BucketDocument); ok {
-		return d.String()
+// pacingNow is every bucket's current interval, in name order, as one line.
+func pacingNow(l *limiter.Limiter) string {
+	var parts []string
+	for _, s := range l.States() {
+		parts = append(parts, s.Name+"="+s.Interval.String())
 	}
-	return "unknown"
+	return strings.Join(parts, " ")
 }
 
 // openFunc builds the runtime from validated flags.
@@ -695,16 +678,37 @@ func status(ctx context.Context, a *app, lim *limiter.Limiter) error {
 		fmt.Printf("last update pull:        (never): incremental refill will fail until update --full finishes once\n")
 	}
 
-	fmt.Printf("pacing now:  ")
-	for _, s := range lim.States() {
-		kind := "adaptive"
-		if s.Pinned {
-			kind = "pinned"
-		}
-		fmt.Printf("%s=%s(%s) ", s.Name, s.Interval, kind)
+	// The documents left out, each with when it was last asked for and what the site said:
+	// the per-document half of the pull record.
+	failed := store.Filter{States: []string{string(store.StateFailed)}}
+	xml, err := a.store.PendingInventory(ctx, 0, failed)
+	if err != nil {
+		return err
 	}
-	fmt.Println()
+	bodies, err := a.store.PendingBodies(ctx, 0, failed)
+	if err != nil {
+		return err
+	}
+	if len(xml)+len(bodies) > 0 {
+		fmt.Printf("failed, retried after %d days:\n", int(store.RetryFailedAfter/(24*time.Hour)))
+		for _, r := range xml {
+			fmt.Printf("  %-20s %-55s %s\n", orNever(r.TriedAt), r.ELIURL, r.Error)
+		}
+		for _, b := range bodies {
+			fmt.Printf("  %-20s %-55s %s (body)\n", orNever(b.TriedAt), b.ELIURL, b.Error)
+		}
+	}
+
+	fmt.Printf("pacing now:  %s\n", pacingNow(lim))
 	return nil
+}
+
+// orNever is a last-tried time, or what a row recorded before the time was kept says.
+func orNever(t string) string {
+	if t == "" {
+		return "(not recorded)"
+	}
+	return t
 }
 
 // changeReport is one reconciliation of the change feed against the archive, kept whole so the

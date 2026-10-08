@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
@@ -33,6 +34,10 @@ type Artifact struct {
 	// catalogue is where the catalogue frame sits: what the documents are to one another, read
 	// by the library a server answers from (see lexdania.CatalogueRecord).
 	catalogue [2]uint64
+
+	// base is the artifact a layer reads its base documents from (ArtifactHeader.Base); nil for
+	// a whole artifact.
+	base *Artifact
 }
 
 // Catalogue is the catalogue frame's payload: JSON the library layer defines, kept opaque here.
@@ -73,9 +78,9 @@ func OpenArtifact(path string) (*Artifact, error) {
 		a.Close()
 		return nil, fmt.Errorf("%s: seek table carries frame checksums, which this build neither writes nor verifies", path)
 	}
-	if frames < 5 {
+	if frames < 4 {
 		a.Close()
-		return nil, fmt.Errorf("%s: seek table names %d frames; an artifact holds a header, a dictionary, a document, a catalogue and a table at least", path, frames)
+		return nil, fmt.Errorf("%s: seek table names %d frames; an artifact holds a header, a dictionary, a catalogue and a table at least", path, frames)
 	}
 	// The skippable frame holding the seek table: magic, content length, entries, footer. Reading
 	// its header confirms the file is the length the seek table claims, rather than a truncated
@@ -122,13 +127,17 @@ func OpenArtifact(path string) (*Artifact, error) {
 		a.Close()
 		return nil, err
 	}
-	if a.Header.Version != artifactVersion {
+	if a.Header.Version != artifactVersion && a.Header.Version != layerVersion {
 		// Refusing is the only honest option: the frames themselves are plain zstd, so a
 		// different layout would still decode, and a document table read under the wrong
 		// assumption would return offsets that look entirely plausible.
 		a.Close()
-		return nil, fmt.Errorf("%s: artifact format version %d, this build reads and writes %d — rebuild the artifact from the mirror",
-			path, a.Header.Version, artifactVersion)
+		return nil, fmt.Errorf("%s: artifact format version %d, this build reads and writes %d and %d — rebuild the artifact from the mirror",
+			path, a.Header.Version, artifactVersion, layerVersion)
+	}
+	if (a.Header.Version == layerVersion) != (a.Header.Base != nil) {
+		a.Close()
+		return nil, fmt.Errorf("%s: format version %d with base %v: a layer, and only a layer, names the artifact it is over", path, a.Header.Version, a.Header.Base)
 	}
 	// The dictionary is the second frame, and it must be the one the header names: documents
 	// compressed against another dictionary decode to garbage or not at all, and which of the two
@@ -160,16 +169,45 @@ func OpenArtifact(path string) (*Artifact, error) {
 	// The catalogue is the frame before the table: the documents are the frames between the
 	// dictionary and it.
 	a.catalogue = [2]uint64{offsets[frames-2], offsets[frames-1]}
-	if len(refs) != frames-4 {
+	var own int
+	for _, r := range refs {
+		if r.Base && a.Header.Base == nil {
+			a.Close()
+			return nil, fmt.Errorf("%s: %s is marked as read from a base, and this artifact has none", path, r.Accession)
+		}
+		if !r.Base {
+			own++
+		}
+	}
+	if own != frames-4 {
 		a.Close()
 		return nil, fmt.Errorf("%s: %d content frames but the table lists %d documents: a document is missing from the table, or the table describes frames that are not documents",
-			path, frames, len(refs))
+			path, frames, own)
+	}
+	if a.Header.Base != nil {
+		if err := a.openBase(); err != nil {
+			a.Close()
+			return nil, err
+		}
 	}
 	// Cross-check the two indexes against each other. The seek table says where the frames are, the
 	// document table says where the documents are, and documents are the frames between the
-	// dictionary and the table: document i must be exactly frame i+2. A build that wrote one index
-	// without the other is refused here rather than served as half a mirror.
-	for i, r := range refs {
+	// dictionary and the table: the i-th document of this file must be exactly frame i+2. A build
+	// that wrote one index without the other is refused here rather than served as half a mirror.
+	i := -1
+	for _, r := range refs {
+		if r.Base {
+			br, ok := a.base.refs[r.Accession]
+			if !ok || br.Base {
+				a.Close()
+				return nil, fmt.Errorf("%s: %s is to be read from the base %s, which does not hold it", path, r.Accession, a.base.path)
+			}
+			br.Base = true
+			a.refs[r.Accession] = br
+			a.order = append(a.order, r.Accession)
+			continue
+		}
+		i++
 		if want, end := offsets[i+2], offsets[i+3]; r.Offset != want || r.Offset+r.Length != end {
 			a.Close()
 			return nil, fmt.Errorf("%s: %s recorded as bytes %d..%d, the frame table says frame %d is %d..%d",
@@ -184,6 +222,51 @@ func OpenArtifact(path string) (*Artifact, error) {
 		a.order = append(a.order, r.Accession)
 	}
 	return a, nil
+}
+
+// openBase opens the artifact a layer is over: the file its header names, beside it, carrying
+// the stamp the header names. A layer over a layer is refused; the base is a whole artifact.
+func (a *Artifact) openBase() error {
+	ref := a.Header.Base
+	if ref.File == "" || filepath.Base(ref.File) != ref.File {
+		return fmt.Errorf("%s: the base is named %q, which is not a file beside it", a.path, ref.File)
+	}
+	base, err := OpenArtifact(filepath.Join(filepath.Dir(a.path), ref.File))
+	if err != nil {
+		return fmt.Errorf("%s is a layer over %s: %w", a.path, ref.File, err)
+	}
+	switch {
+	case base.Header.Stamp != ref.Stamp:
+		base.Close()
+		return fmt.Errorf("%s is a layer over the build stamped %s, and %s is stamped %s", a.path, ref.Stamp, ref.File, base.Header.Stamp)
+	case base.Header.Base != nil:
+		base.Close()
+		return fmt.Errorf("%s is a layer over %s, which is itself a layer", a.path, ref.File)
+	}
+	a.base = base
+	return nil
+}
+
+// Base is the artifact a layer reads its base documents from, nil for a whole artifact.
+func (a *Artifact) Base() *Artifact { return a.base }
+
+// Frame returns a document's compressed frame as it is stored, for a build that carries the
+// document over without compiling it again, and whether it is stored in the base. The frame is
+// compressed against the dictionary of the file it is in (Header.Dictionary of a or of Base).
+func (a *Artifact) Frame(accession string) (CompiledFrame, bool, error) {
+	r, ok := a.refs[accession]
+	if !ok {
+		return CompiledFrame{}, false, fmt.Errorf("%s: %s is not in this artifact", a.path, accession)
+	}
+	in := a
+	if r.Base {
+		in = a.base
+	}
+	raw := make([]byte, r.Length)
+	if _, err := in.file.ReadAt(raw, int64(r.Offset)); err != nil {
+		return CompiledFrame{}, false, fmt.Errorf("%s: %s: %w", in.path, accession, err)
+	}
+	return CompiledFrame{Accession: accession, Raw: int(r.Raw), Compressed: raw}, r.Base, nil
 }
 
 // Path is the file this artifact was opened from, for error messages and the provenance line.
@@ -226,9 +309,13 @@ func (a *Artifact) Payload(accession string) ([]byte, error) {
 		return nil, fmt.Errorf("%s: %s is not in this artifact (%d documents, built %s): rebuild the artifact from the mirror",
 			a.path, accession, len(a.order), a.Header.Created.Format("2006-01-02"))
 	}
-	raw, err := a.decodeWith(a.docDecoder, r.Offset, r.Offset+r.Length)
+	in := a
+	if r.Base {
+		in = a.base
+	}
+	raw, err := in.decodeWith(in.docDecoder, r.Offset, r.Offset+r.Length)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s: %w", a.path, accession, err)
+		return nil, fmt.Errorf("%s: %s: %w", in.path, accession, err)
 	}
 	return raw, nil
 }
@@ -264,6 +351,9 @@ func (a *Artifact) readJSONFrame(from, to uint64, out any) error {
 }
 
 func (a *Artifact) Close() error {
+	if a.base != nil {
+		a.base.Close()
+	}
 	if a.docDecoder != nil {
 		a.docDecoder.Close()
 	}

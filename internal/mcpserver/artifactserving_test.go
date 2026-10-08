@@ -167,7 +167,7 @@ func writeFixtureArtifactAfter(t *testing.T, a *lexdania.Archive, pass *compiled
 	if err != nil {
 		t.Fatal(err)
 	}
-	wr, err := compiled.NewWriterAfter(f, a.Root, pass)
+	wr, err := compiled.NewWriterAfter(f, a.Root, compiled.Provenance{Pass: pass})
 	if err != nil {
 		t.Fatal(err)
 	}

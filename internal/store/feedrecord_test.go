@@ -37,7 +37,10 @@ func TestAnAccessionRecordsWhenItWasFetched(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	a := Accession{Accession: "A1", ELIURL: "u", SHA256: "h", Bytes: 3, ChangedAt: "2026-09-01T00:00:00Z", FetchedAt: "2026-10-06T00:00:00Z"}
+	if err := s.PutInventory(ctx, Inventory{ELIURL: "u", State: StateFetched}); err != nil {
+		t.Fatal(err)
+	}
+	a := Accession{Accession: "A1", ELIURL: "u", Hash: "h", Bytes: 3, ChangedAt: "2026-09-01T00:00:00Z", FetchedAt: "2026-10-06T00:00:00Z"}
 	if err := s.PutAccession(ctx, a); err != nil {
 		t.Fatal(err)
 	}

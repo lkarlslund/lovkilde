@@ -38,6 +38,14 @@ type Options struct {
 	CollectionRecord string
 	// Report receives the one-line summary of what was built.
 	Report io.Writer
+
+	// Mode is how documents are got (Full when empty). Patch and Layer continue From, the
+	// current artifact in DataDir when it is empty.
+	Mode Mode
+	From string
+	// RebaseAt is the share of the base's documents a layer may replace before a Layer build
+	// writes a whole artifact instead (DefaultRebaseAt when zero).
+	RebaseAt float64
 }
 
 // Artifact compiles the archive and returns the path of the file written.
@@ -53,10 +61,41 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		out = filepath.Join(artifactdir.Dir(o.DataDir), "artifact-building"+artifactdir.Ext)
 	}
 	start := time.Now()
-	slog.Info("scanning the mirror", "dir", o.XMLDir)
-	a, err := lexdania.Scan(ctx, o.XMLDir)
-	if err != nil {
-		return "", err
+	mode := o.Mode
+	if mode == "" {
+		mode = Full
+	}
+	var a *lexdania.Archive
+	var prev *compiled.Artifact
+	var carry map[string]lexdania.CatalogueRecord
+	if mode == Full {
+		slog.Info("scanning the mirror", "dir", o.XMLDir)
+		var err error
+		if a, err = lexdania.Scan(ctx, o.XMLDir); err != nil {
+			return "", err
+		}
+	} else {
+		from := o.From
+		if from == "" {
+			var err error
+			if from, err = artifactdir.Current(o.DataDir); err != nil {
+				return "", fmt.Errorf("a %s build continues an earlier artifact: %w", mode, err)
+			}
+		}
+		var err error
+		if prev, err = compiled.OpenArtifact(from); err != nil {
+			return "", err
+		}
+		defer prev.Close()
+		slog.Info("comparing the mirror with the earlier artifact", "dir", o.XMLDir, "artifact", from)
+		p, err := planIncremental(ctx, prev, o.XMLDir)
+		if err != nil {
+			return "", err
+		}
+		if p.unbodied > 0 {
+			slog.Warn("body sidecars changed for documents whose XML is not on disk; they keep the text they had until a build has the XML", "documents", p.unbodied)
+		}
+		a, carry = p.archive, p.carry
 	}
 	// The archive's last collection pass is how current this text is; the server quotes it
 	// from the artifact, which is what it serves. A record that will not parse is an error
@@ -70,23 +109,10 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 			return "", fmt.Errorf("reading the collection record: %w", err)
 		case found:
 			pass = &compiled.Collection{PulledAt: rec.PulledAt, IssuesKnown: rec.IssuesKnown,
-				Owed: rec.Owed, Stalled: rec.Stalled, Digest: rec.Digest}
+				Owed: rec.Owed, Failed: rec.Failed, Digest: rec.Digest}
 		default:
 			slog.Warn("no collection pass recorded: the artifact will say the mirror was never pulled", "looked_in", o.CollectionRecord)
 		}
-	}
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-		return "", err
-	}
-	tmp := out + artifactdir.PartExt
-	f, err := os.Create(tmp)
-	if err != nil {
-		return "", err
-	}
-	wr, err := compiled.NewWriterAfter(f, o.XMLDir, pass)
-	if err != nil {
-		f.Close()
-		return "", err
 	}
 
 	// Which entries make it into the file is decided here, in entry order: the
@@ -110,6 +136,61 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		seen[e.Accession] = true
 	}
 
+	// What an incremental build carries, and whether it writes a layer or a whole artifact.
+	var prov compiled.Provenance
+	prov.Pass = pass
+	var base *compiled.Artifact // the layer's base, whose frames stay where they are
+	if prev != nil {
+		inc := &compiled.Incremental{From: prev.Header.Stamp}
+		var layered int // documents a layer over prev's base would hold itself
+		for _, acc := range want {
+			if _, ok := carry[acc]; !ok {
+				inc.Compiled++
+				layered++
+				continue
+			}
+			inc.Carried++
+			if ref, _ := prev.Ref(acc); prev.Base() != nil && !ref.Base {
+				layered++
+			}
+		}
+		prov.Incremental = inc
+		if mode == Layer {
+			base = prev
+			if prev.Base() != nil {
+				base = prev.Base()
+			}
+			rebaseAt := o.RebaseAt
+			if rebaseAt == 0 {
+				rebaseAt = DefaultRebaseAt
+			}
+			if share := float64(layered) / float64(max(len(want), 1)); share > rebaseAt {
+				slog.Info("the layer would replace too much of its base: writing a whole artifact instead",
+					"layer_documents", layered, "documents", len(want), "rebase_at", rebaseAt)
+				base = nil
+			} else {
+				if filepath.Dir(base.Path()) != filepath.Dir(out) {
+					return "", fmt.Errorf("a layer is written beside its base, and %s is not in %s", base.Path(), filepath.Dir(out))
+				}
+				prov.Base = &compiled.BaseRef{File: filepath.Base(base.Path()), Stamp: base.Header.Stamp}
+			}
+		}
+		slog.Info("incremental build", "mode", mode, "from", prev.Header.Stamp, "compile", inc.Compiled, "carry", inc.Carried, "layer", base != nil)
+	}
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return "", err
+	}
+	tmp := out + artifactdir.PartExt
+	f, err := os.Create(tmp)
+	if err != nil {
+		return "", err
+	}
+	wr, err := compiled.NewWriterAfter(f, o.XMLDir, prov)
+	if err != nil {
+		f.Close()
+		return "", err
+	}
+
 	// Open, model, marshal and compress on workers; write here, in order.
 	//
 	// A build spends its time in exactly those four steps — 191,429 documents
@@ -129,6 +210,7 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 	tLoop := time.Now()
 	type ready struct {
 		frames   []compiled.CompiledFrame
+		inBase   []bool // carried documents a layer reads from its base
 		missing  int
 		failed   string
 		firstErr error
@@ -140,12 +222,29 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		defer close(batches)
 		for lo := 0; lo < len(want); lo += chunk {
 			hi := min(lo+chunk, len(want))
-			batch := ready{frames: make([]compiled.CompiledFrame, hi-lo)}
+			batch := ready{frames: make([]compiled.CompiledFrame, hi-lo), inBase: make([]bool, hi-lo)}
 			errs := make([]error, hi-lo)
 			opened := make([]bool, hi-lo)
 			tCompile := time.Now()
 			parallel.For(ctx, hi-lo, func(i int) {
 				acc := want[lo+i]
+				if rec, ok := carry[acc]; ok {
+					// Compiled from exactly these files before: the record and the frame are what
+					// compiling them again would make.
+					records[lo+i] = rec
+					if !rec.Readable {
+						return
+					}
+					opened[i] = true
+					ref, _ := prev.Ref(acc)
+					if base != nil && (ref.Base || prev == base) {
+						batch.frames[i] = compiled.CompiledFrame{Accession: acc, Raw: int(ref.Raw)}
+						batch.inBase[i] = true
+						return
+					}
+					batch.frames[i], _, errs[i] = prev.Frame(acc)
+					return
+				}
 				doc, path, ok := a.Open(acc)
 				if !ok {
 					return
@@ -156,6 +255,10 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 				// filed under the address the archive gave it. The model carries the act's
 				// changes and the catalogue what chains need of it (lexdania.ArtifactRecords).
 				m, rec := lexdania.ArtifactRecords(entryOf[acc], doc, path)
+				rec.XMLHash, rec.BodyHash, errs[i] = sourceHashes(path)
+				if errs[i] != nil {
+					return
+				}
 				records[lo+i] = rec
 				batch.frames[i], errs[i] = wr.Compile(acc, m)
 			})
@@ -192,7 +295,15 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		}
 		unreadable += batch.missing
 		tWrite := time.Now()
-		for _, fr := range batch.frames {
+		for i, fr := range batch.frames {
+			if batch.inBase[i] {
+				if err := wr.WriteBaseRef(fr.Accession, uint64(fr.Raw)); err != nil {
+					f.Close()
+					os.Remove(tmp)
+					return "", err
+				}
+				continue
+			}
 			if err := wr.WriteFrame(fr); err != nil {
 				f.Close()
 				os.Remove(tmp)
@@ -266,6 +377,8 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 	bands, counts, largest, rawTotal := wr.SizeDistribution()
 	slog.Info("artifact built",
 		"path", out,
+		"mode", mode,
+		"layer_over", layerOver(opened.Header),
 		"documents", wr.Documents(),
 		"bytes", st.Size(),
 		"model_json", archive.SizeHint(int64(rawTotal)),
@@ -290,7 +403,18 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		time.Since(start).Round(time.Millisecond),
 		archive.SizeHint(int64(rawTotal)), archive.SizeHint(int64(largest)), sizeHistogram(bands, counts),
 		noAccession, duplicates, unreadable)
+	if inc := opened.Header.Incremental; inc != nil {
+		fmt.Fprintf(o.Report, "  %s build from %s: compiled %d, carried %d%s\n", mode, inc.From[:min(8, len(inc.From))], inc.Compiled, inc.Carried, layerOver(opened.Header))
+	}
 	return out, nil
+}
+
+// layerOver says what a layer is over, "" for a whole artifact.
+func layerOver(h compiled.ArtifactHeader) string {
+	if h.Base == nil {
+		return ""
+	}
+	return ", a layer over " + h.Base.File
 }
 
 // sizeHistogram renders the compiled document sizes as one log field, e.g.

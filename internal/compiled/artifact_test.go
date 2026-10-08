@@ -134,7 +134,7 @@ func TestFrameSizeGuardMatchesTheSeekTablesSizes(t *testing.T) {
 // about the corpus, and the last band is the one that says how many documents the old bound made
 // impossible.
 func TestSizeDistributionCountsDocumentsInTheirBands(t *testing.T) {
-	wr, err := newWriter(io.Discard, "test", artifactVersion, dictionary.Current, nil)
+	wr, err := newWriter(io.Discard, "test", artifactVersion, dictionary.Current, Provenance{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestArtifactRefusesWhatItCannotRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wr, err := newWriter(f, "/mirror", artifactVersion+1, dictionary.Current, nil)
+	wr, err := newWriter(f, "/mirror", layerVersion+1, dictionary.Current, Provenance{})
 	if err != nil {
 		t.Fatal(err)
 	}

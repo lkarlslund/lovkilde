@@ -208,13 +208,10 @@ func (c *Crawler) FetchBodies(ctx context.Context, opt FetchOptions) error {
 	if opt.Batch <= 0 {
 		opt.Batch = 200
 	}
-	if opt.MaxAttempts <= 0 {
-		opt.MaxAttempts = 5
-	}
-	var attempted, stored, held, empty, failed, bytes int64
+	var attempted, stored, held, empty, failed, throttled, bytes int64
 	start := time.Now()
 
-	filter := store.Filter{Kinds: opt.Kinds, States: opt.States, MaxAttempts: opt.MaxAttempts, Order: opt.Order}
+	filter := store.Filter{Kinds: opt.Kinds, States: opt.States, RetryAfter: store.RetryFailedAfter, Order: opt.Order}
 	total, err := c.PendingBodyCount(ctx, opt.Limit, filter)
 	if err != nil {
 		return err
@@ -274,7 +271,9 @@ func (c *Crawler) FetchBodies(ctx context.Context, opt FetchOptions) error {
 			}
 
 			set := func(b store.Body) error {
-				b.Attempts = row.Attempts + 1
+				if b.State != store.StateFetched && b.State != store.StateEmpty {
+					b.TriedAt = triedNow()
+				}
 				return c.store.PutBody(ctx, b)
 			}
 			eliPath := docapi.PathFromELIURL(row.ELIURL)
@@ -287,6 +286,11 @@ func (c *Crawler) FetchBodies(ctx context.Context, opt FetchOptions) error {
 			}
 
 			payload, err := c.doc.FetchJSON(ctx, eliPath)
+			if rihttp.Throttled(err) {
+				throttled++ // the row stays as it was: the next run asks again
+				report()
+				continue
+			}
 			if err != nil {
 				var sc *rihttp.StatusCodeError
 				if errors.As(err, &sc) && (sc.StatusCode == http.StatusNotFound || sc.StatusCode == http.StatusGone) {
@@ -344,7 +348,7 @@ func (c *Crawler) FetchBodies(ctx context.Context, opt FetchOptions) error {
 			}
 			if err := set(store.Body{
 				ELIURL: row.ELIURL, Kind: row.Kind, State: state,
-				SHA256: hash, Bytes: n, TextChars: int64(chars),
+				Hash: hash, Bytes: n, TextChars: int64(chars),
 			}); err != nil {
 				return err
 			}
@@ -357,7 +361,7 @@ func (c *Crawler) FetchBodies(ctx context.Context, opt FetchOptions) error {
 	}
 
 	slog.Info("body fetch complete", "attempted", attempted, "stored", stored, "already_held", held,
-		"without_text", empty, "failed", failed, "bytes", archive.SizeHint(bytes),
+		"without_text", empty, "failed", failed, "throttled", throttled, "bytes", archive.SizeHint(bytes),
 		"elapsed", time.Since(start).Round(time.Second).String())
 	return nil
 }
@@ -383,6 +387,6 @@ func (c *Crawler) closeBodyWithoutFetch(ctx context.Context, row store.Body) err
 	}
 	return c.store.PutBody(ctx, store.Body{
 		ELIURL: row.ELIURL, Kind: row.Kind, State: state,
-		Attempts: row.Attempts, SHA256: hash, Bytes: n, TextChars: chars,
+		Hash: hash, Bytes: n, TextChars: chars,
 	})
 }

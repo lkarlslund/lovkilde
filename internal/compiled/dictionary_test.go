@@ -41,7 +41,7 @@ func TestAnArtifactCarriesItsOwnDictionary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wr, err := newWriter(f, "test", artifactVersion, d, nil)
+		wr, err := newWriter(f, "test", artifactVersion, d, Provenance{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,7 +72,7 @@ func TestAnArtifactCarriesItsOwnDictionary(t *testing.T) {
 		a.Close()
 	}
 
-	if _, err := newWriter(nil, "test", artifactVersion, []byte("not a dictionary at all"), nil); err == nil {
+	if _, err := newWriter(nil, "test", artifactVersion, []byte("not a dictionary at all"), Provenance{}); err == nil {
 		t.Error("a writer accepted bytes that are not a zstd dictionary")
 	}
 }

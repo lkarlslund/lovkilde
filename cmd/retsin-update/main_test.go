@@ -87,7 +87,7 @@ func TestFlagsBindOnEitherSideOfSubcommand(t *testing.T) {
 		{"global flag after command", []string{"probe", "--data-dir", "/tmp/x"}, "data-dir", "/tmp/x"},
 		{"both sides at once", []string{"--data-dir", "/tmp/y", "probe", "--limit", "7"}, "limit", "7"},
 		{"duration flag before command", []string{"--request-timeout", "30s", "probe"}, "request-timeout", "30s"},
-		{"duration with unit after command", []string{"probe", "--document-floor", "300ms"}, "document-floor", "300ms"},
+		{"duration with unit after command", []string{"probe", "--floor", "300ms"}, "floor", "300ms"},
 		{"progress mode after command", []string{"probe", "--progress", "never"}, "progress", "never"},
 		{"progress mode before command", []string{"--progress", "always", "probe"}, "progress", "always"},
 	}
@@ -233,20 +233,18 @@ func TestFetchRejectsUnknownOrder(t *testing.T) {
 // that works. This is the guard for that failure.
 func TestLimiterTakesThePacingFlags(t *testing.T) {
 	cfg := config.Default()
-	cfg.DocumentFloor = 45 * time.Millisecond
+	cfg.Floor = 45 * time.Millisecond
 	cfg.JitterPercent = 33
 	lim := newLimiter(cfg)
 
-	if d, ok := lim.Current(limiter.BucketDocument); !ok || d != 45*time.Millisecond {
-		t.Errorf("document bucket = %s (present %v), want the 45ms floor from the flag", d, ok)
+	// Every bucket starts at the floor the flag gave; each adapts on its own from there.
+	for _, b := range []string{limiter.BucketDocument, limiter.BucketHarvest, limiter.BucketSitemap} {
+		if d, ok := lim.Current(b); !ok || d != 45*time.Millisecond {
+			t.Errorf("%s bucket = %s (present %v), want the 45ms floor from the flag", b, d, ok)
+		}
 	}
 	if got := lim.JitterPercent(); got != 33 {
 		t.Errorf("--jitter 33 reached the limiter as %g", got)
-	}
-	// The harvest obligation is not a setting: no flag may loosen the published
-	// one-call-per-10s limit, so it stays pinned regardless of config.
-	if d, ok := lim.Current(limiter.BucketHarvest); !ok || d != config.HarvestInterval {
-		t.Errorf("harvest bucket = %s (present %v), want the pinned %s", d, ok, config.HarvestInterval)
 	}
 }
 
@@ -254,7 +252,7 @@ func TestLimiterTakesThePacingFlags(t *testing.T) {
 // request, so the floor stays a hard minimum.
 func TestJitterDelaysButNeverAdvances(t *testing.T) {
 	cfg := config.Default()
-	cfg.DocumentFloor = 10 * time.Millisecond
+	cfg.Floor = 10 * time.Millisecond
 	cfg.JitterPercent = 100
 	lim := newLimiter(cfg)
 	ctx := context.Background()
@@ -279,8 +277,7 @@ func TestJitterDelaysButNeverAdvances(t *testing.T) {
 }
 
 // The defaults must be valid or every run fails at startup, and the pacing surface
-// must stay two flags wide: a pace that is either a published obligation or a
-// learned value cannot have a flag.
+// must stay two flags wide: a learned value cannot have a flag.
 func TestConfigSafety(t *testing.T) {
 	if err := config.Default().Validate(); err != nil {
 		t.Fatalf("defaults invalid: %v", err)
@@ -289,14 +286,14 @@ func TestConfigSafety(t *testing.T) {
 	root := newRootCmd()
 	for _, name := range []string{
 		"harvest-interval", "sitemap-interval", "document-interval", "document-max-interval",
-		"pinned-intervals", "adaptive-window", "adaptive-step-down", "adaptive-cooldown",
+		"document-floor", "adaptive-window", "adaptive-step-down", "adaptive-cooldown",
 		"jitter-interval", "jitter-max",
 	} {
 		if root.PersistentFlags().Lookup(name) != nil {
-			t.Errorf("--%s exists: that pace is a constant or a learned value, not an option", name)
+			t.Errorf("--%s exists: that pace is a learned value, not an option", name)
 		}
 	}
-	for _, name := range []string{"document-floor", "jitter"} {
+	for _, name := range []string{"floor", "jitter"} {
 		if root.PersistentFlags().Lookup(name) == nil {
 			t.Errorf("--%s is a pacing knob and must exist", name)
 		}
@@ -305,9 +302,9 @@ func TestConfigSafety(t *testing.T) {
 	// The floor itself is not policed — only a value that would leave requests
 	// unpaced, which cannot be what anyone meant.
 	unpaced := config.Default()
-	unpaced.DocumentFloor = 0
+	unpaced.Floor = 0
 	if err := unpaced.Validate(); err == nil {
-		t.Error("a zero document floor was accepted, which would disable pacing")
+		t.Error("a zero floor was accepted, which would disable pacing")
 	}
 
 	// Jitter is a percentage, so nonsense outside 0-100 is refused rather than

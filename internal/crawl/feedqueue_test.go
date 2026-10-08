@@ -23,10 +23,10 @@ func TestFeedChangesQueueWhatWasFetchedBeforeThem(t *testing.T) {
 		{"A1", "https://retsinformation.dk/eli/lta/2020/1", at(5)}, // fetched before the change was seen
 		{"B2", "https://retsinformation.dk/eli/lta/2020/2", at(1)}, // fetched after it
 	} {
-		if err := f.st.PutInventory(ctx, store.Inventory{ELIURL: d.url, Kind: "lta", State: store.StateFetched, Accession: d.acc, SHA256: "h"}); err != nil {
+		if err := f.st.PutInventory(ctx, store.Inventory{ELIURL: d.url, Kind: "lta", State: store.StateFetched, Accession: d.acc, Hash: "h"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.st.PutAccession(ctx, store.Accession{Accession: d.acc, ELIURL: d.url, SHA256: "h", ChangedAt: d.held}); err != nil {
+		if err := f.st.PutAccession(ctx, store.Accession{Accession: d.acc, ELIURL: d.url, Hash: "h", ChangedAt: d.held}); err != nil {
 			t.Fatal(err)
 		}
 		// The body queue keys by the configured site origin, not the sitemap's spelling.
@@ -61,10 +61,10 @@ func TestFeedChangesQueueWhatWasFetchedBeforeThem(t *testing.T) {
 
 	// The refetch brings identical bytes: ChangedAt stays old, FetchedAt moves, and the
 	// change is not queued again.
-	if err := f.st.PutInventory(ctx, store.Inventory{ELIURL: "https://retsinformation.dk/eli/lta/2020/1", Kind: "lta", State: store.StateFetched, Accession: "A1", SHA256: "h"}); err != nil {
+	if err := f.st.PutInventory(ctx, store.Inventory{ELIURL: "https://retsinformation.dk/eli/lta/2020/1", Kind: "lta", State: store.StateFetched, Accession: "A1", Hash: "h"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.st.PutAccession(ctx, store.Accession{Accession: "A1", ELIURL: "https://retsinformation.dk/eli/lta/2020/1", SHA256: "h", ChangedAt: at(5), FetchedAt: at(0)}); err != nil {
+	if err := f.st.PutAccession(ctx, store.Accession{Accession: "A1", ELIURL: "https://retsinformation.dk/eli/lta/2020/1", Hash: "h", ChangedAt: at(5), FetchedAt: at(0)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.c.QueueFeedChanges(ctx); err != nil {

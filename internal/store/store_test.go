@@ -23,8 +23,8 @@ func TestInventoryRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	in := Inventory{
 		ELIURL: "https://www.retsinformation.dk/eli/lta/2026/789", LastMod: "2026-09-17",
-		Kind: "lta", State: StateFetched, Attempts: 2,
-		Accession: "B20260078905", SHA256: "abc123", Bytes: 72366,
+		Kind: "lta", State: StateFetched,
+		Accession: "B20260078905", Hash: "abc123", Bytes: 72366,
 	}
 	if err := s.PutInventory(ctx, in); err != nil {
 		t.Fatal(err)
@@ -41,21 +41,21 @@ func TestInventoryRoundTrip(t *testing.T) {
 	}
 }
 
-func TestPendingSkipsExhaustedAndFetched(t *testing.T) {
+func TestPendingSkipsRecentFailuresAndFetched(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	rows := []Inventory{
 		{ELIURL: "https://x/eli/a/1", State: StatePending, Kind: "a"},
-		{ELIURL: "https://x/eli/a/2", State: StateFetched, Kind: "a", SHA256: "deadbeef"},
-		{ELIURL: "https://x/eli/a/3", State: StateFailed, Attempts: 1, Kind: "a"},
-		{ELIURL: "https://x/eli/a/4", State: StateFailed, Attempts: 9, Kind: "a"},
+		{ELIURL: "https://x/eli/a/2", State: StateFetched, Kind: "a", Hash: "deadbeef"},
+		{ELIURL: "https://x/eli/a/3", State: StateFailed, TriedAt: longAgo, Kind: "a"},
+		{ELIURL: "https://x/eli/a/4", State: StateFailed, TriedAt: justNow, Kind: "a"},
 		{ELIURL: "https://x/eli/a/5", State: StateGone, Kind: "a"},
 		{ELIURL: "https://x/eli/a/6", State: StateSkipped, Kind: "a"},
 	}
 	if err := s.PutInventoryBatch(ctx, rows); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5})
+	got, err := s.PendingInventory(ctx, 100, Filter{RetryAfter: RetryFailedAfter})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,12 +64,12 @@ func TestPendingSkipsExhaustedAndFetched(t *testing.T) {
 	}
 	for _, r := range got {
 		if r.ELIURL != "https://x/eli/a/1" && r.ELIURL != "https://x/eli/a/3" {
-			t.Errorf("unexpected pending row %s (state %s, attempts %d)", r.ELIURL, r.State, r.Attempts)
+			t.Errorf("unexpected pending row %s (state %s, tried %s)", r.ELIURL, r.State, r.TriedAt)
 		}
 	}
 
 	// A limit must be honoured so batches stay small and memory flat.
-	limited, err := s.PendingInventory(ctx, 1, Filter{MaxAttempts: 5})
+	limited, err := s.PendingInventory(ctx, 1, Filter{RetryAfter: RetryFailedAfter})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,8 +84,8 @@ func TestPendingByKind(t *testing.T) {
 	rows := []Inventory{
 		{ELIURL: "https://x/eli/ft/1", State: StatePending, Kind: "ft"},
 		{ELIURL: "https://x/eli/retsinfo/1", State: StatePending, Kind: "retsinfo"},
-		{ELIURL: "https://x/eli/retsinfo/2", State: StateFailed, Attempts: 1, Kind: "retsinfo"},
-		{ELIURL: "https://x/eli/lta/1", State: StateFetched, Kind: "lta", SHA256: "aa"},
+		{ELIURL: "https://x/eli/retsinfo/2", State: StateFailed, TriedAt: longAgo, Kind: "retsinfo"},
+		{ELIURL: "https://x/eli/lta/1", State: StateFetched, Kind: "lta", Hash: "aa"},
 		{ELIURL: "https://x/eli/lta/2", State: StateGone, Kind: "lta"},
 	}
 	if err := s.PutInventoryBatch(ctx, rows); err != nil {
@@ -93,7 +93,7 @@ func TestPendingByKind(t *testing.T) {
 	}
 
 	// One kind only, and retryable failures count while fetched/gone do not.
-	only, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5, Kinds: []string{"retsinfo"}})
+	only, err := s.PendingInventory(ctx, 100, Filter{RetryAfter: RetryFailedAfter, Kinds: []string{"retsinfo"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,12 +107,12 @@ func TestPendingByKind(t *testing.T) {
 	}
 
 	// Several kinds at once, and a kind nothing matches.
-	if many, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5, Kinds: []string{"ft", "retsinfo"}}); err != nil {
+	if many, err := s.PendingInventory(ctx, 100, Filter{RetryAfter: RetryFailedAfter, Kinds: []string{"ft", "retsinfo"}}); err != nil {
 		t.Fatal(err)
 	} else if len(many) != 3 {
 		t.Errorf("two-kind filter = %d rows, want 3", len(many))
 	}
-	if none, err := s.PendingInventory(ctx, 100, Filter{MaxAttempts: 5, Kinds: []string{"nosuchkind"}}); err != nil {
+	if none, err := s.PendingInventory(ctx, 100, Filter{RetryAfter: RetryFailedAfter, Kinds: []string{"nosuchkind"}}); err != nil {
 		t.Fatal(err)
 	} else if len(none) != 0 {
 		t.Errorf("unknown kind matched %d rows, want 0", len(none))
@@ -134,10 +134,10 @@ func TestInventoryStateSelection(t *testing.T) {
 	ctx := context.Background()
 	rows := []Inventory{
 		{ELIURL: "https://x/eli/ft/1", State: StatePending, Kind: "ft"},
-		{ELIURL: "https://x/eli/ft/2", State: StateFailed, Attempts: 1, Kind: "ft"},
-		{ELIURL: "https://x/eli/ft/3", State: StateFailed, Attempts: 99, Kind: "ft"},
+		{ELIURL: "https://x/eli/ft/2", State: StateFailed, TriedAt: longAgo, Kind: "ft"},
+		{ELIURL: "https://x/eli/ft/3", State: StateFailed, TriedAt: justNow, Kind: "ft"},
 		{ELIURL: "https://x/eli/lta/1", State: StateGone, Kind: "lta", Error: "404 Not Found"},
-		{ELIURL: "https://x/eli/lta/2", State: StateFetched, Kind: "lta", SHA256: "aa"},
+		{ELIURL: "https://x/eli/lta/2", State: StateFetched, Kind: "lta", Hash: "aa"},
 		{ELIURL: "https://x/eli/ltb/1", State: StateSkipped, Kind: "ltb"},
 	}
 	if err := s.PutInventoryBatch(ctx, rows); err != nil {
@@ -154,7 +154,7 @@ func TestInventoryStateSelection(t *testing.T) {
 
 	// Naming failed must include the row at 99 attempts: the ceiling protects the
 	// automatic sweep, not a deliberate retry.
-	if n := count(Filter{States: []string{"failed"}, MaxAttempts: 5}); n != 2 {
+	if n := count(Filter{States: []string{"failed"}, RetryAfter: RetryFailedAfter}); n != 2 {
 		t.Errorf("states=failed matched %d rows, want 2 (exhausted failures must be retriable)", n)
 	}
 	if n := count(Filter{States: []string{"gone"}}); n != 1 {
@@ -213,7 +213,7 @@ func TestPendingInventoryPagesAfterCursor(t *testing.T) {
 	seen := map[string]bool{}
 	var after string
 	for page := 0; page < 10; page++ {
-		got, err := s.PendingInventory(ctx, 2, Filter{MaxAttempts: 5, Cursor: after})
+		got, err := s.PendingInventory(ctx, 2, Filter{RetryAfter: RetryFailedAfter, Cursor: after})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -233,12 +233,12 @@ func TestPendingInventoryPagesAfterCursor(t *testing.T) {
 	}
 
 	// A cursor at or past the last key must return nothing rather than wrapping.
-	if got, err := s.PendingInventory(ctx, 10, Filter{MaxAttempts: 5, Cursor: "https://x/eli/a/5"}); err != nil {
+	if got, err := s.PendingInventory(ctx, 10, Filter{RetryAfter: RetryFailedAfter, Cursor: "https://x/eli/a/5"}); err != nil {
 		t.Fatal(err)
 	} else if len(got) != 0 {
 		t.Errorf("cursor at the last key returned %d rows, want 0: %v", len(got), got)
 	}
-	if got, err := s.PendingInventory(ctx, 10, Filter{MaxAttempts: 5, Cursor: "zzz-beyond-the-end"}); err != nil {
+	if got, err := s.PendingInventory(ctx, 10, Filter{RetryAfter: RetryFailedAfter, Cursor: "zzz-beyond-the-end"}); err != nil {
 		t.Fatal(err)
 	} else if len(got) != 0 {
 		t.Errorf("cursor past the prefix returned %d rows, want 0", len(got))
@@ -265,7 +265,7 @@ func TestPendingInventoryDescending(t *testing.T) {
 	}
 
 	want := []string{"a/5", "a/4", "a/3", "a/2", "a/1"}
-	got, err := s.PendingInventory(ctx, 0, Filter{MaxAttempts: 5, Order: OrderDesc})
+	got, err := s.PendingInventory(ctx, 0, Filter{RetryAfter: RetryFailedAfter, Order: OrderDesc})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestPendingInventoryDescending(t *testing.T) {
 	seen := map[string]bool{}
 	var cursor string
 	for page := 0; page < 10; page++ {
-		pageRows, err := s.PendingInventory(ctx, 2, Filter{MaxAttempts: 5, Order: OrderDesc, Cursor: cursor})
+		pageRows, err := s.PendingInventory(ctx, 2, Filter{RetryAfter: RetryFailedAfter, Order: OrderDesc, Cursor: cursor})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -302,7 +302,7 @@ func TestPendingInventoryDescending(t *testing.T) {
 	}
 
 	// A cursor in the middle resumes on its near side, exclusive.
-	below, err := s.PendingInventory(ctx, 10, Filter{MaxAttempts: 5, Order: OrderDesc, Cursor: "https://x/eli/a/3"})
+	below, err := s.PendingInventory(ctx, 10, Filter{RetryAfter: RetryFailedAfter, Order: OrderDesc, Cursor: "https://x/eli/a/3"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestPendingKeysAndInventories(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	keys, err := s.PendingKeys(ctx, Filter{MaxAttempts: 5})
+	keys, err := s.PendingKeys(ctx, Filter{RetryAfter: RetryFailedAfter})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,14 +389,21 @@ func TestAccessionDedupIndex(t *testing.T) {
 	if _, found, err := s.GetAccession(ctx, "B20260078905"); err != nil || found {
 		t.Fatalf("unknown accession: found=%v err=%v", found, err)
 	}
-	if err := s.PutAccession(ctx, Accession{Accession: "B20260078905", ELIURL: "https://x/eli/lta/2026/789", SHA256: "h1", Bytes: 72366, ChangedAt: "2026-09-17T00:00:00Z"}); err != nil {
+	// An accession is held by a catalogue row, so one for a URL without a row is refused.
+	if err := s.PutAccession(ctx, Accession{Accession: "B20260078905", ELIURL: "https://x/eli/lta/2026/789", ChangedAt: "2026-09-17T00:00:00Z"}); err == nil {
+		t.Fatal("an accession for a URL with no catalogue row was recorded")
+	}
+	if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/lta/2026/789", Kind: "lta", State: StateFetched}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutAccession(ctx, Accession{Accession: "B20260078905", ELIURL: "https://x/eli/lta/2026/789", Hash: "h1", Bytes: 72366, ChangedAt: "2026-09-17T00:00:00Z"}); err != nil {
 		t.Fatal(err)
 	}
 	got, found, err := s.GetAccession(ctx, "B20260078905")
 	if err != nil || !found {
 		t.Fatalf("accession lookup: found=%v err=%v", found, err)
 	}
-	if got.SHA256 != "h1" || got.Bytes != 72366 {
+	if got.Hash != "h1" || got.Bytes != 72366 {
 		t.Errorf("accession = %+v", got)
 	}
 }
@@ -446,7 +453,10 @@ func TestPutChangesIsIdempotent(t *testing.T) {
 	}
 
 	// Once the body is stored, the change is no longer outstanding.
-	if err := s.PutAccession(ctx, Accession{Accession: c.Accession, SHA256: "h"}); err != nil {
+	if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/accn/" + c.Accession, State: StateFetched}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutAccession(ctx, Accession{Accession: c.Accession, ELIURL: "https://x/eli/accn/" + c.Accession, Hash: "h", ChangedAt: "2026-09-17T00:00:00Z"}); err != nil {
 		t.Fatal(err)
 	}
 	got, err = s.UnresolvedAccessions(ctx, 10)
@@ -458,19 +468,12 @@ func TestPutChangesIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestSha256Hex(t *testing.T) {
-	// Known-answer test: a wrong hash silently breaks change detection.
-	if got := Sha256Hex([]byte("abc")); got != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
-		t.Errorf("Sha256Hex(abc) = %s", got)
-	}
-}
-
 func TestBodyRoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	in := Body{
 		ELIURL: "https://www.retsinformation.dk/eli/lta/1995/498", Kind: "lta",
-		State: StateEmpty, Attempts: 1, SHA256: "deadbeef", Bytes: 12611,
+		State: StateEmpty, Hash: "deadbeef", Bytes: 12611,
 		TextChars: 12, Error: "payload has no text",
 	}
 	if err := s.PutBody(ctx, in); err != nil {
@@ -497,25 +500,25 @@ func TestBodyRowsDoNotMixWithInventory(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	url := "https://www.retsinformation.dk/eli/lta/1995/498"
-	if err := s.PutInventory(ctx, Inventory{ELIURL: url, Kind: "lta", State: StatePending, SHA256: "xmlhash", Bytes: 700}); err != nil {
+	if err := s.PutInventory(ctx, Inventory{ELIURL: url, Kind: "lta", State: StatePending, Hash: "xmlhash", Bytes: 700}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.PutBody(ctx, Body{ELIURL: url, Kind: "lta", State: StatePending, SHA256: "jsonhash", Bytes: 12611}); err != nil {
+	if err := s.PutBody(ctx, Body{ELIURL: url, Kind: "lta", State: StatePending, Hash: "jsonhash", Bytes: 12611}); err != nil {
 		t.Fatal(err)
 	}
 
-	inv, err := s.PendingInventory(ctx, 10, Filter{MaxAttempts: 5})
+	inv, err := s.PendingInventory(ctx, 10, Filter{RetryAfter: RetryFailedAfter})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inv) != 1 || inv[0].SHA256 != "xmlhash" {
+	if len(inv) != 1 || inv[0].Hash != "xmlhash" {
 		t.Fatalf("inventory queue = %+v, want only the XML row", inv)
 	}
-	bodies, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5})
+	bodies, err := s.PendingBodies(ctx, 10, Filter{RetryAfter: RetryFailedAfter})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bodies) != 1 || bodies[0].SHA256 != "jsonhash" {
+	if len(bodies) != 1 || bodies[0].Hash != "jsonhash" {
 		t.Fatalf("body queue = %+v, want only the body row", bodies)
 	}
 
@@ -536,10 +539,10 @@ func TestBodyRowsDoNotMixWithInventory(t *testing.T) {
 
 	// The accession index is a third keyspace; seeding it proves the body prefix
 	// does not sweep up anything that merely starts with a similar byte.
-	if err := s.PutAccession(ctx, Accession{Accession: "A19950049829", ELIURL: url, SHA256: "xmlhash", Bytes: 700, ChangedAt: "2026-09-17"}); err != nil {
+	if err := s.PutAccession(ctx, Accession{Accession: "A19950049829", ELIURL: url, Hash: "xmlhash", Bytes: 700, ChangedAt: "2026-09-17"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5}); err != nil || len(got) != 1 {
+	if got, err := s.PendingBodies(ctx, 10, Filter{RetryAfter: RetryFailedAfter}); err != nil || len(got) != 1 {
 		t.Errorf("body queue after accession seed = %+v (err %v), want still one row", got, err)
 	}
 }
@@ -553,28 +556,28 @@ func TestPendingBodiesSweepsOnlyRetryableStates(t *testing.T) {
 	ctx := context.Background()
 	seed := []Body{
 		{ELIURL: "https://x/eli/lta/1", Kind: "lta", State: StatePending},
-		{ELIURL: "https://x/eli/lta/2", Kind: "lta", State: StateFetched, Attempts: 1},
-		{ELIURL: "https://x/eli/lta/3", Kind: "lta", State: StateFailed, Attempts: 1},
-		{ELIURL: "https://x/eli/lta/4", Kind: "lta", State: StateGone, Attempts: 1},
-		{ELIURL: "https://x/eli/lta/5", Kind: "lta", State: StateEmpty, Attempts: 1},
-		{ELIURL: "https://x/eli/lta/6", Kind: "lta", State: StateSkipped, Attempts: 1},
+		{ELIURL: "https://x/eli/lta/2", Kind: "lta", State: StateFetched},
+		{ELIURL: "https://x/eli/lta/3", Kind: "lta", State: StateFailed, TriedAt: longAgo},
+		{ELIURL: "https://x/eli/lta/4", Kind: "lta", State: StateGone},
+		{ELIURL: "https://x/eli/lta/5", Kind: "lta", State: StateEmpty},
+		{ELIURL: "https://x/eli/lta/6", Kind: "lta", State: StateSkipped},
 	}
 	if err := s.PutBodyBatch(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5})
+	got, err := s.PendingBodies(ctx, 10, Filter{RetryAfter: RetryFailedAfter})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 2 {
 		t.Errorf("default sweep offered %d rows (%v), want pending and failed only", len(got), got)
 	}
-	if err := s.PutBody(ctx, Body{ELIURL: "https://x/eli/lta/7", Kind: "lta", State: StatePending, Attempts: 9}); err != nil {
+	if err := s.PutBody(ctx, Body{ELIURL: "https://x/eli/lta/7", Kind: "lta", State: StateFailed, TriedAt: justNow}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5}); err != nil || len(got) != 2 {
-		t.Errorf("default sweep with an exhausted row = %+v (err %v), want the retry ceiling honoured", got, err)
+	if got, err := s.PendingBodies(ctx, 10, Filter{RetryAfter: RetryFailedAfter}); err != nil || len(got) != 2 {
+		t.Errorf("default sweep with a failure tried just now = %+v (err %v), want it left until its week is up", got, err)
 	}
 
 	for _, st := range []State{StateGone, StateEmpty, StateFetched, StateSkipped} {
@@ -613,7 +616,7 @@ func TestPendingBodiesPagesAfterCursor(t *testing.T) {
 	seen := map[string]bool{}
 	var after string
 	for page := 0; page < 10; page++ {
-		got, err := s.PendingBodies(ctx, 2, Filter{MaxAttempts: 5, Cursor: after})
+		got, err := s.PendingBodies(ctx, 2, Filter{RetryAfter: RetryFailedAfter, Cursor: after})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -631,12 +634,12 @@ func TestPendingBodiesPagesAfterCursor(t *testing.T) {
 	if len(seen) != 5 {
 		t.Errorf("paged %d distinct body rows, want 5", len(seen))
 	}
-	if got, err := s.PendingBodies(ctx, 10, Filter{MaxAttempts: 5, Cursor: "zzz-beyond-the-end"}); err != nil || len(got) != 0 {
+	if got, err := s.PendingBodies(ctx, 10, Filter{RetryAfter: RetryFailedAfter, Cursor: "zzz-beyond-the-end"}); err != nil || len(got) != 0 {
 		t.Errorf("cursor past the prefix returned %+v (err %v), want nothing", got, err)
 	}
 
 	// Descending is what the live backfill wants once it starts from the newest law.
-	got, err := s.PendingBodies(ctx, 2, Filter{MaxAttempts: 5, Order: "desc"})
+	got, err := s.PendingBodies(ctx, 2, Filter{RetryAfter: RetryFailedAfter, Order: "desc"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -683,14 +686,14 @@ func TestPutInventoryBatchPreservesState(t *testing.T) {
 
 	have := []Inventory{
 		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-01-01", Kind: "lta", State: StateFetched,
-			Attempts: 1, Accession: "B20260000105", SHA256: "hash1", Bytes: 5000},
+			Accession: "B20260000105", Hash: "hash1", Bytes: 5000},
 		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-01-02", Kind: "lta", State: StateGone,
-			Attempts: 4, Error: "404 Not Found"},
+			TriedAt: longAgo, Error: "404 Not Found"},
 		// A document we hold, so a moved lastmod has to re-pend it while keeping the
 		// hash: that pairing is what lets the next fetch tell an amended text from a
 		// republication of the same one.
 		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-01-03", Kind: "lta", State: StateFetched,
-			Attempts: 2, Accession: "B20260000305", SHA256: "hash3", Bytes: 1200},
+			Accession: "B20260000305", Hash: "hash3", Bytes: 1200},
 	}
 	if err := s.PutInventoryBatch(ctx, have); err != nil {
 		t.Fatal(err)
@@ -708,20 +711,20 @@ func TestPutInventoryBatchPreservesState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Unchanged lastmod: the conclusion survives untouched, attempts included, so
+	// Unchanged lastmod: the conclusion survives untouched, its last try included, so
 	// a dead resource is not retried forever and a fetched one is not re-fetched.
 	for _, want := range []Inventory{
-		{ELIURL: "https://x/eli/lta/1", State: StateFetched, Attempts: 1, Accession: "B20260000105", SHA256: "hash1", Bytes: 5000},
-		{ELIURL: "https://x/eli/lta/2", State: StateGone, Attempts: 4, Error: "404 Not Found"},
+		{ELIURL: "https://x/eli/lta/1", State: StateFetched, Accession: "B20260000105", Hash: "hash1", Bytes: 5000},
+		{ELIURL: "https://x/eli/lta/2", State: StateGone, TriedAt: longAgo, Error: "404 Not Found"},
 	} {
 		got, found, err := s.GetInventory(ctx, want.ELIURL)
 		if err != nil || !found {
 			t.Fatalf("GetInventory(%s): found=%v err=%v", want.ELIURL, found, err)
 		}
-		if got.State != want.State || got.Attempts != want.Attempts || got.SHA256 != want.SHA256 ||
+		if got.State != want.State || got.TriedAt != want.TriedAt || got.Hash != want.Hash ||
 			got.Accession != want.Accession || got.Bytes != want.Bytes || got.Error != want.Error {
-			t.Errorf("%s unchanged lastmod rewrote the row: got %+v, want state %s attempts %d accession %s hash %s bytes %d error %q",
-				want.ELIURL, got, want.State, want.Attempts, want.Accession, want.SHA256, want.Bytes, want.Error)
+			t.Errorf("%s unchanged lastmod rewrote the row: got %+v, want state %s tried %s accession %s hash %s bytes %d error %q",
+				want.ELIURL, got, want.State, want.TriedAt, want.Accession, want.Hash, want.Bytes, want.Error)
 		}
 	}
 
@@ -735,7 +738,7 @@ func TestPutInventoryBatchPreservesState(t *testing.T) {
 	if got3.State != StateStale || got3.LastMod != "2026-09-18" {
 		t.Errorf("moved lastmod did not mark the held row stale: %+v", got3)
 	}
-	if got3.SHA256 != "hash3" || got3.Accession != "B20260000305" || got3.Bytes != 1200 || got3.Attempts != 2 {
+	if got3.Hash != "hash3" || got3.Accession != "B20260000305" || got3.Bytes != 1200 {
 		t.Errorf("re-pending threw away the identity of a held document: %+v", got3)
 	}
 
@@ -796,27 +799,26 @@ func TestChangesRange(t *testing.T) {
 }
 
 // TestIssuesCountsStale pins what the collection record counts once a publisher has
-// moved on from a document we hold. An unattempted stale row is work the sweep owes;
-// past the retry ceiling it is stalled, which is reported rather than held against the
-// mirror forever.
+// moved on from a document we hold: a stale row is work the sweep owes, a failed one is
+// a document the site refused, and a fetched one is neither.
 func TestIssuesCountsStale(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
 	if err := s.PutInventoryBatch(ctx, []Inventory{
-		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-09-18", Kind: "lta", State: StateStale, SHA256: "h1", Attempts: 1},
-		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-09-18", Kind: "lta", State: StateStale, SHA256: "h2", Attempts: 9},
-		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-09-18", Kind: "lta", State: StateFetched, SHA256: "h3", Attempts: 1},
+		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-09-18", Kind: "lta", State: StateStale, Hash: "h1"},
+		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-09-18", Kind: "lta", State: StateFailed, TriedAt: justNow, Error: "500"},
+		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-09-18", Kind: "lta", State: StateFetched, Hash: "h3"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	issues, err := s.InventoryIssues(ctx, 5)
+	issues, err := s.InventoryIssues(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if issues.Owed != 1 || issues.Stalled != 1 {
-		t.Errorf("issues %s, want owed 1 and stalled 1: the fresh stale row is owed work and the exhausted one is stalled, and the fetched row is neither", issues)
+	if issues.Owed != 1 || issues.Failed != 1 {
+		t.Errorf("issues %s, want owed 1 and failed 1: the stale row is owed work, the refused one failed, and the fetched row is neither", issues)
 	}
 	// The fingerprint is what tells two runs apart when the counts are the same, so it
 	// has to depend on which rows are outstanding, not merely how many.
@@ -824,13 +826,13 @@ func TestIssuesCountsStale(t *testing.T) {
 		t.Fatal("outstanding rows produced no fingerprint")
 	}
 	before := issues.Digest
-	if again, err := s.InventoryIssues(ctx, 5); err != nil || again.Digest != before {
+	if again, err := s.InventoryIssues(ctx); err != nil || again.Digest != before {
 		t.Errorf("the same outstanding set fingerprinted differently: %q then %q", before, again.Digest)
 	}
-	if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/lta/4", LastMod: "2026-09-18", Kind: "lta", State: StatePending, SHA256: "h4"}); err != nil {
+	if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/lta/4", LastMod: "2026-09-18", Kind: "lta", State: StatePending, Hash: "h4"}); err != nil {
 		t.Fatal(err)
 	}
-	moved, err := s.InventoryIssues(ctx, 5)
+	moved, err := s.InventoryIssues(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -844,11 +846,11 @@ func TestIssuesCountsStale(t *testing.T) {
 	// the publisher saying the text changed -- which re-queues the row rather than
 	// settling it -- so it cannot be used to record a completed download here.
 	for _, u := range []string{"1", "2", "3", "4"} {
-		if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/lta/" + u, LastMod: "2026-09-18", Kind: "lta", State: StateFetched, SHA256: "h" + u}); err != nil {
+		if err := s.PutInventory(ctx, Inventory{ELIURL: "https://x/eli/lta/" + u, LastMod: "2026-09-18", Kind: "lta", State: StateFetched, Hash: "h" + u}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	clean, err := s.InventoryIssues(ctx, 5)
+	clean, err := s.InventoryIssues(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,7 +872,7 @@ func TestPutInventoryBatchIgnoresOlderLastmod(t *testing.T) {
 
 	if err := s.PutInventory(ctx, Inventory{
 		ELIURL: "https://x/eli/lta/9", LastMod: "2026-09-10", Kind: "lta", State: StateFetched,
-		Attempts: 1, Accession: "B20260000905", SHA256: "hash9", Bytes: 2500,
+		Accession: "B20260000905", Hash: "hash9", Bytes: 2500,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -902,3 +904,9 @@ func TestPutInventoryBatchIgnoresOlderLastmod(t *testing.T) {
 		t.Errorf("a later lastmod did not mark the held row stale: %+v", got)
 	}
 }
+
+// longAgo and justNow are last-tried times either side of RetryFailedAfter.
+var (
+	longAgo = "2020-01-01T00:00:00Z"
+	justNow = time.Now().UTC().Format(time.RFC3339)
+)

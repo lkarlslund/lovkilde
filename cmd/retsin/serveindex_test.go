@@ -2,11 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,10 +9,9 @@ import (
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/artifactfetch"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
+	"github.com/lkarlslund/retsinformation/internal/release"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
 
@@ -239,7 +233,8 @@ func TestAServerNeedsOnlyTheArtifact(t *testing.T) {
 }
 
 // TestAServerWithoutAnArtifactDownloadsThePublishedOne: a data directory with nothing in it gets
-// the published artifact before the server starts, and serves it.
+// the published artifact before the server starts, and serves it. The release repository is a
+// local directory, which goes through the same interface as a Hugging Face one.
 func TestAServerWithoutAnArtifactDownloadsThePublishedOne(t *testing.T) {
 	built := t.TempDir()
 	for into, from := range map[string]string{
@@ -262,23 +257,12 @@ func TestAServerWithoutAnArtifactDownloadsThePublishedOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := os.ReadFile(path)
-	if err != nil {
+	// Published to a local release repository, the way a Hugging Face one is laid out.
+	repo := t.TempDir()
+	local, _ := release.Open(repo)
+	if _, err := release.Publish(context.Background(), local, release.Release{Artifact: path}); err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(body)
-	m := artifactfetch.Manifest{File: filepath.Base(path), Size: int64(len(body)), SHA256: hex.EncodeToString(sum[:]), Model: compiled.ModelVersion}
-	hf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/datasets/owner/repo/resolve/main/" + artifactfetch.ManifestFile:
-			_ = json.NewEncoder(w).Encode(m)
-		case "/datasets/owner/repo/resolve/main/" + m.File:
-			_, _ = w.Write(body)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer hf.Close()
 
 	dir := t.TempDir()
 	resolve := func() (config.Config, error) {
@@ -288,10 +272,10 @@ func TestAServerWithoutAnArtifactDownloadsThePublishedOne(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if _, err := openServingServer(ctx, resolve, serveOptions{}); err == nil || !strings.Contains(err.Error(), "--hf-repo") {
+	if _, err := openServingServer(ctx, resolve, serveOptions{}); err == nil || !strings.Contains(err.Error(), "--release") {
 		t.Fatalf("an empty directory with no repository: %v", err)
 	}
-	srv, err := openServingServer(ctx, resolve, serveOptions{Publish: artifactfetch.Source{Repo: "owner/repo", BaseURL: hf.URL}})
+	srv, err := openServingServer(ctx, resolve, serveOptions{Release: repo})
 	if err != nil {
 		t.Fatal(err)
 	}

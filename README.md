@@ -21,7 +21,7 @@ Two programs, which can run on different machines:
 
 The mirror is running. **191,429 documents** of canonical ELI XML — 14 GB under `data/xml`, split
 `fob` 2,865 · `ft` 41,464 · `lta` 63,275 · `ltb` 45 · `ltc` 4,777 · `mt` 6,407 · `retsinfo` 72,596 —
-last pulled 2026-09-18 with 14 issues past the retry ceiling, a full-text index of 4,493,745 terms
+last pulled 2026-09-18 with 14 documents the site refuses, a full-text index of 4,493,745 terms
 over those same documents, and a compiled artifact holding all 191,429 of them. Bootstrap was run by
 a human, as [Running it](#running-it) describes; the numbers above are what that left behind.
 
@@ -33,25 +33,24 @@ Three distinct channels, measured rather than assumed:
 |---|---|---|
 | **ELI sitemap** `/eli/sitemap.xml` | Full catalogue: **203,152** ELI URIs (+`lastmod`) across 21 pages of 10k | ~22 requests for the *entire* catalogue |
 | **ELI XML** `/eli/{path}/xml` | Canonical XSD-validated document text + metadata (~110 KB avg) | uncached (`cf-cache-status: DYNAMIC`) — every hit is origin work |
-| **Harvest API** `api.retsinformation.dk/v1/Documents` | Rolling **10-day** change feed | **published: max 1 call / 10 s** → HTTP 429 |
+| **Harvest API** `api.retsinformation.dk/v1/Documents` | Rolling **10-day** change feed | HTTP 429 when called too often |
 
-### Rate limits (published)
+### Terms of use
 
-The harvesting service documents its own limit in its OpenAPI description
-(`https://api.retsinformation.dk/swagger/v1/swagger.json`):
-
-> *"Servicen er kaldt for ofte. Den må kun kaldes en gang pr. 10 sekunder."*
-
-It also states the intended usage is **one call per day**, and that the `date`
-argument must fall within the last 10 days. Confirmed empirically: ~8 rapid requests
-returned a real `429 Too Many Requests`.
+The harvesting service's OpenAPI description
+(`https://api.retsinformation.dk/swagger/v1/swagger.json`) states the intended usage is
+**one call per day**, and that the `date` argument must fall within the last 10 days.
+Called too often it answers a real `429 Too Many Requests`, whose text says it may only
+be called once per 10 seconds (*"Den må kun kaldes en gang pr. 10 sekunder"*). For now
+this tool does not keep that pace: the harvest bucket starts at the same floor as every
+other and slows down only when the service actually answers 429.
 
 The general terms at <https://www.retsinformation.dk/api> grant free, non-exclusive
 use of the open data, but require that use *"ikke belaster Civilstyrelsens
 datagrænseflade på en uhensigtsmæssig eller uforholdsmæssig måde"* — must not burden
 the interface disproportionately. Cloudflare fronts the site, so a block would be
-IP-wide. **There is no published limit for document requests**, which is exactly why
-this tool imposes its own throttle there.
+IP-wide. That is why every request this tool makes is paced by a learner that backs off
+the moment a service pushes back (see [Pacing](#pacing-learned-from-one-floor)).
 
 ### Two facts that shaped the design
 
@@ -537,7 +536,7 @@ on 2026-09-19, not inferred from the archive.
 `GET /v1/Documents` and its own swagger (`/swagger/v1/swagger.json`, titled
 *Retsinformation høsteservice API*). One path: a rolling **10-day** feed of
 individually promulgated documents, to be called *"én gang i døgnet"* between 03:00
-and 23:45 at one call per 10 seconds, with a changelog running back to 3/4-2022.
+and 23:45, with a changelog running back to 3/4-2022.
 No version parameter, no chain, no consolidation. The guide list the swagger points
 at (`/offentlig/vejledninger`) holds exactly **6** documents — four for the Eunomia /
 Lex Dania editor and client, one generic decisions webservice, one harvest-API guide —
@@ -724,7 +723,7 @@ flowchart LR
     S["status / rebuild"]
   end
   subgraph PACE["internal/limiter — process-global, self-learning"]
-    B["harvest 12s PINNED<br/>document at floor 200ms (settable)<br/>sitemap 2s, may double"]
+    B["harvest · document · sitemap<br/>each adaptive from the floor<br/>(200ms, settable)"]
   end
   C1 & C2 & C3 --> PACE --> H["internal/rihttp<br/>1 conn/host · honest UA+contact<br/>reports outcome → learner<br/>one request per call · Retry-After → bucket delay"]
   H --> RI["retsinformation.dk"]
@@ -745,33 +744,56 @@ readable without this program. So `data/state` is a *derived* index: if it is lo
 deleting the store and running `rebuild` recovered every stored document, and the next
 `fetch` issued no requests for them.
 
-It is three files (`internal/store`):
+It is a file per table, as JSON Lines — one row per line, in key order (`internal/store`):
 
 ```
-state/current.json    what the mirror holds and knows: every catalogue row (lastmod, kind,
-                      state, accession, sha256, bytes), every stored body, the feed changes,
-                      the harvested days and the pull record
-state/queue.json      retry bookkeeping: attempts and the last error of every row not yet
-                      answered with content
-state/journal.jsonl   every change since those two were written, one per line
+state/meta.json         format version, the pull record and other markers, harvested days
+state/inventory.jsonl   one row per ELI resource: lastmod, kind, state, the accession it holds,
+                        hash and size of the bytes held, when they changed and were fetched,
+                        and for a row the site refused, when it was last tried and the error
+state/bodies.jsonl      one row per document whose XML has no body: the payload that does
+state/changes.jsonl     the harvesting feed's entries, kept for 60 days
+state/journal.jsonl     every change since the others were written
 ```
 
-`current.json` is what a fresh machine needs to carry on collecting, so it is the part that
-travels; `queue.json` is local, and losing it only resets retry counters — a row still owed
-says so in `current.json` (`pending`, `failed` or `stale`), and rows past the retry ceiling
-are simply tried again. The journal is why a killed run loses nothing: every write appends a
-line before the method returns, opening replays it (a torn last line is ignored), and closing
-folds it into the two files, each written to a temporary name and renamed. Both files are
-written one row per line in key order, so two states diff line by line and a
-content-chunked store keeps the rows that did not change. A lock file keeps it to one
-collecting process at a time.
+Everything but the journal is what a fresh machine needs to carry on collecting, so it is the
+part that travels. That includes the documents the site would not serve: such a row says
+`failed`, when it was last tried (`tried_at`) and what came back (`error`), and the default
+sweep asks for it again once a week (`store.RetryFailedAfter`) — on whichever machine runs
+next, since the schedule is in the row rather than in a counter kept beside it. What a run
+has to do right now is derived from the rows when it starts: `pending` and `stale` rows, and
+failures that are due. Nothing about it is kept apart. The journal is why a killed
+run loses nothing: every write appends a line before the method returns, opening replays it
+(a torn last line is ignored), and closing writes the tables that changed — each to a
+temporary name, renamed — so a fetch run does not rewrite the body table. One row per line in
+key order means two states diff line by line and a content-chunked store keeps the rows that
+did not change; and the files are ordinary JSON Lines for `jq` and `grep`. A lock file keeps
+it to one collecting process at a time.
 
-Measured on the live mirror (201,800 catalogue rows, 101,727 body rows, 191,612 accessions,
-1,397 feed changes): `current.json` is 103 MB and 21.7 MB under `zstd -19`; `queue.json` is
-0.9 MB (15 KB compressed); loading both takes about a second. It replaced a Badger store, and
-the move was checked row by row — every field of every row identical, except the attempt
-counts of fetched rows, which nothing read — with the pull record's fingerprint unchanged
-(`eb14429b`).
+Two choices keep it small, and both were measured before they were made. An accession is not
+a table of its own: it is the row that holds it, which already carries its hash and size —
+only when its bytes changed and were last fetched are its own — so the 191,612 accession
+records that repeated their row's URL and hash are gone; the one accession two rows share
+(`lta/1963/7` and `ltc/1963/7`) is held by one of them, and moves when the other is fetched.
+And a hash is the first 64 bits of the SHA-256 (`archive.Hash`), not all 256: it only has to
+tell one version of a document from the next and spot the same bytes under two URLs, and
+full-width hex was 85 % of the compressed state.
+
+Measured on the live mirror (201,800 catalogue rows, 101,727 body rows, 1,397 feed changes):
+
+| | on disk | `zstd -19` |
+|---|---|---|
+| `inventory.jsonl` | 42.4 MB | 4.0 MB |
+| `bodies.jsonl` | 15.4 MB | 1.8 MB |
+| `changes.jsonl` + `meta.json` | 0.3 MB | 0.01 MB |
+| **what travels** | **58 MB** | **5.7 MB** |
+
+Loading it takes under a second. The first JSON layout — one object, a separate accession
+table, full hashes — was 103 MB and 21.7 MB compressed. Each move was checked row by row:
+from Badger, every field of every row identical except the attempt counts of fetched rows,
+which nothing read; from the first layout, every row, body, accession, change and marker
+identical with hashes cut to 16 hex digits. `retsin-update status` printed the same report
+throughout, pull-record fingerprint `eb14429b` included.
 
 Considered and rejected: SQLite (`modernc.org` drags ~40 MB of generated `libc` and the
 payload still wouldn't belong in a DB) and Badger, which this replaced: a database is a lot
@@ -789,30 +811,24 @@ read by anything else.
 
 Example: `xml/fob/1980/100.xml`, `xml/retsinfo/2026/10019.xml`.
 
-## Pacing: one hard rule, everything else learned
+## Pacing: learned, from one floor
 
-There are exactly two kinds of limit here, and the tool treats them differently.
-
-**Constants — proven obligations.** The harvesting service publishes a 1 call / 10 s
-limit and returns a real `429` when exceeded, with no `Retry-After` header to be
-polite about. That interval is a contract, not an observation, so it is a **constant**
-(`config.HarvestInterval`, 12 s for clock-skew margin) with no flag: there is no
-configuration in which going faster is acceptable. The sitemap pace (2 s) is a
-constant too, because it was measured rather than guessed.
-
-**Adaptive — everything unpublished.** There is no published limit for document
-requests, so guessing one is the wrong move: too fast risks an IP-wide Cloudflare
-block, too slow wastes the bootstrap. Instead the learner measures the site and holds
-the fastest pace it can sustain — a TCP-AIMD style controller that starts optimistic
-and lets the service correct it:
+Every request is paced by one learner, with a bucket per service — the harvesting API, the
+sitemap and the documents — so pushback from one service does not slow the others. Guessing
+a pace is the wrong move: too fast risks an IP-wide Cloudflare block, too slow wastes the
+bootstrap. Instead the learner measures each service and holds the fastest pace it can
+sustain — a TCP-AIMD style controller that starts optimistic and lets the service correct
+it:
 
 | Event | Action |
 |---|---|
-| startup | begin at `--document-floor` and stay there while the service is happy |
+| startup | every bucket begins at `--floor` and stays there while its service is happy |
 | 20 consecutive successes (`limiter.Window`) after a throttle | shorten the interval by ÷1.5 (`limiter.StepDown`), working back towards the floor |
-| any `429`/`5xx` | **double** the interval immediately, then hold it for a 10 min cooldown before stepping back down |
+| a `429`, `503` or `504` | **double** the interval immediately, then hold it for a 10 min cooldown before stepping back down |
+| any other `5xx` | neither faster nor slower: the site answers `500` for the same few documents every time, and reading that as pushback once slowed a run to minutes per request |
+| a `Retry-After` header | push the bucket's next request out by that much (capped at an hour) |
 | any transport failure | neither faster nor slower, but it breaks the success streak, so recovery only happens on clean windows |
-| interval | clamped to `[--document-floor, limiter.MaxInterval]` |
+| interval | clamped to `[--floor, limiter.MaxInterval]` |
 
 Only the **floor** is a flag. It is both the interval a run starts at and the fastest
 one the learner returns to, which is why everything else above is a constant: every
@@ -822,7 +838,14 @@ more ways to misconfigure a crawl.
 The floor is a default, not a limit. 200 ms is what a considerate pace looks like for
 requests served uncached straight from the origin, but lowering it is honoured rather
 than refused — the feedback then comes from the service itself as a 429, which the
-learner answers by doubling the interval on its own.
+learner answers by doubling that service's interval on its own.
+
+A throttle answer is a request to slow down, not a refusal, and nothing records it as one. A
+throttled harvest day is asked for again (up to 10 times) once the doubled interval allows,
+so one busy moment does not end an update — a run from a fresh runner was throttled six
+times and settled at 12.8 s, the site's own documented pace, by itself. A throttled document
+is left as it was rather than marked failed, so the next run asks again instead of the
+weekly retry of documents the site refused.
 
 Learning restarts each run — deliberate, because the site's capacity changes and a
 persisted fast interval would begin the next run already presumptuous.
@@ -830,7 +853,7 @@ persisted fast interval would begin the next run already presumptuous.
 **Jitter** is the second pacing flag, and it is about signature rather than speed. A crawl
 that runs for days at exactly 200 ms is a recognisable machine, so each wait gets a random
 share of the current interval added on top — 10 % by default, up to 20 ms extra at the
-floor. It never shortens a wait, so `--document-floor` stays a hard minimum. `--jitter 0`
+floor. It never shortens a wait, so `--floor` stays a hard minimum. `--jitter 0`
 gives exact spacing, which is the setting to choose when the question is whether a service
 limit is what you are hitting: then nothing else is varying, and a 429 means what it says.
 The interval and the jitter in force are printed on the progress bar (`fetch @200ms ±10%`)
@@ -844,9 +867,8 @@ interval — the learner finds the safe pace by being corrected, not by probing 
 ## Anti-blocking measures
 
 1. **Process-global token buckets.** Every request in the process passes one gate per
-   bucket, so no phase or caller can bypass pacing, and the 10 s harvest obligation is
-   a constant with no flag that can lower it.
-2. **A throttle changes the schedule, not the retry count.** Any 429/503/5xx reports
+   bucket, so no phase or caller can bypass pacing.
+2. **A throttle changes the schedule, not the retry count.** Any 429/503/504 reports
    the outcome to the learner, which doubles the interval and holds it through a
    cooldown. If the server sends `Retry-After`, that wait is applied to the **bucket**
    rather than sleeping the request open, so the next request is delayed too and a
@@ -861,9 +883,9 @@ interval — the learner finds the safe pace by being corrected, not by probing 
 5. **Idempotent, resumable phases.** A resource already on disk is closed with **no
    request at all**, so a multi-day crawl can be interrupted freely and a second pass
    costs nothing.
-6. **Bounded re-attempts.** A resource is re-tried on a later sweep at most five times
-   before it stops consuming the polite budget; permanent 4xx (404/410) is recorded as
-   gone and never asked for again.
+6. **Weekly re-attempts.** A resource the site refused is asked for again a week after it
+   was last tried, not every run; permanent 4xx (404/410) is recorded as gone and never
+   asked for again.
 7. **Run-end warning** if the server throttled us at all during the run.
 
 ## Configuration
@@ -873,8 +895,8 @@ exactly what a run will do. Run `retsin-update --help` (or `retsin --help` for t
 
 ```
 --data-dir DIR           archive + state location (default ./data)
---document-floor 200ms   the interval to start at and the fastest to return to
-                         (a default, not a limit: lower is honoured)
+--floor 200ms            the interval every bucket starts at and the fastest it returns
+                         to (a default, not a limit: lower is honoured)
 --jitter 10              random extra wait, as a percentage of the current interval
                          (0 = exact spacing)
 --user-agent STRING      keep a contact address in it
@@ -896,9 +918,8 @@ exactly what a run will do. Run `retsin-update --help` (or `retsin --help` for t
 (`pending`, `fetched`, `empty`, `failed`, `gone`). See
 [Backfilling the missing bodies](#backfilling-the-missing-bodies).
 
-Everything else about pacing is either a published obligation (12 s harvest), a
-measurement (2 s sitemap), or the learner's own shape — all constants, all asserted in
-`internal/config/config_test.go`.
+Everything else about pacing is the learner's own shape: constants in `internal/limiter`,
+pinned by its tests.
 
 ### Progress bar
 
@@ -933,12 +954,12 @@ Subcommands: `inventory`, `harvest`, `fetch`, `update`, `status`, `rebuild`.
 ## Running it
 
 ```bash
-go build -o retsin ./cmd/retsin
+make build    # bin/retsin-update and bin/retsin
 
-# 1. Full catalogue — ~22 requests, ~50 seconds, ~203k resources
+# 1. Full catalogue — ~22 requests, ~203k resources
 retsin-update --data-dir /storage/retsinformation inventory
 
-# 2. Official change feed — 10 days × 12s ≈ 2 minutes
+# 2. Official change feed — the last 10 days
 retsin-update --data-dir /storage/retsinformation harvest
 
 # 3. Documents — 1 request per document
@@ -966,7 +987,7 @@ rows, `retsinfo` with 82,654) were still unfetched when that was measured, so th
 band is **3–8 GB**. Sample them with `--kind` below instead of trusting an
 extrapolation.
 
-To crawl faster, lower `--document-floor`: the tool honours it and leaves the judgement
+To crawl faster, lower `--floor`: the tool honours it and leaves the judgement
 to the site. Those requests are served uncached straight from the origin, and the terms
 ask users not to burden the interface — which is why 200 ms is the default, not why it
 would be a wall. The learner only reaches the floor if the site proves it can take it.
@@ -995,15 +1016,15 @@ run also tolerates a feed gap, since the sitemap pass on that same run covers th
 days the feed has forgotten.
 
 **The pull record is an account, not a certificate.** Every pass writes one, complete
-or not: the moment it pulled, how many documents it still owes, how many are past the
-retry ceiling, and an eight-digit fingerprint of *which* they were. The alternative —
+or not: the moment it pulled, how many documents it still owes, how many the site refused,
+and an eight-digit fingerprint of *which* they were. The alternative —
 recording nothing until a pass finishes with both queues drained — discards the true
 statement "we pulled today, and these fourteen documents would not come", which is the
 statement an operator and a reader actually need. A mirror can only hold what the site
 agrees to serve, so completeness is not a fact available here and withholding a
 timestamp cannot invent it.
 
-The fingerprint does what the counts cannot. `owed=0 stalled=14` on two consecutive
+The fingerprint does what the counts cannot. `owed=0 failed=14` on two consecutive
 nights says nothing about whether anything changed; the same digest says it is the same
 fourteen documents the site refuses, and a moving digest says something new broke. The
 counts and digest travel in the state store row, in `data/sweep.stamp` for readers that
@@ -1011,9 +1032,11 @@ cannot open the locked store, in `retsin-update status`, into the header of the 
 (`compiled.ArtifactHeader.Collection`), and from there into the dataset line of every answer
 served from it.
 
-`owed` counts rows still pending *or* failed while under the retry ceiling; past the
-ceiling they are `stalled` and are reported apart, since no automatic pass will ever
-fetch them and `retsin-update fetch --state pending` is the remedy.
+`owed` counts rows still `pending` or `stale` — work the pass did not get to. `failed`
+counts rows the site refused; each carries when it was last tried and the error, which
+`retsin-update status` lists, and each is asked for again a week after its last try, or at
+once with `retsin-update fetch --state failed`. Records written before failures were dated
+said `stalled`, and still read as failed.
 
 **An inventory pass merges; it does not overwrite.** The sitemap reports every
 resource it has ever advertised, and the rows it hands over carry only URL, `lastmod`,
@@ -1050,7 +1073,7 @@ Measured on the live mirror, 2026-09-18 (yesterday's full crawl, today's first r
 | feed changes naming a document this mirror has never seen | 0 |
 | rows the first inventory pass queued, out of 201,616 | 1,438 |
 | documents the refill collected | ~1,300 rows worked, **35 genuinely new** files |
-| rows left owing after the refill | 1 (a `retsinfo` path the site answers **HTTP 500**), carried in the pull record and fingerprinted; it later joined the 14 rows past the retry ceiling |
+| rows left owing after the refill | 1 (a `retsinfo` path the site answers **HTTP 500**), carried in the pull record and fingerprinted; it later joined the 14 rows the site refuses |
 | permanently failing rows, reported and not blocking | 14 |
 | request rate | 47–52 documents/min, dropping to 400 ms pacing when the site errors |
 | `held rows with a September lastmod that were stored before their own lastmod` | **0 of 308** |
@@ -1201,7 +1224,7 @@ retsin-update fetch --bodies --state gone     # documents the site answered 404 
 retsin-update fetch --bodies --state empty    # table documents, to check they still have no prose
 ```
 
-Naming a state lifts the retry ceiling, exactly as in the XML path, and an unknown state name
+Naming a state lifts the weekly retry wait, exactly as in the XML path, and an unknown state name
 is an error listing the valid ones. `empty` is worth re-testing only after a parser change —
 re-testing it otherwise is 10k requests for a known answer.
 
@@ -1776,27 +1799,139 @@ artifact it came from. The artifact carries three things a server needs besides 
   the register's references), whether it is a bill, and the changes its notes say it does not
   print yet.
 
-#### Downloading the published artifact (placeholder)
+#### Releases: publishing, downloading and snapshots
 
-A server does not need `retsin-update` of its own. With no current artifact, `retsin serve` and
-`retsin mcp` download the published one from a Hugging Face dataset repository (`--hf-repo`)
-before starting, and while they run they look for a newer one every `--auto-update` (a week by
-default; `0` turns it off), install it and move to it the way they move to any new current
-artifact. `retsin artifact download` does the same by hand. The time of the last check is kept
-in `<data-dir>/artifact.checked`, so restarting the server does not reset the week.
-
-**Nothing is published yet**, so the default repository is empty and none of this does anything:
-a server without an artifact still refuses to start, now naming `--hf-repo` as the other remedy.
-The repository is expected to hold a manifest beside the artifact it names:
+A release is the artifact and the collection state, published together to a release
+repository (`internal/release`). A repository is one string for both programs: a **local
+directory**, or **`hf://owner/name[@revision]`** for a Hugging Face dataset repository. Both
+are the same interface — open a published file, commit a set of files at once — so a
+directory is a complete stand-in for Hugging Face, and is how publishing is tried out:
 
 ```
-latest.json                                {"file": "artifact-….retsin", "size": …, "sha256": "…", "model": 1}
-artifact-20261007T0648Z-61f208f4.retsin
+latest.json                                manifest: every file's size and SHA-256, the model
+artifact-20261007T0648Z-61f208f4.retsin    the artifact a server downloads
+artifact-20261001T0310Z-c41e9b07.retsin    its base, when the artifact is a layer
+state/meta.json, state/inventory.jsonl,    the collection state a fresh machine continues from
+state/bodies.jsonl, state/changes.jsonl
+xml/lta/1995.tar.zst, …                    the XML archive, one pack per kind and year (--with-xml)
 ```
+
+- `retsin-update publish --release <repo>` publishes the current artifact and the state, with
+  the manifest committed last, so a reader never sees it naming a file that is not there yet;
+  the artifact it replaces is deleted. `--state-only` keeps the published artifact. In a
+  directory every file is hard-linked where it can be: neither artifacts nor state files are
+  ever rewritten in place, so a release costs no space beside the data it came from.
+- `retsin-update restore --release <repo>` downloads the state into an empty data directory,
+  each file checked against the manifest and none put in place until all arrived whole;
+  `--with-artifact` installs the artifact too (and its base, for a layer). That is everything
+  `update` and an incremental build need: `update` fetches only what changed. `--with-xml`
+  also unpacks the XML archive, for a full build.
+- `retsin serve` and `retsin mcp` download the published artifact when they have none
+  (`--release`), and while they run look for a newer one every `--auto-update` (a week by
+  default; `0` turns it off), install it and move to it as to any new current artifact.
+  `retsin artifact download` does it by hand. The last check is kept in
+  `<data-dir>/artifact.checked`, so restarting does not reset the week.
 
 The manifest's document model is checked before downloading, so a binary never fetches an
-artifact it would refuse; the size and SHA-256 are checked after, and the file's own header
-before it becomes current (`internal/artifactfetch`). Publishing that layout is still to do.
+artifact it would refuse; the size and SHA-256 after, and the artifact's own header before it
+becomes current.
+
+**A snapshot is a release in a directory.** `data/snapshots/2026-10-07` holds the mirror as
+it stood that morning (pull record 2026-10-06 11:32Z), so an incremental collection can be run
+from the same starting point as often as needed, the way a fresh runner would:
+
+```bash
+rm -rf /tmp/try
+retsin-update --data-dir /tmp/try restore --release data/snapshots/2026-10-07
+retsin-update --data-dir /tmp/try update
+```
+
+**Publishing to Hugging Face** is one commit made with the Hub's own client, `hf upload`
+(`pip install huggingface_hub`), with `HF_TOKEN`: the release's files are staged under their
+paths, hard-linked, and the deletions go in the same commit, so a reader sees one release or
+the next. Large files go to Xet storage in content-defined chunks, so a whole artifact that is
+mostly unchanged costs its changed chunks. Downloads send `HF_TOKEN` when it is set, for a
+private repository.
+
+**The weekly release runs on a GitHub runner**: `.github/workflows/hf-release.yml` (Mondays,
+or by hand with a mode) runs `scripts/hf-release.sh` from the checkout, with the repository
+secrets `HF_REPO` (`owner/name`) and `HF_TOKEN`. The script:
+
+1. `restore --with-artifact`: the state and the artifact (and its base) from the release;
+2. `update`: the change feed and the documents it names;
+3. `artifact build --mode layer`; when the published artifact cannot be continued (another
+   document model or dictionary), `restore --xml-only` and a full build;
+4. `publish --with-xml`: the artifact, the state and the packs this week touched.
+
+Tried against a local release made from this machine's data: 36 s from an empty checkout —
+restore, a harvest throttled six times, 39 documents tried (25 stored, 13 still answering
+500), a 17.5 MB layer over the 1.3 GB base, 11 packs repacked from 2.5 GB of archive on disk.
+The data directory is `data`, as here, because documents record paths under the archive root.
+
+The first release is published once from a machine holding the whole archive:
+`hf repo create owner/name --repo-type dataset`, then `retsin-update publish --release
+hf://owner/name --with-xml` (1.3 GB of artifact, 1.4 GB of packs).
+
+**Not done yet (placeholder):** the default repository a server downloads from, which is empty
+because nothing is published, so a server without an artifact still refuses to start, naming
+`--release` as the other remedy.
+
+#### Incremental builds: patch, layer, and the XML packs
+
+A full build compiles every file of the 13 GB archive, which a fresh machine does not have:
+restoring gives it the state, the artifact and this week's fetched files. Three ways to make
+the next artifact from that, all through `retsin-update artifact build --mode`:
+
+| | `full` + `restore --with-xml` | `--mode patch` | `--mode layer` |
+|---|---|---|---|
+| builds from | every file, unpacked from the release | the current artifact + the files on disk | the same |
+| writes | a whole artifact | a whole artifact | only the changed documents, over the base beside it |
+| a server downloads | the whole artifact | the whole artifact | the layer (the base it has already) |
+| survives a new document model or dictionary | yes | no: build in full | no: build in full |
+
+Measured on the whole mirror (191,613 documents; 3 corrected and 1 new):
+
+| | time | output |
+|---|---|---|
+| full build | 55 s | 1,308 MB |
+| patch, every file on disk | 4.0 s | 1,308 MB, frame for frame and catalogue byte for byte the full build's |
+| patch, only the 4 changed files on disk | 3.7 s | the same, from 1.3 GB on disk instead of 14 GB |
+| layer | 4.2 s | 17.2 MB over the 1,308 MB base; reads exactly like the full build |
+
+**How a patch knows what changed.** The catalogue records what each document was compiled
+from: the hash of its XML and of its body sidecar (`XMLHash`, `BodyHash`). A patch hashes the
+files on disk — 13 GB in about two seconds from the page cache — and compiles those whose
+hashes differ, or that are new; every other document's frame is copied from the earlier
+artifact as compressed bytes, which is what it would compress to again under the same
+dictionary. A document whose XML is not on disk is carried, so a runner holding only what
+`update` fetched builds the whole artifact. A body sidecar that changed while its XML is not on
+disk cannot be compiled there, and is reported; the document keeps the text it had until a
+build has the XML.
+
+**When a patch refuses.** Carrying a frame is only right when compiling it again would give the
+same bytes, so a patch or a layer refuses an earlier artifact holding another document model
+(`compiled.ModelVersion`, which a change to what a document compiles to must bump), another
+dictionary, or one built from another archive root: a document's model records its sidecar's
+path, so the same `--data-dir` is needed. A full build is the answer in every case: here, from
+the archive; on a runner, after `restore --with-xml`.
+
+**A layer** is artifact format version 4: the same frames, but its document table lists every
+document in build order, marking the ones read from the base, and its header names the base
+file and its stamp. A reader opens both and sees one artifact; a base that is missing or has
+another stamp is refused. A layer is always over a whole artifact: the next layer goes over
+the same base and carries the documents the previous layer held, so it grows week by week.
+When it would replace more than `--rebase-at` of the documents (5 % by default) the build
+writes a whole artifact instead, which becomes the next base. Most of a layer is what it
+repeats whole: the catalogue (219 MB of JSON for the mirror) and the document table. Pruning keeps the
+base of every artifact it keeps; `publish` sends a layer's base only when the release does not
+hold it already, and a server downloads it only when it does not have it.
+
+**The XML packs** are one `tar.zst` per kind and year: 659 packs, 1.4 GB for the 13 GB
+archive. Each carries a digest of its files' paths and SHA-256s, so `publish --with-xml` packs
+and sends only the shards whose files changed (27 s to pack everything, 1.4 s when nothing
+changed), and `restore --with-xml` skips the shards already on disk as published (30 s to
+unpack everything, file for file the archive it was packed from). The entries carry no owner
+or time, so a pack depends only on its files.
 
 The search index is cut from the artifact too, by the server, when it is missing or was cut from
 another one (see [Full-text search](#full-text-search-retsin-index-build-and-what-the-measurement-decided)), so anyone holding the artifact can build
@@ -2548,14 +2683,14 @@ retsin-update --data-dir /storage/retsinformation fetch       # resume; already-
 go test ./...
 ```
 
-Covering: the pacing **constants** and the document-floor default, pacing guarantees,
+Covering: the pacing floor's default and that every bucket starts at it, pacing guarantees,
 **the adaptive learner** (step-down after a clean window, doubling on throttle,
-floor/ceiling clamps, pinned buckets ignoring all feedback, `Retry-After` applied to the
-bucket and clamped), live learner integration against a throttling fake server,
+floor/ceiling clamps, independent buckets, `Retry-After` applied to the bucket and
+clamped), live learner integration against a throttling fake server,
 one-request-per-call throttle handling, flag parsing on either side
 of the subcommand, gzip handling, non-retryable errors, UA
 identity, context cancellation (including a cancelled throttle wait), ELI path↔archive-path mapping (including
-path-traversal rejection), state round-trips (close and reopen, a killed run replayed from the journal, carrying on from `current.json` alone, the lock) and pending/limit semantics, harvest
+path-traversal rejection), state round-trips (close and reopen, a killed run replayed from the journal, carrying on without the queue, an accession moving between the rows that share it, dropping old feed changes, leaving unchanged tables unwritten, the lock) and pending/limit semantics, harvest
 checkpointing, XML parsing against **three genuine fixture schemas**, the log/bar
 writer gate (a record must erase the frame, and never add a clear of its own),
 bar modes including silent-off-a-terminal, and end-to-end `Fetch` progress
@@ -2954,10 +3089,9 @@ XML class above, seen from the outside.
   the dropped path answers 404 while `eli/lta/1963/7` and the accession both open the same
   bekendtgørelse. Reporting the count is the first fix; whether two ELI paths for one accession
   should each answer is a decision still open.
-- The 12 s harvest pace is a constant with no flag, so the published 1 call / 10 s
-  obligation cannot be configured away. The 200 ms document floor is a **default**, not
-  a limit: `Validate()` only refuses a non-positive value, and pushing it lower is a
-  deliberate operator choice answered by the service's own 429.
+- The 200 ms pacing floor is a **default**, not a limit: `Validate()` only refuses a
+  non-positive value, and pushing it lower is a deliberate operator choice answered by
+  the service's own 429.
 - The harvest feed only covers a rolling 10 days. An outage longer than that can only
   be repaired via `inventory`, which the tool warns about explicitly.
 - `inventory` reports ingested rows including any cross-page duplicates; unique

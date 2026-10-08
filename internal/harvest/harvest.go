@@ -3,9 +3,8 @@
 //
 // Published constraints (see https://www.retsinformation.dk/api and the service's
 // own OpenAPI description at https://api.retsinformation.dk/swagger/v1/swagger.json):
-//   - The service may be called at most once per 10 seconds; exceeding this
-//     returns HTTP 429 with the text "Servicen er kaldt for ofte. Den må kun
-//     kaldes en gang pr. 10 sekunder."
+//   - Called too often, it answers HTTP 429, which the adaptive pacing in
+//     internal/limiter backs off from like any other.
 //   - A date argument must fall within the last 10 days.
 //   - The intended usage is one call per day ("I en almindelig situation kaldes
 //     denne service en gang i døgnet").

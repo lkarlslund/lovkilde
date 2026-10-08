@@ -15,12 +15,13 @@ func fill(t *testing.T, s *Store) {
 	ctx := context.Background()
 	for _, err := range []error{
 		s.PutInventoryBatch(ctx, []Inventory{
-			{ELIURL: "https://x/eli/lta/2020/1", LastMod: "2026-09-01", Kind: "lta", State: StateFetched, Accession: "A1", SHA256: "h1", Bytes: 10},
-			{ELIURL: "https://x/eli/lta/2020/2", LastMod: "2026-09-02", Kind: "lta", State: StateFailed, Attempts: 3, Error: "HTTP 500"},
+			{ELIURL: "https://x/eli/lta/2020/1", LastMod: "2026-09-01", Kind: "lta", State: StateFetched, Accession: "A1", Hash: "h1", Bytes: 10},
+			{ELIURL: "https://x/eli/lta/2020/2", LastMod: "2026-09-02", Kind: "lta", State: StateFailed, TriedAt: "2026-10-01T12:00:00Z", Error: "HTTP 500"},
 		}),
-		s.PutBody(ctx, Body{ELIURL: "https://x/eli/lta/2020/1", Kind: "lta", State: StateEmpty, Attempts: 1, Bytes: 5}),
-		s.PutAccession(ctx, Accession{Accession: "A1", ELIURL: "https://x/eli/lta/2020/1", SHA256: "h1", Bytes: 10, ChangedAt: "2026-09-01T00:00:00Z"}),
-		s.PutChanges(ctx, []Change{{Date: "2026-10-01", Accession: "A1", Reason: "updated", SeenAt: "2026-10-01T10:00:00Z"}}),
+		s.PutBody(ctx, Body{ELIURL: "https://x/eli/lta/2020/1", Kind: "lta", State: StateEmpty, Bytes: 5}),
+		s.PutAccession(ctx, Accession{Accession: "A1", ELIURL: "https://x/eli/lta/2020/1", Hash: "h1", Bytes: 10, ChangedAt: "2026-09-01T00:00:00Z"}),
+		// Dated today: changes past changeRetention are dropped when the state is written.
+		s.PutChanges(ctx, []Change{{Date: time.Now().Format(time.DateOnly), Accession: "A1", Reason: "updated", SeenAt: "2026-10-01T10:00:00Z"}}),
 		s.MarkDayHarvested(ctx, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)),
 		s.SetMeta(ctx, "last_full_sweep", "2026-10-01T11:00:00Z owed=1"),
 	} {
@@ -31,19 +32,15 @@ func fill(t *testing.T, s *Store) {
 }
 
 // same reports how the state in b differs from the one fill wrote, or "".
-func same(t *testing.T, b *Store, withRetries bool) string {
+func same(t *testing.T, b *Store) string {
 	t.Helper()
 	ctx := context.Background()
 	var diffs []string
 	failed, _, _ := b.GetInventory(ctx, "https://x/eli/lta/2020/2")
-	wantAttempts := 0
-	if withRetries {
-		wantAttempts = 3
-	}
-	if failed.State != StateFailed || failed.LastMod != "2026-09-02" || failed.Attempts != wantAttempts {
+	if failed.State != StateFailed || failed.LastMod != "2026-09-02" || failed.TriedAt != "2026-10-01T12:00:00Z" || failed.Error != "HTTP 500" {
 		diffs = append(diffs, "failed row "+failed.ELIURL+" "+string(failed.State))
 	}
-	if in, _, _ := b.GetInventory(ctx, "https://x/eli/lta/2020/1"); in.SHA256 != "h1" || in.Accession != "A1" || in.State != StateFetched {
+	if in, _, _ := b.GetInventory(ctx, "https://x/eli/lta/2020/1"); in.Hash != "h1" || in.Accession != "A1" || in.State != StateFetched {
 		diffs = append(diffs, "fetched row")
 	}
 	if body, ok, _ := b.GetBody(ctx, "https://x/eli/lta/2020/1"); !ok || body.State != StateEmpty || body.Bytes != 5 {
@@ -64,8 +61,9 @@ func same(t *testing.T, b *Store, withRetries bool) string {
 	return strings.Join(diffs, ", ")
 }
 
-// Closing writes the two files and empties the journal; opening them again is the same state.
-// Attempts and errors are in queue.json and nowhere in current.json.
+// Closing writes the files and empties the journal; opening them again is the same state. A
+// failed document is part of it -- when it was last tried and what the site said -- and a table
+// is one row per line.
 func TestTheStateSurvivesCloseAndOpen(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(dir)
@@ -79,19 +77,19 @@ func TestTheStateSurvivesCloseAndOpen(t *testing.T) {
 	if info, err := os.Stat(filepath.Join(dir, JournalFile)); err != nil || info.Size() != 0 {
 		t.Errorf("the journal after a close: %v, %v", info, err)
 	}
-	cur, _ := os.ReadFile(filepath.Join(dir, CurrentFile))
-	if strings.Contains(string(cur), "HTTP 500") || strings.Contains(string(cur), "attempts") {
-		t.Errorf("current.json carries retry bookkeeping:\n%s", cur)
+	inv, _ := os.ReadFile(filepath.Join(dir, InventoryFile))
+	if !strings.Contains(string(inv), `"tried_at":"2026-10-01T12:00:00Z","error":"HTTP 500"`) {
+		t.Errorf("%s does not record the failure:\n%s", InventoryFile, inv)
 	}
-	if q, _ := os.ReadFile(filepath.Join(dir, QueueFile)); !strings.Contains(string(q), "HTTP 500") {
-		t.Errorf("queue.json lacks the error:\n%s", q)
+	if lines := strings.Count(string(inv), "\n"); lines != 2 {
+		t.Errorf("%s has %d lines for two rows:\n%s", InventoryFile, lines, inv)
 	}
 	b, err := Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	if d := same(t, b, true); d != "" {
+	if d := same(t, b); d != "" {
 		t.Errorf("reopened state differs: %s", d)
 	}
 }
@@ -115,39 +113,11 @@ func TestAKilledRunLosesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	if d := same(t, b, true); d != "" {
+	if d := same(t, b); d != "" {
 		t.Errorf("state replayed from the journal differs: %s", d)
 	}
 	if _, ok, _ := b.GetInventory(context.Background(), "torn"); ok {
 		t.Error("a torn journal line was applied")
-	}
-}
-
-// A fresh machine gets current.json alone: everything but the retry counters is there, and
-// the rows still owed are still owed.
-func TestCurrentStateAloneIsEnoughToCarryOn(t *testing.T) {
-	dir := t.TempDir()
-	s, err := Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fill(t, s)
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(filepath.Join(dir, QueueFile)); err != nil {
-		t.Fatal(err)
-	}
-	b, err := Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer b.Close()
-	if d := same(t, b, false); d != "" {
-		t.Errorf("state from current.json alone differs: %s", d)
-	}
-	if owed, _ := b.PendingInventory(context.Background(), 0, Filter{MaxAttempts: 5}); len(owed) != 1 {
-		t.Errorf("rows owed after losing the queue: %+v", owed)
 	}
 }
 
@@ -167,4 +137,102 @@ func TestTheStateIsLocked(t *testing.T) {
 		t.Fatalf("Open after Close: %v", err)
 	}
 	again.Close()
+}
+
+// An accession lives on the row that holds it. Two rows may name the same accession (the live
+// mirror has one: lta/1963/7 and ltc/1963/7); recording it on the second moves it, and the
+// first stops holding it, across a reopen too. Rewriting the holding row keeps its times.
+func TestAnAccessionMovesBetweenTheRowsThatNameIt(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	const lta, ltc = "https://x/eli/lta/1963/7", "https://x/eli/ltc/1963/7"
+	for _, u := range []string{lta, ltc} {
+		if err := s.PutInventory(ctx, Inventory{ELIURL: u, State: StateFetched, Accession: "B1", Hash: "h-" + u}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.PutAccession(ctx, Accession{Accession: "B1", ELIURL: lta, Hash: "h-" + lta, ChangedAt: "2026-09-01T00:00:00Z"}); err != nil {
+		t.Fatal(err)
+	}
+	// The fetch loop rewrites the holding row; the accession's times stay with it.
+	if err := s.PutInventory(ctx, Inventory{ELIURL: lta, State: StateFetched, Accession: "B1", Hash: "h2"}); err != nil {
+		t.Fatal(err)
+	}
+	if a, _, _ := s.GetAccession(ctx, "B1"); a.ELIURL != lta || a.Hash != "h2" || a.ChangedAt != "2026-09-01T00:00:00Z" {
+		t.Fatalf("after rewriting the holding row: %+v", a)
+	}
+	if err := s.PutAccession(ctx, Accession{Accession: "B1", ELIURL: ltc, Hash: "h-" + ltc, ChangedAt: "2026-10-01T00:00:00Z"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if a, ok, _ := b.GetAccession(ctx, "B1"); !ok || a.ELIURL != ltc || a.ChangedAt != "2026-10-01T00:00:00Z" {
+		t.Errorf("after moving and reopening: %+v (found %v)", a, ok)
+	}
+	if left := b.inventory.rows[lta]; left.holds() || left.Accession != "B1" {
+		t.Errorf("the row the accession left: %+v", left)
+	}
+}
+
+// Feed changes older than changeRetention are dropped when the state is written.
+func TestOldFeedChangesAreDropped(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	old := time.Now().Add(-changeRetention - 48*time.Hour).Format(time.DateOnly)
+	recent := time.Now().Format(time.DateOnly)
+	if err := s.PutChanges(ctx, []Change{{Date: old, Accession: "A1", Reason: "x"}, {Date: recent, Accession: "A2", Reason: "x"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if got, _ := b.Changes(ctx, "", 0); len(got) != 1 || got[0].Date != recent {
+		t.Errorf("changes kept: %+v", got)
+	}
+}
+
+// A save rewrites only the tables that changed, so a fetch run does not rewrite the body table.
+func TestASaveLeavesUnchangedTablesAlone(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fill(t, s)
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	bodies := filepath.Join(dir, BodiesFile)
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(bodies, past, past); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutInventory(context.Background(), Inventory{ELIURL: "https://x/eli/lta/2020/3", State: StatePending}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(bodies); !info.ModTime().Equal(past) {
+		t.Errorf("%s was rewritten though no body row changed", BodiesFile)
+	}
 }

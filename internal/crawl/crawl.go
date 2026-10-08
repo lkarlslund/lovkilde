@@ -5,7 +5,7 @@
 // The phases, and why they are separate:
 //
 //	Inventory  sitemap pages only          ~22 requests for the full 203k catalogue
-//	Harvest    harvesting service only     1 call per 10s, 10-day rolling window
+//	Harvest    harvesting service only     10-day rolling window
 //	Fetch      document XML only           1 request per not-yet-held resource
 //	Update     inventory + harvest + fetch  the daily cron entry point
 //
@@ -93,6 +93,11 @@ func (c *Crawler) Inventory(ctx context.Context) error {
 	return nil
 }
 
+// maxThrottled is how many times a harvest day is asked for while the service throttles. The
+// harvest bucket doubles its interval on every throttle, so the calls are a minute apart well
+// before the attempts run out.
+const maxThrottled = 10
+
 // Harvest consumes the official change feed. It walks backwards from today only
 // as far as it has not already recorded, because the service answers for a
 // rolling 10-day window: entries older than that expire, so an outage longer
@@ -130,6 +135,13 @@ func (c *Crawler) Harvest(ctx context.Context) error {
 	var seen, stored int
 	for _, day := range harvest.Days(today, limit) {
 		docs, err := c.harvest.ForDay(ctx, day)
+		// A throttled day is asked for again: the client has already slowed the harvest bucket
+		// down (and honoured any Retry-After), so the next call waits as long as the service
+		// asked. Giving up on the first 429 ended the whole update over one busy moment.
+		for attempt := 1; rihttp.Throttled(err) && attempt < maxThrottled; attempt++ {
+			slog.Info("harvest throttled, asking again once the pacing allows", "day", day.Format(time.DateOnly), "attempt", attempt)
+			docs, err = c.harvest.ForDay(ctx, day)
+		}
 		if err != nil {
 			// A 400 means the date fell outside the window: stop walking back
 			// rather than retrying days that can never succeed.
@@ -182,15 +194,13 @@ type FetchOptions struct {
 	// without first crawling everything that sorts before it.
 	Kinds []string
 	// States restricts the pass to inventory rows in these states ("failed",
-	// "gone", ...); empty means the ordinary sweep of pending plus retryable
-	// failures. Naming a state also lifts MaxAttempts for it, so exhausted
-	// failures can be retried on purpose.
+	// "gone", ...); empty means the ordinary sweep: pending and stale rows, and
+	// failures last tried store.RetryFailedAfter ago. Naming a state also lifts that
+	// wait, so failures can be retried on purpose.
 	States []string
 	// Batch is how many pending rows to load at a time. Small batches keep
 	// memory flat and make progress checkpoints frequent.
 	Batch int
-	// MaxAttempts bounds retries for a single resource.
-	MaxAttempts int
 	// Order is the sequence the selection is walked in: "asc" (default), "desc", or
 	// "random". It exists because the three questions people ask of a 200k catalogue
 	// need three different orders: finish it chronologically, take the newest law
@@ -345,18 +355,15 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 	if opt.Batch <= 0 {
 		opt.Batch = 200
 	}
-	if opt.MaxAttempts <= 0 {
-		opt.MaxAttempts = defaultMaxAttempts
-	}
-	var attempted, stored, skippedDup, failed, bytes int64
+	var attempted, stored, skippedDup, failed, throttled, bytes int64
 	start := time.Now()
 
 	// The denominator comes from the state store rather than the batch loop, so
 	// the bar can show a percentage from the first document. For the default sweep
-	// it counts pending and failed rows without re-checking their attempt counts,
-	// which is an estimate that errs slightly high and only affects the
-	// percentage. Hand-picked states are counted exactly.
-	filter := store.Filter{Kinds: opt.Kinds, States: opt.States, MaxAttempts: opt.MaxAttempts, Order: opt.Order}
+	// it counts failed rows without checking whether they are due, which is an
+	// estimate that errs slightly high and only affects the percentage.
+	// Hand-picked states are counted exactly.
+	filter := store.Filter{Kinds: opt.Kinds, States: opt.States, RetryAfter: store.RetryFailedAfter, Order: opt.Order}
 	totalPending, err := c.PendingCount(ctx, opt.Limit, filter)
 	if err != nil {
 		return err
@@ -420,7 +427,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 
 			url := xmlURLFor(c.cfg.SiteBase, row.ELIURL)
 			if url == "" {
-				if err := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateSkipped, Attempts: row.Attempts + 1, Error: "not an ELI resource URL"}); err != nil {
+				if err := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateSkipped, TriedAt: triedNow(), Error: "not an ELI resource URL"}); err != nil {
 					return err
 				}
 				report()
@@ -428,11 +435,18 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 			}
 
 			body, err := c.doc.FetchXMLURL(ctx, url)
+			if rihttp.Throttled(err) {
+				// Not a refusal: the row stays as it was, so the next run asks again rather
+				// than the weekly retry of documents the site refused.
+				throttled++
+				report()
+				continue
+			}
 			if err != nil {
 				var sc *rihttp.StatusCodeError
 				if errors.As(err, &sc) && (sc.StatusCode == http.StatusNotFound || sc.StatusCode == http.StatusGone) {
 					slog.Warn("resource gone", "eli", row.ELIURL, "status", sc.StatusCode)
-					if err := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateGone, Attempts: row.Attempts + 1, Error: sc.Status}); err != nil {
+					if err := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateGone, TriedAt: triedNow(), Error: sc.Status}); err != nil {
 						return err
 					}
 					report()
@@ -440,7 +454,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				}
 				failed++
 				slog.Warn("fetch failed", "eli", row.ELIURL, "err", err)
-				if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateFailed, Attempts: row.Attempts + 1, Error: err.Error()}); perr != nil {
+				if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateFailed, TriedAt: triedNow(), Error: err.Error()}); perr != nil {
 					return perr
 				}
 				report()
@@ -455,7 +469,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				// dead representations gets re-requested on every future pass.
 				if errors.Is(err, docapi.ErrNotXML) {
 					slog.Warn("no xml representation", "eli", row.ELIURL, "bytes", len(body))
-					if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateGone, Attempts: row.Attempts + 1, Error: err.Error()}); perr != nil {
+					if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateGone, TriedAt: triedNow(), Error: err.Error()}); perr != nil {
 						return perr
 					}
 					report()
@@ -463,7 +477,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				}
 				failed++
 				slog.Warn("unparseable xml", "eli", row.ELIURL, "err", err)
-				if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateFailed, Attempts: row.Attempts + 1, Error: err.Error()}); perr != nil {
+				if perr := c.store.PutInventory(ctx, store.Inventory{ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind, State: store.StateFailed, TriedAt: triedNow(), Error: err.Error()}); perr != nil {
 					return perr
 				}
 				report()
@@ -479,10 +493,16 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 				bytes += n
 			}
 
+			// The accession is read before the row is written: it lives on the row that holds
+			// it, so afterwards it would report the new hash and no change would ever show.
+			acc, found, err := c.store.GetAccession(ctx, meta.Accession)
+			if err != nil {
+				return err
+			}
 			in := store.Inventory{
 				ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind,
-				State: store.StateFetched, Attempts: row.Attempts + 1,
-				Accession: meta.Accession, SHA256: hash, Bytes: n,
+				State:     store.StateFetched,
+				Accession: meta.Accession, Hash: hash, Bytes: n,
 			}
 			if err := c.store.PutInventory(ctx, in); err != nil {
 				return err
@@ -491,23 +511,19 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 			// answers "do we already hold the body the feed just told us about?" —
 			// and, through FetchedAt, "did we fetch it after the feed said it changed?"
 			now := time.Now().UTC().Format(time.RFC3339)
-			if acc, found, err := c.store.GetAccession(ctx, meta.Accession); err != nil {
-				return err
-			} else {
-				rec := store.Accession{Accession: meta.Accession, ELIURL: row.ELIURL, SHA256: hash, Bytes: n, ChangedAt: acc.ChangedAt, FetchedAt: now}
-				if !found || acc.SHA256 != hash {
-					rec.ChangedAt = now
-					// New XML for a document we held: its body payload, where it has one,
-					// is the older text now, and a held payload is otherwise never asked for.
-					if found {
-						if err := c.markBodyStale(ctx, row.ELIURL); err != nil {
-							return err
-						}
+			rec := store.Accession{Accession: meta.Accession, ELIURL: row.ELIURL, Hash: hash, Bytes: n, ChangedAt: acc.ChangedAt, FetchedAt: now}
+			if !found || acc.Hash != hash {
+				rec.ChangedAt = now
+				// New XML for a document we held: its body payload, where it has one,
+				// is the older text now, and a held payload is otherwise never asked for.
+				if found {
+					if err := c.markBodyStale(ctx, row.ELIURL); err != nil {
+						return err
 					}
 				}
-				if err := c.store.PutAccession(ctx, rec); err != nil {
-					return err
-				}
+			}
+			if err := c.store.PutAccession(ctx, rec); err != nil {
+				return err
 			}
 
 			report()
@@ -519,7 +535,7 @@ func (c *Crawler) Fetch(ctx context.Context, opt FetchOptions) error {
 	}
 
 	slog.Info("fetch complete", "attempted", attempted, "stored", stored, "already_held", skippedDup,
-		"failed", failed, "bytes", archive.SizeHint(bytes),
+		"failed", failed, "throttled", throttled, "bytes", archive.SizeHint(bytes),
 		"elapsed", time.Since(start).Round(time.Second).String())
 	return nil
 }
@@ -543,8 +559,8 @@ func (c *Crawler) closeWithoutFetch(ctx context.Context, row store.Inventory) er
 	}
 	return c.store.PutInventory(ctx, store.Inventory{
 		ELIURL: row.ELIURL, LastMod: row.LastMod, Kind: row.Kind,
-		State: store.StateFetched, Attempts: row.Attempts + 1,
-		Accession: acc, SHA256: hash, Bytes: n,
+		State:     store.StateFetched,
+		Accession: acc, Hash: hash, Bytes: n,
 	})
 }
 
@@ -642,32 +658,30 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 	if issues.Total() > 0 {
 		slog.Warn("collection pass recorded with unresolved work",
 			"at", now.Format(time.RFC3339),
-			"owed", issues.Owed, "stalled", issues.Stalled, "issues", issues.Digest,
-			"remedy", "retsin-update fetch --state pending (and --bodies --state pending)")
+			"owed", issues.Owed, "failed", issues.Failed, "issues", issues.Digest,
+			"remedy", "owed rows are fetched by the next update; failed ones are retried weekly, or now with retsin-update fetch --state failed (and --bodies --state failed)")
 	} else {
 		slog.Info("collection pass recorded", "at", now.Format(time.RFC3339))
 	}
 	return nil
 }
 
-// Issues counts what both queues still intend to fetch: documents the site has not
-// served yet, and documents past the automatic retry ceiling.
+// Issues counts what both queues left out: documents not fetched yet, and documents the
+// site refused.
 func (c *Crawler) Issues(ctx context.Context) (store.Issues, error) {
-	xml, err := c.store.InventoryIssues(ctx, defaultMaxAttempts)
+	xml, err := c.store.InventoryIssues(ctx)
 	if err != nil {
 		return store.Issues{}, err
 	}
-	body, err := c.store.BodyIssues(ctx, defaultMaxAttempts)
+	body, err := c.store.BodyIssues(ctx)
 	if err != nil {
 		return store.Issues{}, err
 	}
 	return xml.Merge(body), nil
 }
 
-// defaultMaxAttempts is the retry ceiling Fetch applies when the caller does not
-// name one; the drain check has to use the same number, or it disagrees with the
-// sweep about what still counts as work.
-const defaultMaxAttempts = 5
+// triedNow is the time a request that did not end in content is recorded under.
+func triedNow() string { return time.Now().UTC().Format(time.RFC3339) }
 
 // LastSweep reports when a collection pass last recorded itself. It is a convenience
 // over LastSweepRecord for the callers that only need the date.
@@ -744,7 +758,7 @@ func (c *Crawler) Rebuild(ctx context.Context) error {
 			in.State = store.StateFetched
 		}
 		in.Accession = acc
-		in.SHA256 = store.Sha256Hex(raw)
+		in.Hash = archive.Hash(raw)
 		in.Bytes = int64(len(raw))
 		if err := c.store.PutInventory(ctx, in); err != nil {
 			return err
@@ -754,7 +768,7 @@ func (c *Crawler) Rebuild(ctx context.Context) error {
 				return err
 			} else if !found {
 				if err := c.store.PutAccession(ctx, store.Accession{
-					Accession: acc, ELIURL: eliURL, SHA256: in.SHA256, Bytes: in.Bytes,
+					Accession: acc, ELIURL: eliURL, Hash: in.Hash, Bytes: in.Bytes,
 					ChangedAt: time.Now().UTC().Format(time.RFC3339),
 				}); err != nil {
 					return err

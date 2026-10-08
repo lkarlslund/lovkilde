@@ -160,9 +160,7 @@ func TestScanBodiesQueuesOnlyBodylessDocuments(t *testing.T) {
 		t.Errorf("scan made %d requests, want 0: detection is a file walk", h.requests.Load())
 	}
 
-	// MaxAttempts has to be named: an unset ceiling means "no row is eligible" for
-	// the automatic sweep, which is the inventory selector's existing contract.
-	rows, err := h.st.PendingBodies(ctx, 10, store.Filter{MaxAttempts: 1})
+	rows, err := h.st.PendingBodies(ctx, 10, store.Filter{})
 	if err != nil {
 		t.Fatalf("pending: %v", err)
 	}
@@ -208,10 +206,10 @@ func TestScanBodiesPreservesRecordedStates(t *testing.T) {
 	empty := h.eli("lta/1990/110")
 	writeDoc(t, h.ar, gone, stubXML)
 	writeDoc(t, h.ar, empty, stubXML)
-	if err := h.st.PutBody(ctx, store.Body{ELIURL: gone, Kind: "lta", State: store.StateGone, Attempts: 1, Error: "404 Not Found"}); err != nil {
+	if err := h.st.PutBody(ctx, store.Body{ELIURL: gone, Kind: "lta", State: store.StateGone, Error: "404 Not Found"}); err != nil {
 		t.Fatalf("seed gone: %v", err)
 	}
-	if err := h.st.PutBody(ctx, store.Body{ELIURL: empty, Kind: "lta", State: store.StateEmpty, Attempts: 1, TextChars: 12}); err != nil {
+	if err := h.st.PutBody(ctx, store.Body{ELIURL: empty, Kind: "lta", State: store.StateEmpty, TextChars: 12}); err != nil {
 		t.Fatalf("seed empty: %v", err)
 	}
 
@@ -285,7 +283,7 @@ func TestFetchBodiesWritesSidecarBesideXML(t *testing.T) {
 	if row.TextChars <= minBodyTextChars {
 		t.Errorf("recorded %d text chars, want the payload's real text length", row.TextChars)
 	}
-	if row.SHA256 == "" || row.Bytes == 0 {
+	if row.Hash == "" || row.Bytes == 0 {
 		t.Errorf("row has no content hash or size: %+v", row)
 	}
 }
@@ -433,8 +431,13 @@ func TestFetchBodiesKeepsBadPayloadRetryable(t *testing.T) {
 		t.Errorf("challenge page stored as a body payload")
 	}
 
+	// A week on, the failure is due again and the site is serving.
+	row.TriedAt = time.Now().Add(-store.RetryFailedAfter - time.Hour).UTC().Format(time.RFC3339)
+	if err := h.st.PutBody(ctx, row); err != nil {
+		t.Fatal(err)
+	}
 	serving.Store(true)
-	if err := h.c.FetchBodies(ctx, FetchOptions{MaxAttempts: 100}); err != nil {
+	if err := h.c.FetchBodies(ctx, FetchOptions{}); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 	row, _, err = h.st.GetBody(ctx, eli)

@@ -1,26 +1,24 @@
-// Package limiter paces outbound HTTP requests per bucket, and optionally
-// learns the interval the remote service will actually tolerate.
+// Package limiter paces outbound HTTP requests per bucket, and learns the interval each
+// remote service will actually tolerate.
 //
-// Two bucket flavours exist, and the difference matters:
+// Every bucket adapts the same way. retsinformation.dk sends no Retry-After and no rate-limit
+// header on 429 (measured), so the only way to discover a safe interval is to probe: a bucket
+// starts at its floor -- the pace believed safe is the pace used -- doubles on pushback, and
+// steps back down once a whole window succeeds again. A server's Retry-After, where one is
+// sent, pushes the bucket's next slot out as well.
 //
-//   - Pinned buckets never change. The harvesting service publishes a hard limit
-//     ("once per 10 seconds") and answers 429 beyond it, so there is nothing to
-//     learn and no room to be more aggressive. A pinned bucket encodes an
-//     obligation, not an observation.
-//   - Adaptive buckets self-tune. retsinformation.dk sends no Retry-After and no
-//     rate-limit header on 429 (measured), so the only way to discover a safe
-//     document interval is to probe. Adaptive buckets start at their floor -- the
-//     pace believed safe is the pace used -- double on pushback, and step back
-//     down once a whole window succeeds again.
-//
-// A process-global limiter is used so the published 10s limit is a structural
-// property rather than something each caller has to remember.
+// The buckets are separate because the services are: the harvesting API, the sitemap and the
+// document channels are throttled independently, so pushback from one says nothing about the
+// others. A process-global limiter is used so pacing is a structural property rather than
+// something each caller has to remember.
 package limiter
 
 import (
 	"context"
 	"errors"
 	"math/rand"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -56,14 +54,12 @@ type Spec struct {
 	// floor, which is what production uses; tests set a higher value to exercise
 	// the step-down path on millisecond scales.
 	Start time.Duration
-	// Floor is the fastest interval an adaptive bucket may use, and the one it
-	// starts at unless Start says otherwise. Ignored by pinned buckets.
+	// Floor is the fastest interval the bucket may use, and the one it starts at
+	// unless Start says otherwise.
 	Floor time.Duration
 	// Max caps growth after throttling, so one bad patch cannot park a multi-day
 	// crawl for hours.
 	Max time.Duration
-	// Pinned freezes the interval at Start.
-	Pinned bool
 }
 
 // bucket is one bucket's adaptive state. Guarded by Limiter.mu.
@@ -89,7 +85,7 @@ type Limiter struct {
 	steps int // interval changes made, for logging and tests
 }
 
-// Pacing constants for the adaptive learner. Only the floor is user-settable:
+// Pacing constants for the learner. Only the floor is user-settable:
 // these shape how the learner behaves, so they are observations rather than
 // options.
 const (
@@ -245,7 +241,7 @@ func (l *Limiter) Delay(name string, d time.Duration) time.Duration {
 
 // Feedback reports how a request finished and adapts the bucket. Throttled
 // requests double the interval; a clean window after the cooldown divides it by
-// StepDown, working back towards the floor. Pinned buckets ignore feedback.
+// StepDown, working back towards the floor.
 func (l *Limiter) Feedback(name string, out Outcome) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -257,9 +253,6 @@ func (l *Limiter) Feedback(name string, out Outcome) {
 	case OutcomeThrottled:
 		b.consec = 0
 		b.throttledAt = time.Now()
-		if b.spec.Pinned {
-			return // an obligation is not adjusted by observation
-		}
 		grown := b.cur * 2
 		if grown > b.spec.Max {
 			grown = b.spec.Max
@@ -273,7 +266,7 @@ func (l *Limiter) Feedback(name string, out Outcome) {
 		b.consec = 0
 
 	case OutcomeOK:
-		if b.spec.Pinned || b.cur <= b.spec.Floor {
+		if b.cur <= b.spec.Floor {
 			b.consec = 0
 			return
 		}
@@ -316,14 +309,15 @@ func (l *Limiter) Steps() int {
 	return l.steps
 }
 
-// States snapshots every bucket, for run-start logging and the status command.
+// States snapshots every bucket, in name order, for run-start logging and the status command.
 func (l *Limiter) States() []State {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	out := make([]State, 0, len(l.buckets))
 	for name, b := range l.buckets {
-		out = append(out, State{Name: name, Interval: b.cur, Floor: b.spec.Floor, Pinned: b.spec.Pinned})
+		out = append(out, State{Name: name, Interval: b.cur, Floor: b.spec.Floor})
 	}
+	slices.SortFunc(out, func(a, b State) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
 
@@ -332,5 +326,4 @@ type State struct {
 	Name     string
 	Interval time.Duration
 	Floor    time.Duration
-	Pinned   bool
 }

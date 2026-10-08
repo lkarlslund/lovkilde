@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -135,7 +136,7 @@ func Scan(ctx context.Context, root string) (*Archive, error) {
 	entries := make([]Entry, len(paths))
 	got := make([]bool, len(paths))
 	parallel.For(ctx, len(paths), func(i int) {
-		entries[i], got[i] = readHead(paths[i])
+		entries[i], got[i] = ReadEntry(paths[i])
 	})
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -151,8 +152,9 @@ func Scan(ctx context.Context, root string) (*Archive, error) {
 	return a, nil
 }
 
-// readHead extracts identity fields from the start of a file.
-func readHead(path string) (Entry, bool) {
+// ReadEntry is the entry a scan makes of one file: identity fields from the start of it.
+// False when the file cannot be read or names no accession.
+func ReadEntry(path string) (Entry, bool) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Entry{}, false
@@ -184,6 +186,34 @@ func readHead(path string) (Entry, bool) {
 		Status:       Status(submatch(reStatus, head)),
 		Title:        Squeeze(submatch(reTitle, head)),
 	}, true
+}
+
+// NewArchive is the archive a scan of root would make from these entries, without reading the
+// files: an incremental build knows most entries from the artifact it continues and has only
+// the changed files on disk. The entries are added in the order a scan walks root in, which
+// the consolidation indexes and the artifact inherit, so the same entries give the same
+// archive however they were gathered. Every entry's Path must be under root.
+func NewArchive(root string, entries []Entry) (*Archive, error) {
+	type walked struct {
+		parts []string
+		e     Entry
+	}
+	all := make([]walked, len(entries))
+	for i, e := range entries {
+		rel, err := filepath.Rel(root, e.Path)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf("%s is not under the archive root %s", e.Path, root)
+		}
+		all[i] = walked{strings.Split(filepath.ToSlash(rel), "/"), e}
+	}
+	// filepath.WalkDir visits each directory's names in lexical order, depth first, which is
+	// the lexical order of the paths compared component by component.
+	slices.SortStableFunc(all, func(a, b walked) int { return slices.Compare(a.parts, b.parts) })
+	a := &Archive{Root: root, Catalog: chain.NewCatalog(), scanned: time.Now()}
+	for _, w := range all {
+		a.Add(w.e)
+	}
+	return a, nil
 }
 
 // submatch copies what it extracts: a substring of the file's head would keep the whole head

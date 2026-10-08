@@ -269,3 +269,11 @@ func TestCountExtSplitsRepresentations(t *testing.T) {
 		t.Errorf("Count() = %d files, want 3 across both representations", allFiles)
 	}
 }
+
+// Hash is the first 64 bits of SHA-256: a known answer, because a wrong hash silently breaks
+// change detection.
+func TestHash(t *testing.T) {
+	if got := Hash([]byte("abc")); got != "ba7816bf8f01cfea" {
+		t.Errorf("Hash(abc) = %s", got)
+	}
+}

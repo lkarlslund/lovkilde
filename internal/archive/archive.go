@@ -218,16 +218,24 @@ func (a *Archive) PutExt(eliURL, ext string, body []byte) (hash string, bytes in
 	return a.put(a.PathExt(eliURL, ext), body)
 }
 
+// Hash is what the state records for a file's bytes: the first 64 bits of their SHA-256, in
+// hex. It only has to tell one version of a document from the next and spot the same bytes
+// under two URLs, among a few hundred thousand files, and 64 bits does that with room to
+// spare; the full 256 bits made up most of the published state.
+func Hash(body []byte) string {
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:8])
+}
+
 // put is the shared atomic write: temp file in the destination directory (same
 // filesystem, so the rename cannot fail across devices), synced before the
 // rename so a crash leaves either the old file or the new one.
 func (a *Archive) put(dest string, body []byte) (hash string, bytes int64, changed bool, err error) {
-	sum := sha256.Sum256(body)
-	hash = hex.EncodeToString(sum[:])
+	hash = Hash(body)
 
 	// Skip the write entirely when we already hold these exact bytes.
 	if old, err := os.ReadFile(dest); err == nil {
-		if oldSum := sha256.Sum256(old); hex.EncodeToString(oldSum[:]) == hash {
+		if string(old) == string(body) {
 			return hash, int64(len(body)), false, nil
 		}
 	}

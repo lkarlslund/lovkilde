@@ -107,6 +107,8 @@ func newRootCmd() *cobra.Command {
 		statusCmd(open),
 		changesCmd(open),
 		rebuildCmd(open),
+		publishCmd(resolve),
+		restoreCmd(resolve),
 	)
 	return root
 }
@@ -128,29 +130,30 @@ Phases (each independent, resumable and idempotent):
              pass, which is the only one that can repair an outage over 10 days
   changes    read the change feed back and reconcile it against the archive
   artifact build
-             compile the archive into the artifact the server reads (retsin serve)
+             compile the archive into the artifact the server reads (retsin serve);
+             --mode patch or layer continues the current artifact, compiling only what
+             changed
+  publish    publish the artifact and the collection state to a release repository
+             (a directory, or hf://owner/name); --with-xml adds the XML archive
+  restore    restore the collection state from one into an empty data directory
 
 Pacing:
-  The harvesting service is limited by its own documentation to one call per 10
-  seconds and answers HTTP 429 beyond that. That pace, and the sitemap's, are
-  constants: there is no flag that can lower them.
-
-  Document requests have no published limit and are served uncached straight from
-  the origin, so their interval is learned rather than fixed. It starts at the
-  floor and stays there while the service is happy: any 429 or 5xx doubles the
-  interval and holds it for 10 minutes, after which 20 consecutive successes step
-  it back down. Two flags shape it. --document-floor is the interval to start at and
-  the fastest one to return to; 200ms is the considerate default rather than a
-  limit, and setting it lower is honoured until the service pushes back. --jitter
-  adds a random share of the current interval on top of each wait, so a crawl that
-  runs for days is not machine-regular; it never shortens a wait, so the floor stays
-  a hard minimum, and --jitter 0 gives exact spacing when the question is whether a
-  service limit is what you are hitting. Learning starts over on every run.
+  Every request is paced by a learner, one bucket per service (the harvesting API,
+  the sitemap, the documents), so pushback from one does not slow the others. A
+  bucket starts at the floor and stays there while its service is happy: a 429 or
+  503 doubles its interval and holds it for 10 minutes, after which 20 consecutive
+  successes step it back down, and a Retry-After pushes its next request out. Two
+  flags shape it. --floor is the interval to start at and the fastest one to return
+  to; 200ms is the considerate default rather than a limit, and setting it lower is
+  honoured until a service pushes back. --jitter adds a random share of the current
+  interval on top of each wait, so a crawl that runs for days is not machine-regular;
+  it never shortens a wait, so the floor stays a hard minimum, and --jitter 0 gives
+  exact spacing when the question is whether a service limit is what you are
+  hitting. Learning starts over on every run.
 
 Data layout:
   <data-dir>/xml/<kind>/<year>/<id>.xml   canonical documents (the archive)
-  <data-dir>/state/current.json           what the mirror holds and knows (rebuildable)
-  <data-dir>/state/queue.json             retry counters and errors of unfinished rows
+  <data-dir>/state/*.jsonl, meta.json     what the mirror holds and knows (rebuildable)
   <data-dir>/state/journal.jsonl          changes since those were written`,
 		SilenceUsage: true,
 		// main prints the error once, through the gate that keeps it off a progress frame.
@@ -169,11 +172,9 @@ func registerFlags(pf *pflag.FlagSet, cfg *config.Config, logLevel, progress *st
 	pf.StringVar(&cfg.HarvestBase, "harvest-api", cfg.HarvestBase, "origin of the harvesting service")
 
 	// Pacing has two knobs: how fast the learner is allowed to settle, and how far
-	// each request may drift past that interval. The rest of the schedule is either
-	// a published obligation (harvest), a measurement (sitemap), or the learner's
-	// own shape, all of them constants.
-	pf.DurationVar(&cfg.DocumentFloor, "document-floor", cfg.DocumentFloor,
-		fmt.Sprintf("fastest document interval the learner may settle at; %s is the considerate default, and anything lower is honoured at the risk of a 429", config.DefaultDocumentFloor))
+	// each request may drift past that interval. The learner's own shape is constants.
+	pf.DurationVar(&cfg.Floor, "floor", cfg.Floor,
+		fmt.Sprintf("fastest interval any request bucket may settle at, and the one each starts at; %s is the considerate default, and anything lower is honoured at the risk of a 429", config.DefaultFloor))
 
 	pf.Float64Var(&cfg.JitterPercent, "jitter", cfg.JitterPercent,
 		"random extra wait as a percentage of the current interval, so a long crawl is not metronome-paced; 0 gives exact spacing, which is what to use when testing whether a service limit is what you are hitting")
@@ -202,29 +203,26 @@ func runWith(a *app, lim *limiter.Limiter, fn func(ctx context.Context) error) e
 // lower floor next time.
 func reportPacingOutcome(a *app, lim *limiter.Limiter) {
 	if th := a.client.Throttle.Load(); th > 0 {
-		slog.Warn("server throttled us during this run; the learner already slowed down, consider a higher --document-floor",
+		slog.Warn("server throttled us during this run; the learner already slowed down, consider a higher --floor",
 			"throttled_requests", th,
 			"total_requests", a.client.Requests.Load(),
 			"interval_changes", lim.Steps(),
-			"document_interval_now", currentDocumentInterval(lim))
+			"pacing_now", pacingNow(lim))
 		return
 	}
 	if steps := lim.Steps(); steps > 0 {
 		slog.Info("adaptive pacing tightened the schedule during this run",
 			"interval_changes", steps,
-			"document_interval_now", currentDocumentInterval(lim))
+			"pacing_now", pacingNow(lim))
 	}
 }
 
 // logPacing states the schedule up front, so an unexpectedly aggressive or timid
-// run is visible in the very first log line. Only the document floor is
-// configurable; the other two buckets are constants.
+// run is visible in the very first log line.
 func logPacing(cfg config.Config, cmd string) {
 	slog.Info("retsin starting",
 		"command", cmd,
 		"data_dir", cfg.DataDir,
-		"document_floor", cfg.DocumentFloor.String(),
-		"jitter_percent", cfg.JitterPercent,
-		"harvest_interval", config.HarvestInterval.String(),
-		"sitemap_interval", config.SitemapInterval.String())
+		"floor", cfg.Floor.String(),
+		"jitter_percent", cfg.JitterPercent)
 }

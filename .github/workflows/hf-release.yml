@@ -1,0 +1,45 @@
+# The weekly Hugging Face release: update the mirror from the published state, build the next
+# artifact, publish it. Everything happens in scripts/hf-release.sh; this only provides a
+# runner, Go, the hf command and the secrets.
+#
+# Repository settings it needs:
+#   secret   HF_REPO   the dataset repository the releases live in: owner/name or hf://owner/name
+#   secret   HF_TOKEN  a Hugging Face token with write access to it
+name: Hugging Face release
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "layer (default), patch (a whole artifact), or full (rebuild from the XML archive)"
+        type: choice
+        options: [layer, patch, full]
+        default: layer
+
+# One release at a time: two would both continue the same published state.
+concurrency:
+  group: hf-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install the hf command
+        run: python3 -m pip install --user --upgrade huggingface_hub
+      - name: Release
+        run: scripts/hf-release.sh
+        env:
+          HF_REPO: ${{ secrets.HF_REPO }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODE: ${{ inputs.mode || 'layer' }}

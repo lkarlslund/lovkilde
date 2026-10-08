@@ -166,7 +166,7 @@ func TestStaleContentCensus(t *testing.T) {
 		got := hex.EncodeToString(sum[:])
 		// The archive records the hash of the bytes it stored, so an unchanged
 		// document must reproduce it exactly. Anything else is text we do not have.
-		if got == row.SHA256 {
+		if got == row.Hash {
 			same++
 			entries = append(entries, entry{eli: row.ELIURL, lastMod: row.LastMod, note: "identical"})
 			continue
@@ -176,7 +176,7 @@ func TestStaleContentCensus(t *testing.T) {
 		differentBytes += int64(len(body))
 		entries = append(entries, entry{
 			eli: row.ELIURL, lastMod: row.LastMod,
-			note: fmt.Sprintf("CHANGED held=%s (%d B) now=%s (%d B)", shortHash(row.SHA256), row.Bytes, shortHash(got), len(body)),
+			note: fmt.Sprintf("CHANGED held=%s (%d B) now=%s (%d B)", shortHash(row.Hash), row.Bytes, shortHash(got), len(body)),
 		})
 	}
 
@@ -253,13 +253,13 @@ func TestHeldSinceOrdering(t *testing.T) {
 	defer s.Close()
 	ctx := context.Background()
 	if err := s.PutInventoryBatch(ctx, []store.Inventory{
-		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-09-16", Kind: "lta", State: store.StateFetched, SHA256: "a"},
-		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-09-18", Kind: "lta", State: store.StateFetched, SHA256: "b"},
-		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-09-19", Kind: "lta", State: store.StatePending, SHA256: "c"},
-		{ELIURL: "https://x/eli/lta/4", LastMod: "2026-09-17", Kind: "lta", State: store.StateGone, SHA256: "d"},
+		{ELIURL: "https://x/eli/lta/1", LastMod: "2026-09-16", Kind: "lta", State: store.StateFetched, Hash: "a"},
+		{ELIURL: "https://x/eli/lta/2", LastMod: "2026-09-18", Kind: "lta", State: store.StateFetched, Hash: "b"},
+		{ELIURL: "https://x/eli/lta/3", LastMod: "2026-09-19", Kind: "lta", State: store.StatePending, Hash: "c"},
+		{ELIURL: "https://x/eli/lta/4", LastMod: "2026-09-17", Kind: "lta", State: store.StateGone, Hash: "d"},
 		// Stale rows are the interesting population for this query, so they count
 		// as held: the publisher republished them and we hold an older copy.
-		{ELIURL: "https://x/eli/lta/5", LastMod: "2026-09-19", Kind: "lta", State: store.StateStale, SHA256: "e"},
+		{ELIURL: "https://x/eli/lta/5", LastMod: "2026-09-19", Kind: "lta", State: store.StateStale, Hash: "e"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestFetchReRequestsStaleRows(t *testing.T) {
 	}
 	if err := st.PutInventory(ctx, store.Inventory{
 		ELIURL: eli, LastMod: "2026-09-18", Kind: "lta", State: store.StateStale,
-		Attempts: 1, Accession: "B202600123405", SHA256: store.Sha256Hex(superseded), Bytes: int64(len(superseded)),
+		Accession: "B202600123405", Hash: archive.Hash(superseded), Bytes: int64(len(superseded)),
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -348,14 +348,14 @@ func TestFetchReRequestsStaleRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("archive: %v", err)
 	}
-	if store.Sha256Hex(held) != store.Sha256Hex(current) {
+	if archive.Hash(held) != archive.Hash(current) {
 		t.Error("the archive still holds the superseded bytes")
 	}
 	row, found, err := st.GetInventory(ctx, eli)
 	if err != nil || !found {
 		t.Fatalf("row vanished: found=%v err=%v", found, err)
 	}
-	if row.State != store.StateFetched || row.SHA256 != store.Sha256Hex(current) {
+	if row.State != store.StateFetched || row.Hash != archive.Hash(current) {
 		t.Errorf("stale row after the refill: %+v, want fetched with the new hash", row)
 	}
 	if row.LastMod != "2026-09-18" {
@@ -386,7 +386,7 @@ func TestInventoryPassMarksHeldRowsStale(t *testing.T) {
 
 	held := store.Inventory{
 		ELIURL: "https://x/eli/lta/7", LastMod: "2026-01-01", Kind: "lta", State: store.StateFetched,
-		Attempts: 1, Accession: "B20260000705", SHA256: "oldhash", Bytes: 4000,
+		Accession: "B20260000705", Hash: "oldhash", Bytes: 4000,
 	}
 	if err := s.PutInventory(ctx, held); err != nil {
 		t.Fatal(err)
@@ -406,7 +406,7 @@ func TestInventoryPassMarksHeldRowsStale(t *testing.T) {
 		t.Errorf("state %q after a moved lastmod, want %q: pending is closed from disk and the change would be lost",
 			got.State, store.StateStale)
 	}
-	if got.SHA256 != "oldhash" || got.Bytes != 4000 || got.Accession != "B20260000705" {
+	if got.Hash != "oldhash" || got.Bytes != 4000 || got.Accession != "B20260000705" {
 		t.Errorf("marking stale lost what we hold: %+v", got)
 	}
 }
@@ -440,7 +440,7 @@ func TestRebuildKeepsRowsStale(t *testing.T) {
 	}
 	if err := st.PutInventory(ctx, store.Inventory{
 		ELIURL: eli, LastMod: "2026-09-18", Kind: "lta", State: store.StateStale,
-		Attempts: 1, SHA256: "whatever", Bytes: 1,
+		Hash: "whatever", Bytes: 1,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +455,7 @@ func TestRebuildKeepsRowsStale(t *testing.T) {
 	if row.State != store.StateStale {
 		t.Errorf("rebuild rewrote a stale row as %q: the file on disk is the older copy, which is the whole reason the row is stale", row.State)
 	}
-	if row.SHA256 != store.Sha256Hex(doc) {
+	if row.Hash != archive.Hash(doc) {
 		t.Error("rebuild did not refresh the hash of what is on disk")
 	}
 }

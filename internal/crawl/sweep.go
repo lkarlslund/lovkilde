@@ -41,15 +41,15 @@ func (r SweepRecord) String() string {
 	if !r.IssuesKnown {
 		return line
 	}
-	line += fmt.Sprintf(" owed=%d stalled=%d", r.Owed, r.Stalled)
+	line += fmt.Sprintf(" owed=%d failed=%d", r.Owed, r.Failed)
 	if r.Digest != "" {
 		line += " issues=" + r.Digest
 	}
 	return line
 }
 
-// ParseSweepRecord reads the form String writes, and the older bare timestamp that
-// predated the issues field.
+// ParseSweepRecord reads the form String writes, the older "stalled" for failed, and the
+// older bare timestamp that predated the issues field.
 func ParseSweepRecord(v string) (SweepRecord, error) {
 	fields := strings.Fields(strings.TrimSpace(v))
 	if len(fields) == 0 {
@@ -74,12 +74,12 @@ func ParseSweepRecord(v string) (SweepRecord, error) {
 				return SweepRecord{}, fmt.Errorf("parsing sweep record %q: %w", f, err)
 			}
 			rec.Owed, rec.IssuesKnown = n, true
-		case "stalled":
+		case "failed", "stalled": // stalled is what records said before failures were dated
 			n, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
 				return SweepRecord{}, fmt.Errorf("parsing sweep record %q: %w", f, err)
 			}
-			rec.Stalled, rec.IssuesKnown = n, true
+			rec.Failed, rec.IssuesKnown = n, true
 		case "issues":
 			rec.Digest, rec.IssuesKnown = val, true
 		}

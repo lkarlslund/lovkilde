@@ -15,9 +15,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/artifactfetch"
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
+	"github.com/lkarlslund/retsinformation/internal/release"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
 
@@ -28,19 +28,18 @@ type serveOptions struct {
 	Index           string
 	Artifact        string
 	ArtifactCacheMB int
-	// Publish is where a missing artifact is downloaded from, and a newer one looked for every
-	// AutoUpdate (0: never). Both apply only when following the current artifact.
-	Publish    artifactfetch.Source
+	// Release names where a missing artifact is downloaded from, and a newer one looked for
+	// every AutoUpdate (0: never). Both apply only when following the current artifact.
+	Release    string
 	AutoUpdate time.Duration
 }
 
 // addFetchFlags registers the download settings serve and mcp share.
 func addFetchFlags(cmd *cobra.Command, o *serveOptions) {
-	cmd.Flags().StringVar(&o.Publish.Repo, "hf-repo", artifactfetch.DefaultRepo,
-		"Hugging Face dataset repository the artifact is downloaded from when there is none, and updated from (none is published yet)")
-	cmd.Flags().StringVar(&o.Publish.Revision, "hf-revision", artifactfetch.DefaultRevision, "branch or tag of --hf-repo to read")
-	cmd.Flags().DurationVar(&o.AutoUpdate, "auto-update", artifactfetch.DefaultEvery,
-		"check --hf-repo for a newer artifact this often, and install it; 0 turns it off")
+	cmd.Flags().StringVar(&o.Release, "release", release.DefaultSource,
+		"release repository the artifact is downloaded from when there is none, and updated from: a directory, or hf://owner/name[@revision] (none is published yet)")
+	cmd.Flags().DurationVar(&o.AutoUpdate, "auto-update", release.DefaultEvery,
+		"check --release for a newer artifact this often, and install it; 0 turns it off")
 }
 
 // openServingServer loads what a serving process reads, which is an artifact and nothing else: it
@@ -65,7 +64,7 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 	if follow {
 		artifact, err = artifactdir.Current(cfg.DataDir)
 		if errors.Is(err, artifactdir.ErrNone) {
-			artifact, err = downloadMissing(ctx, cfg.DataDir, o.Publish)
+			artifact, err = downloadMissing(ctx, cfg.DataDir, o.Release)
 		}
 		if err != nil {
 			return nil, err
@@ -100,54 +99,58 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 	}
 	if follow {
 		go followCurrent(ctx, srv, cfg.DataDir, artifact, o, followInterval)
-		if o.AutoUpdate > 0 && o.Publish.Repo != "" {
-			go autoUpdate(ctx, cfg.DataDir, o.Publish, o.AutoUpdate)
+		if repo, err := release.Open(o.Release); err == nil && o.AutoUpdate > 0 {
+			go autoUpdate(ctx, cfg.DataDir, repo, o.AutoUpdate)
 		}
 	}
 	return srv, nil
 }
 
 // downloadMissing installs the published artifact into a data directory that has none.
-func downloadMissing(ctx context.Context, dataDir string, from artifactfetch.Source) (string, error) {
-	if from.Repo == "" {
-		return "", fmt.Errorf("no compiled artifact in %s: build one with `retsin-update artifact build`, or download one with --hf-repo", artifactdir.Dir(dataDir))
+func downloadMissing(ctx context.Context, dataDir, spec string) (string, error) {
+	repo, err := release.Open(spec)
+	if errors.Is(err, release.ErrNoRepo) {
+		return "", fmt.Errorf("no compiled artifact in %s: build one with `retsin-update artifact build`, or download one with --release", artifactdir.Dir(dataDir))
 	}
-	slog.Info("no compiled artifact, downloading the published one", "repo", from.Repo, "into", artifactdir.Dir(dataDir))
-	res, err := from.Fetch(ctx, dataDir)
 	if err != nil {
-		return "", fmt.Errorf("no compiled artifact in %s, and downloading it from %s failed: %w", artifactdir.Dir(dataDir), from.Repo, err)
+		return "", err
 	}
-	_ = artifactfetch.MarkChecked(dataDir)
+	slog.Info("no compiled artifact, downloading the published one", "release", repo.String(), "into", artifactdir.Dir(dataDir))
+	res, err := release.FetchArtifact(ctx, repo, dataDir)
+	if err != nil {
+		return "", fmt.Errorf("no compiled artifact in %s, and downloading it from %s failed: %w", artifactdir.Dir(dataDir), repo, err)
+	}
+	_ = release.MarkChecked(dataDir)
 	slog.Info("downloaded the published artifact", "path", res.Path, "bytes", res.Manifest.Size)
 	return res.Path, nil
 }
 
 // autoCheckInterval is how often autoUpdate asks whether a check is due. The schedule itself is
-// kept on disk (artifactfetch.Due), so a restart neither resets nor repeats it.
+// kept on disk (release.Due), so a restart neither resets nor repeats it.
 var autoCheckInterval = time.Hour
 
 // autoUpdate installs a newer published artifact when one is due to be looked for. It only
 // installs: followCurrent moves the server to it as to any other new current artifact, and
 // prunes. A failed check is logged and tried again at the next due time, not sooner, so an
 // unreachable repository costs one line a week.
-func autoUpdate(ctx context.Context, dataDir string, from artifactfetch.Source, every time.Duration) {
+func autoUpdate(ctx context.Context, dataDir string, from release.Repo, every time.Duration) {
 	tick := time.NewTicker(min(every, autoCheckInterval))
 	defer tick.Stop()
 	for {
-		if artifactfetch.Due(dataDir, every, time.Now()) {
-			res, err := from.Fetch(ctx, dataDir)
+		if release.Due(dataDir, every, time.Now()) {
+			res, err := release.FetchArtifact(ctx, from, dataDir)
 			if ctx.Err() != nil {
 				return
 			}
 			switch {
 			case err != nil:
-				slog.Warn("checking for a newer published artifact failed", "repo", from.Repo, "err", err)
+				slog.Warn("checking for a newer published artifact failed", "release", from.String(), "err", err)
 			case res.Installed:
 				slog.Info("installed a newer published artifact", "path", res.Path)
 			default:
 				slog.Info("the published artifact is the current one", "file", res.Manifest.File)
 			}
-			_ = artifactfetch.MarkChecked(dataDir)
+			_ = release.MarkChecked(dataDir)
 		}
 		select {
 		case <-ctx.Done():
@@ -303,8 +306,8 @@ documents, which is worth reading and not worth quoting without saying so.
 
 Everything is read from the compiled artifact ("retsin-update artifact build"): the catalogue,
 each document's model, and the amending acts' changes that as_of applies. Without one it
-downloads the published artifact from --hf-repo, and refuses to start when it cannot. While it
-runs it checks --hf-repo for a newer artifact every --auto-update and moves to it. An artifact of another document model is refused too, with a message
+downloads the published artifact from --release, and refuses to start when it cannot. While it
+runs it checks --release for a newer artifact every --auto-update and moves to it. An artifact of another document model is refused too, with a message
 naming which side is stale: the artifact holds the model as JSON, so a file from another
 revision decodes into this server's types with another revision's meaning.
 

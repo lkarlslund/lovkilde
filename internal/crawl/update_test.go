@@ -180,12 +180,11 @@ func TestUpdateRecordsEveryPassAndItsProblems(t *testing.T) {
 		t.Errorf("pending row after the refill: found=%v row=%+v err=%v", found, row, err)
 	}
 
-	// Now leave work the sweep will not do but still owes -- pending at the retry
-	// ceiling is stalled, not outstanding, and must not block the timestamp
-	// forever -- while an actually-owed row must block it.
-	stalled := "https://www.retsinformation.dk/eli/lta/2026/9999"
-	if err := f.st.PutInventory(ctx, store.Inventory{ELIURL: stalled, LastMod: "2026-09-18", Kind: "lta",
-		State: store.StatePending, Attempts: defaultMaxAttempts, Error: "giving up"}); err != nil {
+	// Now leave a document the site refused a moment ago: it waits for its weekly
+	// retry, is reported as failed, and must not block the timestamp.
+	refused := "https://www.retsinformation.dk/eli/lta/2026/9999"
+	if err := f.st.PutInventory(ctx, store.Inventory{ELIURL: refused, LastMod: "2026-09-18", Kind: "lta",
+		State: store.StateFailed, TriedAt: time.Now().UTC().Format(time.RFC3339), Error: "500"}); err != nil {
 		t.Fatal(err)
 	}
 	// The stored timestamp has second granularity, so the run expected to advance
@@ -193,26 +192,26 @@ func TestUpdateRecordsEveryPassAndItsProblems(t *testing.T) {
 	time.Sleep(1100 * time.Millisecond)
 	before := *f.requests
 	if err := f.c.Update(ctx, UpdateOptions{}); err != nil {
-		t.Fatalf("Update with a stalled row: %v", err)
+		t.Fatalf("Update with a refused row: %v", err)
 	}
 	if *f.requests != before {
-		t.Errorf("the sweep re-fetched a row past the retry ceiling (%d extra document requests)", *f.requests-before)
+		t.Errorf("the sweep re-fetched a failure before its week was up (%d extra document requests)", *f.requests-before)
 	}
 	ts2, found, err := f.c.LastSweep(ctx)
 	if err != nil || !found {
-		t.Fatalf("stalled row blocked the record: found=%v err=%v", found, err)
+		t.Fatalf("a refused row blocked the record: found=%v err=%v", found, err)
 	}
 	if !ts2.After(ts) {
-		t.Errorf("stalled row left the record where it was: %s then %s", ts.Format(time.RFC3339), ts2.Format(time.RFC3339))
+		t.Errorf("a refused row left the record where it was: %s then %s", ts.Format(time.RFC3339), ts2.Format(time.RFC3339))
 	}
-	// The stalled document is reported rather than held against the mirror: the counts
+	// The refused document is reported rather than held against the mirror: the counts
 	// and fingerprint are how a reader learns the mirror has a hole in it.
 	rec2, _, err := f.c.LastSweepRecord(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec2.Stalled != 1 || rec2.Digest == "" {
-		t.Errorf("stalled work not carried in the record: %q", rec2)
+	if rec2.Failed != 1 || rec2.Digest == "" {
+		t.Errorf("the refused document is not carried in the record: %q", rec2)
 	}
 }
 
@@ -230,10 +229,8 @@ func TestLastSweepRejectsCorruptTimestamp(t *testing.T) {
 	}
 }
 
-// A run that came home empty-handed is not a completed collection. The document
-// stays owed -- failed but still under the retry ceiling -- and the mirror must
-// not be stamped as collected, because that stamp is what authorises every
-// subsequent incremental refill.
+// A run that came home empty-handed still records the pull, and the document it could
+// not get: failed, with when it was tried and what the site said.
 func TestFailingPassRecordsThePullAndTheProblem(t *testing.T) {
 	f := newUpdateFixture(t)
 	ctx := context.Background()
@@ -259,7 +256,7 @@ func TestFailingPassRecordsThePullAndTheProblem(t *testing.T) {
 	if !found {
 		t.Fatal("a pass that pulled recorded nothing")
 	}
-	if !rec.IssuesKnown || rec.Owed != 1 {
+	if !rec.IssuesKnown || rec.Failed != 1 {
 		t.Errorf("the document the site refused is not in the record: %q", rec)
 	}
 	if rec.Digest == "" {
@@ -269,12 +266,16 @@ func TestFailingPassRecordsThePullAndTheProblem(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("document row vanished: found=%v err=%v", found, err)
 	}
-	if row.State != store.StateFailed || row.Attempts != 1 {
-		t.Errorf("failed document stored as %+v, want failed after 1 attempt", row)
+	if row.State != store.StateFailed || row.TriedAt == "" || row.Error == "" {
+		t.Errorf("failed document stored as %+v, want failed with when it was tried and why", row)
 	}
 
-	// The same document arriving on the next run must clear both the row and the
-	// timestamp: owed is not a life sentence.
+	// The same document arriving when it is next due must clear both the row and the
+	// record: failed is not a life sentence. A week on, it is due again.
+	row.TriedAt = time.Now().Add(-store.RetryFailedAfter - time.Hour).UTC().Format(time.RFC3339)
+	if err := f.st.PutInventory(ctx, row); err != nil {
+		t.Fatal(err)
+	}
 	f.failing.Store(false)
 	if err := f.c.Update(ctx, UpdateOptions{Force: true}); err != nil {
 		t.Fatalf("Update after the document became available: %v", err)
@@ -319,7 +320,7 @@ func TestUpdatePublishesTheRecord(t *testing.T) {
 	if !fileFound {
 		t.Fatalf("nothing published at %s: a reader that cannot open the store has no horizon", f.c.cfg.SweepStampPath())
 	}
-	if !file.PulledAt.Equal(row.PulledAt) || file.Digest != row.Digest || file.Owed != row.Owed || file.Stalled != row.Stalled {
+	if !file.PulledAt.Equal(row.PulledAt) || file.Digest != row.Digest || file.Owed != row.Owed || file.Failed != row.Failed {
 		t.Errorf("published %q disagrees with the store row %q", file, row)
 	}
 }
@@ -328,7 +329,7 @@ func TestSweepRecordRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "sweep.stamp")
 	want := SweepRecord{
 		PulledAt:    time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC),
-		Issues:      store.Issues{Owed: 2, Stalled: 14, Digest: "6f2c1a9d"},
+		Issues:      store.Issues{Owed: 2, Failed: 14, Digest: "6f2c1a9d"},
 		IssuesKnown: true,
 	}
 	if err := PublishSweepRecord(path, want); err != nil {

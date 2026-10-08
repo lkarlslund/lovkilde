@@ -8,25 +8,27 @@
 // requests.
 //
 // The whole state is a few hundred thousand small rows, so it is held in memory and kept on
-// disk as JSON in one directory (see files.go):
+// disk as JSON Lines in one directory (see files.go): a file per table, one row per line in
+// key order, so two states diff line by line and a content-chunked store (Hugging Face's)
+// keeps the rows that did not change.
 //
-//	current.json    what the mirror holds and knows: every row, every stored body, the feed
-//	                changes, the harvested days and the pull record. It is what a fresh
-//	                machine needs to carry on collecting, and what gets published with it.
-//	queue.json      retry bookkeeping: attempts and the last error, per row. Local; losing it
-//	                only resets the counters, because a row still owed says so in current.json
-//	                (pending, failed or stale).
-//	journal.jsonl   every change since the files were last written, one per line, so a run
-//	                that is killed loses nothing. Close folds it into the two files.
+//	meta.json        format version, markers (the pull record) and the harvested days
+//	inventory.jsonl  one row per ELI resource: lastmod, kind, state, the accession it holds,
+//	                 the hash and size of the bytes held, and when they changed and were fetched
+//	bodies.jsonl     one row per document whose XML has no body: the payload that does
+//	changes.jsonl    the harvesting feed's entries, for changeRetention
+//	journal.jsonl    every change since the files were last written, so a run that is killed
+//	                 loses nothing. Close folds it into the files that changed.
 //
-// Both JSON files are written one row per line in key order, so two states diff line by
-// line and a content-chunked store (Hugging Face's) keeps the rows that did not change.
+// Everything but the journal is what a fresh machine needs to carry on collecting, and what
+// gets published with an artifact. A document the site would not serve is part of it -- its
+// row says failed, when it was last tried and what the site answered -- so every machine
+// retries it on the same schedule (RetryFailedAfter). What a run has to do now is derived from
+// these rows when it starts; nothing about it is kept apart.
 package store
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"hash/fnv"
 	"slices"
@@ -69,7 +71,7 @@ type Store struct {
 	dir string
 
 	// inventory is the sitemap queue: one row per ELI resource, holding the canonical XML.
-	inventory table[Inventory]
+	inventory table[record]
 	// bodies is the second-representation queue: one row per document whose canonical XML
 	// has no body, tracking the site JSON payload that does. It is a separate table rather
 	// than another State on the inventory row because the two questions are independent --
@@ -77,11 +79,16 @@ type Store struct {
 	// true while the same document is still pending a body. Overloading one State field
 	// would make PendingInventory offer already-archived XML again, which is the one thing
 	// the fetch loop's idempotency depends on.
-	bodies     table[Body]
-	accessions map[string]Accession
-	changes    table[Change] // keyed date|accession|reason, so key order is date order
-	days       map[string]bool
-	meta       map[string]string
+	bodies  table[Body]
+	changes table[Change] // keyed date|accession|reason, so key order is date order
+	days    map[string]bool
+	meta    map[string]string
+	// metaDirty says meta.json has changed since it was written; tables keep their own flag.
+	metaDirty bool
+
+	// held finds the row holding an accession: the one carrying its changed and fetched
+	// times. Derived on load, kept by setRecord.
+	held map[string]string
 
 	journal *journal
 	unlock  func()
@@ -90,8 +97,9 @@ type Store struct {
 // table is one keyed set of rows with its keys sorted on demand. Scans walk the keys in
 // order, which is what makes cursor paging and the issue fingerprint reproducible.
 type table[T any] struct {
-	rows map[string]T
-	keys []string // sorted; nil after a new key is added
+	rows  map[string]T
+	keys  []string // sorted; nil after a key is added or removed
+	dirty bool     // changed since its file was written
 }
 
 func newTable[T any]() table[T] { return table[T]{rows: map[string]T{}} }
@@ -101,6 +109,13 @@ func (t *table[T]) put(key string, v T) {
 		t.keys = nil
 	}
 	t.rows[key] = v
+	t.dirty = true
+}
+
+func (t *table[T]) remove(key string) {
+	delete(t.rows, key)
+	t.keys = nil
+	t.dirty = true
 }
 
 func (t *table[T]) sorted() []string {
@@ -120,17 +135,19 @@ type Inventory struct {
 	LastMod   string `json:"lastmod,omitempty"`
 	Kind      string `json:"kind,omitempty"`
 	State     State  `json:"state,omitempty"`
-	Attempts  int    `json:"attempts,omitempty"`
 	Accession string `json:"accession,omitempty"`
-	SHA256    string `json:"sha256,omitempty"`
+	Hash      string `json:"hash,omitempty"` // archive.Hash of the bytes held
 	Bytes     int64  `json:"bytes,omitempty"`
-	Error     string `json:"error,omitempty"`
+	// TriedAt and Error are the last request that did not end in content: when it was made
+	// (RFC 3339) and what came back. Set on failed, gone and skipped rows.
+	TriedAt string `json:"tried_at,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // head reports the fields a scan selects on, so the shared scan code can serve
 // the inventory and body queues without knowing which record it is holding.
 func (in Inventory) head() rowHead {
-	return rowHead{kind: in.Kind, state: string(in.State), attempts: in.Attempts}
+	return rowHead{kind: in.Kind, state: string(in.State), triedAt: in.TriedAt}
 }
 
 // normal fills what an absent field means: a row without a state is pending.
@@ -141,13 +158,49 @@ func (in Inventory) normal() Inventory {
 	return in
 }
 
+// record is a catalogue row as stored: the row, and -- on the row that holds its accession --
+// when that document's bytes last changed and when it was last fetched. Those two are the
+// accession's (see Accession), so writing the row leaves them alone.
+type record struct {
+	Inventory
+	ChangedAt string `json:"changed_at,omitempty"`
+	FetchedAt string `json:"fetched_at,omitempty"`
+}
+
+// holds says the row is where its accession is held.
+func (r record) holds() bool { return r.Accession != "" && (r.ChangedAt != "" || r.FetchedAt != "") }
+
+// setRecord stores a row and keeps the accession index in step with it. Every write of a
+// catalogue row goes through here, the journal's replay included.
+func (s *Store) setRecord(r record) {
+	if cur, ok := s.inventory.rows[r.ELIURL]; ok && cur.Accession != "" && s.held[cur.Accession] == r.ELIURL && !(r.holds() && r.Accession == cur.Accession) {
+		delete(s.held, cur.Accession)
+	}
+	if r.holds() {
+		if _, taken := s.held[r.Accession]; !taken || s.held[r.Accession] == r.ELIURL {
+			s.held[r.Accession] = r.ELIURL
+		}
+	}
+	s.inventory.put(r.ELIURL, r)
+}
+
+// withTimes is the row to store for in: the accession's times carry over while the row
+// still names the same accession.
+func (s *Store) withTimes(in Inventory) record {
+	r := record{Inventory: in.normal()}
+	if cur, ok := s.inventory.rows[in.ELIURL]; ok && cur.Accession == in.Accession {
+		r.ChangedAt, r.FetchedAt = cur.ChangedAt, cur.FetchedAt
+	}
+	return r
+}
+
 // PutInventory upserts one inventory record.
 func (s *Store) PutInventory(ctx context.Context, in Inventory) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	in = in.normal()
-	s.inventory.put(in.ELIURL, in)
-	return s.log(entry{Inv: &in})
+	r := s.withTimes(in)
+	s.setRecord(r)
+	return s.log(entry{Inv: &r})
 }
 
 // PutInventoryBatch upserts many records at once, which is the path for the ~200k-row
@@ -168,15 +221,13 @@ func (s *Store) PutInventoryBatch(ctx context.Context, rows []Inventory) error {
 			return err
 		}
 		cur, ok := s.inventory.rows[in.ELIURL]
-		if !ok {
-			cur = Inventory{}
-		}
-		merged := mergeInventory(cur, in.normal())
-		if ok && merged == cur {
+		merged := mergeInventory(cur.Inventory, in.normal())
+		if ok && merged == cur.Inventory {
 			continue // the observation changed nothing, so there is nothing to record
 		}
-		s.inventory.put(merged.ELIURL, merged)
-		changed = append(changed, entry{Inv: &merged})
+		r := s.withTimes(merged)
+		s.setRecord(r)
+		changed = append(changed, entry{Inv: &r})
 	}
 	return s.log(changed...)
 }
@@ -211,7 +262,7 @@ func mergeInventory(cur, observed Inventory) Inventory {
 	// Holding bytes and having them declared out of date is not the same problem as
 	// never having them: the fetch loop must ask the site this time, and it only
 	// does that for a row it cannot satisfy from disk.
-	if cur.SHA256 != "" {
+	if cur.Hash != "" {
 		next.State = StateStale
 	} else {
 		next.State = StatePending
@@ -223,17 +274,17 @@ func mergeInventory(cur, observed Inventory) Inventory {
 func (s *Store) GetInventory(ctx context.Context, eliURL string) (Inventory, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	in, ok := s.inventory.rows[eliURL]
-	return in, ok, nil
+	r, ok := s.inventory.rows[eliURL]
+	return r.Inventory, ok, nil
 }
 
 // rowHead is the part of a stored record a selection decision is made from. Both
 // record types in the store (inventory rows and body rows) produce one, which is
 // what lets one scan implementation serve both queues.
 type rowHead struct {
-	kind     string
-	state    string
-	attempts int
+	kind    string
+	state   string
+	triedAt string
 }
 
 // row is a stored record that can report what a scan needs to decide on it
@@ -310,25 +361,32 @@ func parseOrder(name string) (string, error) {
 	}
 }
 
-// Filter narrows which inventory rows a scan returns. The zero Filter is the
-// ordinary crawl sweep: pending rows plus failed rows still under MaxAttempts, in
-// ELI URL order.
+// RetryFailedAfter is how long a failed row waits before the default sweep asks for it again.
+// The documents the site will not serve are the same handful week after week, so asking every
+// run would spend requests to relearn that; asking weekly still notices when one comes back.
+const RetryFailedAfter = 7 * 24 * time.Hour
+
+// Filter narrows which inventory rows a scan returns. The zero Filter is the ordinary crawl
+// sweep: pending and stale rows, and failed rows last tried RetryAfter ago or longer, in ELI
+// URL order.
 type Filter struct {
 	// Kinds restricts to ELI series as parsed from the sitemap URL ("retsinfo",
 	// "lta", ...). Empty means every kind.
 	Kinds []string
-	// States restricts to rows in these states. Empty means pending and failed.
-	// Naming states lifts MaxAttempts: the attempt ceiling exists to stop an
-	// automatic sweep spinning on a dead URL, and "retire these failures anyway"
-	// is precisely the case that ceiling must not veto.
+	// States restricts to rows in these states. Empty means pending, stale and failed.
+	// Naming states lifts the retry wait: it exists to stop an automatic sweep asking
+	// for a dead URL every run, and "try these failures now" is precisely the case it
+	// must not veto.
 	States []string
-	// MaxAttempts bounds retries in the default sweep.
-	MaxAttempts int
+	// RetryAfter is how long a failed row waits in the default sweep; zero retries it
+	// every run. Now is the time it is measured from; zero means time.Now.
+	RetryAfter time.Duration
+	Now        time.Time
 	// Order is OrderAsc, OrderDesc or OrderRandom.
 	Order string
 	// Cursor is the last ELI URL the caller was handed. The scan resumes on the far
 	// side of it, in the direction Order asks for, which is what guarantees each row
-	// is offered once per run -- the attempt ceiling cannot do that for a
+	// is offered once per run -- the retry wait cannot do that for a
 	// hand-picked state, because re-fetching a row that stays in that state (a 404
 	// retried under --state gone) would otherwise re-select it forever.
 	Cursor string
@@ -338,12 +396,12 @@ type Filter struct {
 // compiled once per scan so a 200k-row walk does not re-parse the same flag values
 // per row.
 type selector struct {
-	kinds      map[string]bool
-	states     map[string]bool // nil means the default sweep: pending plus failed
-	exact      bool            // states named by hand, so MaxAttempts does not apply
-	maxAttempt int
-	cursor     string
-	reverse    bool
+	kinds     map[string]bool
+	states    map[string]bool // nil means the default sweep: pending plus failed
+	exact     bool            // states named by hand, so the retry wait does not apply
+	retryFrom string          // a failed row tried before this (RFC 3339) is due
+	cursor    string
+	reverse   bool
 }
 
 // selector compiles the filter, refusing state and order names that cannot mean
@@ -355,7 +413,11 @@ func (f Filter) selector() (selector, error) {
 	if err != nil {
 		return selector{}, err
 	}
-	sel := selector{maxAttempt: f.MaxAttempts, cursor: f.Cursor, reverse: order == OrderDesc}
+	now := f.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	sel := selector{retryFrom: now.Add(-f.RetryAfter).UTC().Format(time.RFC3339), cursor: f.Cursor, reverse: order == OrderDesc}
 	for _, k := range f.Kinds {
 		if sel.kinds == nil {
 			sel.kinds = map[string]bool{}
@@ -399,10 +461,11 @@ func (sel selector) wantState(state string) bool {
 	return sel.states[state]
 }
 
-// wantAttempts reports whether the retry ceiling still admits a row. The ceiling
-// belongs to the automatic sweep; a hand-picked state is a deliberate retry.
-func (sel selector) wantAttempts(attempts int) bool {
-	return sel.exact || attempts < sel.maxAttempt
+// due reports whether the retry wait admits a row: only a failed row waits, and only in the
+// automatic sweep; a hand-picked state is a deliberate retry. A failed row with no TriedAt
+// was recorded before the date was, and is due.
+func (sel selector) due(h rowHead) bool {
+	return sel.exact || h.state != string(StateFailed) || h.triedAt == "" || h.triedAt <= sel.retryFrom
 }
 
 // scanRows walks the rows on the far side of the selection's cursor, in its direction, and
@@ -445,7 +508,7 @@ func scanRows[T any](ctx context.Context, t *table[T], sel selector, fn func(key
 }
 
 // pendingRows is the shared selection loop behind PendingInventory and
-// PendingBodies: same filter, same cursor paging, same attempt ceiling. Two
+// PendingBodies: same filter, same cursor paging, same retry wait. Two
 // independent copies of this loop is where a queue would drift out of agreement
 // with the other.
 func pendingRows[T row](ctx context.Context, t *table[T], limit int, f Filter) ([]T, error) {
@@ -456,7 +519,7 @@ func pendingRows[T row](ctx context.Context, t *table[T], limit int, f Filter) (
 	var out []T
 	err = scanRows(ctx, t, sel, func(_ string, r T) bool {
 		h := r.head()
-		if !sel.wantState(h.state) || !sel.wantAttempts(h.attempts) || !sel.wantKind(h.kind) {
+		if !sel.wantState(h.state) || !sel.due(h) || !sel.wantKind(h.kind) {
 			return false
 		}
 		out = append(out, r)
@@ -472,7 +535,19 @@ func pendingRows[T row](ctx context.Context, t *table[T], limit int, f Filter) (
 func (s *Store) PendingInventory(ctx context.Context, limit int, f Filter) ([]Inventory, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return pendingRows(ctx, &s.inventory, limit, f)
+	rs, err := pendingRows(ctx, &s.inventory, limit, f)
+	return inventoryOf(rs), err
+}
+
+func inventoryOf(rs []record) []Inventory {
+	if rs == nil {
+		return nil
+	}
+	out := make([]Inventory, len(rs))
+	for i, r := range rs {
+		out[i] = r.Inventory
+	}
+	return out
 }
 
 // PendingKeys returns the ELI URLs the filter selects. Order=random needs the whole
@@ -490,7 +565,7 @@ func (s *Store) PendingKeys(ctx context.Context, f Filter) ([]string, error) {
 func (s *Store) Inventories(ctx context.Context, eliURLs []string) ([]Inventory, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return rowsByKeys(&s.inventory, eliURLs), nil
+	return inventoryOf(rowsByKeys(&s.inventory, eliURLs)), nil
 }
 
 func pendingKeys[T row](ctx context.Context, t *table[T], f Filter) ([]string, error) {
@@ -501,7 +576,7 @@ func pendingKeys[T row](ctx context.Context, t *table[T], f Filter) ([]string, e
 	var out []string
 	err = scanRows(ctx, t, sel, func(key string, r T) bool {
 		h := r.head()
-		if sel.wantState(h.state) && sel.wantAttempts(h.attempts) && sel.wantKind(h.kind) {
+		if sel.wantState(h.state) && sel.due(h) && sel.wantKind(h.kind) {
 			out = append(out, key)
 		}
 		return false
@@ -550,17 +625,18 @@ type Body struct {
 	ELIURL    string `json:"url,omitempty"`
 	Kind      string `json:"kind,omitempty"`
 	State     State  `json:"state,omitempty"`
-	Attempts  int    `json:"attempts,omitempty"`
-	SHA256    string `json:"sha256,omitempty"`
+	Hash      string `json:"hash,omitempty"` // archive.Hash of the payload held
 	Bytes     int64  `json:"bytes,omitempty"`
 	TextChars int64  `json:"text_chars,omitempty"`
-	Error     string `json:"error,omitempty"`
+	// TriedAt and Error are as on Inventory.
+	TriedAt string `json:"tried_at,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // head reports the selection fields, which is what lets Body share the inventory
-// queue's scan, cursor paging, ordering and attempt ceiling.
+// queue's scan, cursor paging, ordering and retry wait.
 func (b Body) head() rowHead {
-	return rowHead{kind: b.Kind, state: string(b.State), attempts: b.Attempts}
+	return rowHead{kind: b.Kind, state: string(b.State), triedAt: b.TriedAt}
 }
 
 func (b Body) normal() Body {
@@ -645,16 +721,19 @@ func (s *Store) CountBodiesByState(ctx context.Context) (map[State]int64, int64,
 
 // Accession is a stored document body keyed by accession number, which is the
 // deduplication unit: several ELI resources can resolve to the same accession.
+//
+// It is not stored apart: it is read from, and written to, the catalogue row that holds it
+// (ELIURL), whose hash and size are the accession's. Only the two times are its own.
 type Accession struct {
-	Accession string `json:"accession,omitempty"`
-	ELIURL    string `json:"url,omitempty"`
-	SHA256    string `json:"sha256,omitempty"`
-	Bytes     int64  `json:"bytes,omitempty"`
-	ChangedAt string `json:"changed_at,omitempty"` // when the stored bytes last changed
+	Accession string
+	ELIURL    string
+	Hash      string
+	Bytes     int64
+	ChangedAt string // when the stored bytes last changed
 
 	// FetchedAt is when the document was last downloaded, whether or not the bytes changed.
 	// Empty on records written before it existed, where ChangedAt is the best lower bound.
-	FetchedAt string `json:"fetched_at,omitempty"`
+	FetchedAt string
 }
 
 // HeldSince is the latest time the stored copy is known to have been current.
@@ -669,16 +748,40 @@ func (a Accession) HeldSince() string {
 func (s *Store) GetAccession(ctx context.Context, accession string) (Accession, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	a, ok := s.accessions[accession]
-	return a, ok, nil
+	u, ok := s.held[accession]
+	if !ok {
+		return Accession{}, false, nil
+	}
+	r := s.inventory.rows[u]
+	return Accession{Accession: accession, ELIURL: u, Hash: r.Hash, Bytes: r.Bytes, ChangedAt: r.ChangedAt, FetchedAt: r.FetchedAt}, true, nil
 }
 
-// PutAccession records a stored body.
+// PutAccession records a stored body on the catalogue row that holds it, which must exist.
+// When the accession moves to another row, the row it leaves stops holding it.
 func (s *Store) PutAccession(ctx context.Context, a Accession) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.accessions[a.Accession] = a
-	return s.log(entry{Acc: &a})
+	r, ok := s.inventory.rows[a.ELIURL]
+	if !ok {
+		return fmt.Errorf("accession %s names %q, which has no catalogue row", a.Accession, a.ELIURL)
+	}
+	if a.ChangedAt == "" && a.FetchedAt == "" {
+		return fmt.Errorf("accession %s: a held accession records when it changed or was fetched", a.Accession)
+	}
+	var es []entry
+	if prev, ok := s.held[a.Accession]; ok && prev != a.ELIURL {
+		left := s.inventory.rows[prev]
+		left.ChangedAt, left.FetchedAt = "", ""
+		s.setRecord(left)
+		es = append(es, entry{Inv: &left})
+	}
+	r.Accession, r.ChangedAt, r.FetchedAt = a.Accession, a.ChangedAt, a.FetchedAt
+	if a.Hash != "" {
+		r.Hash, r.Bytes = a.Hash, a.Bytes
+	}
+	s.setRecord(r)
+	es = append(es, entry{Inv: &r})
+	return s.log(es...)
 }
 
 // Change is one harvesting-feed entry.
@@ -713,24 +816,22 @@ func (s *Store) PutChanges(ctx context.Context, changes []Change) error {
 	return s.log(es...)
 }
 
-// Issues is the work a collection pass could not finish, and a fingerprint of which
-// work that was.
+// Issues is what a collection pass left out, and a fingerprint of which documents those were.
 //
-//	owed     pending, or failed while still under the retry ceiling
-//	stalled  either of those, but past the ceiling, so only a deliberate pass
-//	         with --state pending revisits them
+//	owed    pending or stale: work the pass did not get to, because it was cut short
+//	failed  asked for and refused; each row says when it was last tried and what the
+//	        site answered, and the default sweep asks again after RetryFailedAfter
 //
-// A failed row counts as owed rather than as a conclusion, because the site may serve
-// it tomorrow. Rows in gone, skipped, fetched or empty states are conclusions and are
-// ignored. Stalled rows are counted apart because they are not retryable: they are
-// reported so a reader knows the mirror has holes, not so a run can refuse to run.
+// Rows in gone, skipped, fetched or empty states are conclusions and are not counted. The
+// counts are what a published pull record states: "updated as of then, but these documents
+// failed and are not included".
 //
 // Digest fingerprints the identities of the outstanding rows, which the counts cannot.
 // The same digest on consecutive runs means the same handful of documents the site will
 // not serve; a moving digest means something new broke.
 type Issues struct {
-	Owed    int64
-	Stalled int64
+	Owed   int64
+	Failed int64
 
 	// Digest is 8 hex digits over the outstanding rows, empty when nothing is
 	// outstanding. A fingerprint for comparing runs, not an integrity check.
@@ -738,12 +839,12 @@ type Issues struct {
 }
 
 // Total is everything outstanding, retryable or not.
-func (i Issues) Total() int64 { return i.Owed + i.Stalled }
+func (i Issues) Total() int64 { return i.Owed + i.Failed }
 
 // Merge folds another queue's issues into these. The digests are combined rather than
 // concatenated so the whole record stays one short field.
 func (i Issues) Merge(j Issues) Issues {
-	out := Issues{Owed: i.Owed + j.Owed, Stalled: i.Stalled + j.Stalled}
+	out := Issues{Owed: i.Owed + j.Owed, Failed: i.Failed + j.Failed}
 	if i.Digest != "" || j.Digest != "" {
 		h := fnv.New64a()
 		_, _ = h.Write([]byte(i.Digest))
@@ -759,9 +860,9 @@ func (i Issues) String() string {
 		return "clean"
 	}
 	if i.Digest == "" {
-		return fmt.Sprintf("owed=%d stalled=%d", i.Owed, i.Stalled)
+		return fmt.Sprintf("owed=%d failed=%d", i.Owed, i.Failed)
 	}
-	return fmt.Sprintf("owed=%d stalled=%d issues=%s", i.Owed, i.Stalled, i.Digest)
+	return fmt.Sprintf("owed=%d failed=%d issues=%s", i.Owed, i.Failed, i.Digest)
 }
 
 // The table tags the fingerprint hashes ahead of each key. They are the key prefixes of
@@ -773,38 +874,35 @@ const (
 	digestBody      = "b|"
 )
 
-// InventoryIssues walks the sitemap queue once and reports what it still intends to
-// fetch.
-func (s *Store) InventoryIssues(ctx context.Context, maxAttempts int) (Issues, error) {
+// InventoryIssues walks the sitemap queue once and reports what it left out.
+func (s *Store) InventoryIssues(ctx context.Context) (Issues, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return pendingIssues(ctx, &s.inventory, digestInventory, maxAttempts)
+	return pendingIssues(ctx, &s.inventory, digestInventory)
 }
 
 // BodyIssues is InventoryIssues for the body sidecar queue, where empty is also a
 // conclusion: the payload genuinely had no text.
-func (s *Store) BodyIssues(ctx context.Context, maxAttempts int) (Issues, error) {
+func (s *Store) BodyIssues(ctx context.Context) (Issues, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return pendingIssues(ctx, &s.bodies, digestBody, maxAttempts)
+	return pendingIssues(ctx, &s.bodies, digestBody)
 }
 
 // pendingIssues is the shared scan: one walk per queue, in key order, so the fingerprint
 // is reproducible.
-func pendingIssues[T row](ctx context.Context, t *table[T], tag string, maxAttempts int) (Issues, error) {
+func pendingIssues[T row](ctx context.Context, t *table[T], tag string) (Issues, error) {
 	var out Issues
 	h := fnv.New64a()
 	err := scanAll(ctx, t, func(key string, r T) bool {
 		hh := r.head()
 		switch hh.state {
-		case "", string(StatePending), string(StateFailed), string(StateStale):
+		case "", string(StatePending), string(StateStale):
+			out.Owed++
+		case string(StateFailed):
+			out.Failed++
 		default:
 			return false
-		}
-		if hh.attempts < maxAttempts {
-			out.Owed++
-		} else {
-			out.Stalled++
 		}
 		_, _ = h.Write([]byte(tag))
 		_, _ = h.Write([]byte(key))
@@ -831,7 +929,8 @@ func (s *Store) HeldSince(ctx context.Context, since string, limit int) ([]Inven
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []Inventory
-	err := scanAll(ctx, &s.inventory, func(_ string, in Inventory) bool {
+	err := scanAll(ctx, &s.inventory, func(_ string, r record) bool {
+		in := r.Inventory
 		// Stale rows belong here: they are exactly the ones the publisher says were
 		// republished while we hold an older version.
 		if (in.State == StateFetched || in.State == StateStale) && in.LastMod >= since {
@@ -880,7 +979,7 @@ func (s *Store) UnresolvedAccessions(ctx context.Context, limit int) ([]Change, 
 	defer s.mu.RUnlock()
 	var out []Change
 	err := scanAll(ctx, &s.changes, func(_ string, c Change) bool {
-		if _, ok := s.accessions[c.Accession]; ok {
+		if _, ok := s.held[c.Accession]; ok {
 			return false
 		}
 		out = append(out, c)
@@ -899,7 +998,7 @@ func (s *Store) MarkDayHarvested(ctx context.Context, day time.Time) error {
 	if s.days[d] {
 		return nil
 	}
-	s.days[d] = true
+	s.days[d], s.metaDirty = true, true
 	return s.log(entry{Day: d})
 }
 
@@ -925,8 +1024,8 @@ func (s *Store) LastHarvestedDay(ctx context.Context) (time.Time, bool, error) {
 func (s *Store) SetMeta(ctx context.Context, key, value string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.meta[key] = value
-	return s.log(entry{Meta: &metaEntry{Key: key, Value: value}})
+	s.meta[key], s.metaDirty = value, true
+	return s.log(entry{Meta: &metaPair{Key: key, Value: value}})
 }
 
 // GetMeta reads an arbitrary marker.
@@ -935,10 +1034,4 @@ func (s *Store) GetMeta(ctx context.Context, key string) (string, bool, error) {
 	defer s.mu.RUnlock()
 	v, ok := s.meta[key]
 	return v, ok, nil
-}
-
-// Sha256Hex is the content hash used for change detection and deduplication.
-func Sha256Hex(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
 }

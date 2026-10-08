@@ -24,7 +24,8 @@ func artifactCmd(resolve configFunc) *cobra.Command {
 // network cost, and the store is locked to one process, so a command that opened it would block the
 // nightly crawl.
 func artifactBuildCmd(resolve configFunc) *cobra.Command {
-	var out string
+	var out, mode, from string
+	var rebaseAt float64
 
 	cmd := &cobra.Command{
 		Use:   "build",
@@ -53,14 +54,36 @@ read and decode a document against 691 to parse its XML (see
 internal/compiled/testdata/artifact-20260918.txt).
 
 The artifact records the last collection pass (data/sweep.stamp), which is what a
-server quotes as how current its text is.`,
+server quotes as how current its text is.
+
+Modes (--mode):
+  full    compile every document in the archive (the default)
+  patch   continue an earlier artifact (--from, default the current one): compile only the
+          documents whose XML or body sidecar on disk differs from what it was compiled
+          from, and copy every other document's frame from it byte for byte. Documents
+          whose XML is not on disk are carried, so a machine holding only this week's
+          files builds the whole artifact; on a machine holding every file the result is
+          what a full build makes. Refused when the earlier artifact holds another
+          document model or dictionary: build in full then.
+  layer   as patch, but write only the changed documents, as a layer over the earlier
+          artifact (or over its base, when it is a layer itself), which stays as it is
+          beside it. A server downloads the layer instead of the whole file. When the
+          layer would replace more than --rebase-at of the documents, a whole artifact is
+          written instead.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := resolve()
 			if err != nil {
 				return err
 			}
+			m, err := builder.ParseMode(mode)
+			if err != nil {
+				return err
+			}
 			_, err = builder.Artifact(cmd.Context(), builder.Options{
+				Mode:             m,
+				From:             from,
+				RebaseAt:         rebaseAt,
 				XMLDir:           cfg.XMLDir(),
 				DataDir:          cfg.DataDir,
 				Out:              out,
@@ -70,6 +93,9 @@ server quotes as how current its text is.`,
 			return err
 		},
 	}
+	cmd.Flags().StringVar(&mode, "mode", string(builder.Full), "full, patch or layer (see above)")
+	cmd.Flags().StringVar(&from, "from", "", "the earlier artifact a patch or layer build continues (default: the current one)")
+	cmd.Flags().Float64Var(&rebaseAt, "rebase-at", builder.DefaultRebaseAt, "share of the documents a layer may replace before a whole artifact is written instead")
 	cmd.Flags().StringVar(&out, "out", "", "write the artifact to this file instead of installing it as the current one in <data-dir>/"+artifactdir.Subdir)
 	return cmd
 }

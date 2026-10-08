@@ -31,6 +31,11 @@ type CatalogueRecord struct {
 	// Readable is false for an entry whose document could not be read when the artifact was
 	// built: it is in the catalogue, as it is in the archive, but cannot be opened.
 	Readable bool `json:",omitempty"`
+	// XMLHash and BodyHash are what the document was compiled from: the archive's hash
+	// (archive.Hash) of its XML and of its body sidecar, "" when it had none. An incremental
+	// build compares them with the files to know which documents it can carry over unchanged.
+	XMLHash  string `json:",omitempty"`
+	BodyHash string `json:",omitempty"`
 }
 
 // NewChains is consolidation over a library given by its parts: the catalogue's entries in scan

@@ -23,11 +23,12 @@ type horizon struct {
 	PulledAt time.Time
 	Known    bool
 
-	// Owed, Stalled and Digest are what that pass could not get. IssuesKnown is false
+	// Owed, Failed and Digest are what that pass left out: work it did not get to, and
+	// documents the site refused. IssuesKnown is false
 	// for a record written before the problems were counted, where "unknown" is the
 	// truth and "clean" would be a claim.
 	Owed        int64
-	Stalled     int64
+	Failed      int64
 	Digest      string
 	IssuesKnown bool
 
@@ -59,7 +60,7 @@ func (s *Server) horizon() horizon {
 		if pass := c.Artifact().Header.Collection; pass != nil {
 			h.Known = true
 			h.PulledAt = pass.PulledAt
-			h.Owed, h.Stalled, h.Digest = pass.Owed, pass.Stalled, pass.Digest
+			h.Owed, h.Failed, h.Digest = pass.Owed, pass.Failed, pass.Digest
 			h.IssuesKnown = pass.IssuesKnown
 		}
 	}
@@ -84,13 +85,13 @@ func (h horizon) pull() string {
 	switch {
 	case !h.IssuesKnown:
 		return when + ", problems not recorded by that pass"
-	case h.Owed+h.Stalled == 0:
+	case h.Owed+h.Failed == 0:
 		return when + ", nothing left unresolved"
 	case h.Digest == "":
-		return fmt.Sprintf("%s, %d unresolved", when, h.Owed+h.Stalled)
+		return fmt.Sprintf("%s, %d unresolved", when, h.Owed+h.Failed)
 	default:
-		return fmt.Sprintf("%s, %d unresolved (issues %s: %d owed, %d past the retry ceiling)",
-			when, h.Owed+h.Stalled, h.Digest, h.Owed, h.Stalled)
+		return fmt.Sprintf("%s, %d unresolved (issues %s: %d owed, %d refused by the site and retried weekly)",
+			when, h.Owed+h.Failed, h.Digest, h.Owed, h.Failed)
 	}
 }
 
@@ -103,13 +104,13 @@ func (h horizon) pullDA() string {
 	switch {
 	case !h.IssuesKnown:
 		return when + ", fejl ikke registreret af den kørsel"
-	case h.Owed+h.Stalled == 0:
+	case h.Owed+h.Failed == 0:
 		return when + ", intet uafklaret"
 	case h.Digest == "":
-		return fmt.Sprintf("%s, %d uafklarede", when, h.Owed+h.Stalled)
+		return fmt.Sprintf("%s, %d uafklarede", when, h.Owed+h.Failed)
 	default:
-		return fmt.Sprintf("%s, %d uafklarede (sag %s: %d afventer, %d over grænsen for nye forsøg)",
-			when, h.Owed+h.Stalled, h.Digest, h.Owed, h.Stalled)
+		return fmt.Sprintf("%s, %d uafklarede (sag %s: %d afventer, %d afvist af siden og prøves igen ugentligt)",
+			when, h.Owed+h.Failed, h.Digest, h.Owed, h.Failed)
 	}
 }
 

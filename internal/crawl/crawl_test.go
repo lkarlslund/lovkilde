@@ -129,7 +129,7 @@ func TestFetchReportsProgressEveryResource(t *testing.T) {
 
 	var calls int
 	var last FetchStats
-	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 2,
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10,
 		OnProgress: func(s FetchStats) { calls++; last = s }}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestFetchKindFilter(t *testing.T) {
 	}
 
 	var last FetchStats
-	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 2, Kinds: []string{"retsinfo"},
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, Kinds: []string{"retsinfo"},
 		OnProgress: func(s FetchStats) { last = s }}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -224,10 +224,10 @@ func TestFetchKindFilter(t *testing.T) {
 	}
 }
 
-// --state failed is the retry path for rows the ordinary sweep has given up on, so
-// the attempt ceiling must not veto it -- and must still veto it for a default run,
-// which is what keeps a dead URL from being re-requested forever.
-func TestFetchStateFilterRetriesExhaustedFailures(t *testing.T) {
+// --state failed is the retry path for failures the ordinary sweep is leaving for their
+// weekly retry, so the wait must not veto it -- and must still veto it for a default
+// run, which is what keeps a dead URL from being re-requested every run.
+func TestFetchStateFilterRetriesRecentFailures(t *testing.T) {
 	var requests int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
@@ -258,23 +258,23 @@ func TestFetchStateFilterRetriesExhaustedFailures(t *testing.T) {
 
 	ctx := context.Background()
 	seed := []store.Inventory{
-		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/2", Kind: "ft", State: store.StateFailed, Attempts: 99, Error: "transport"},
-		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/3", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/2", Kind: "ft", State: store.StateFailed, TriedAt: time.Now().UTC().Format(time.RFC3339), Error: "transport"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/3", Kind: "ft", State: store.StateGone, Error: "404 Not Found"},
 	}
 	if err := st.PutInventoryBatch(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
 
 	// The ordinary sweep: both rows are out of scope, so nothing is requested.
-	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 5}); err != nil {
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if requests != 0 {
-		t.Fatalf("default sweep made %d requests, want 0: exhausted failures and 404s must stay put", requests)
+		t.Fatalf("default sweep made %d requests, want 0: a failure tried just now and a 404 must stay put", requests)
 	}
 
-	// Named states: the ceiling lifts and the failed row is retried.
-	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 5, States: []string{"failed"}}); err != nil {
+	// Named states: the wait lifts and the failed row is retried.
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10, States: []string{"failed"}}); err != nil {
 		t.Fatalf("Fetch --state failed: %v", err)
 	}
 	if requests != 1 {
@@ -333,9 +333,9 @@ func TestFetchStateRetryVisitsEachRowOnce(t *testing.T) {
 
 	ctx := context.Background()
 	seed := []store.Inventory{
-		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/5", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
-		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/6", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
-		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/7", Kind: "ft", State: store.StateGone, Attempts: 1, Error: "404 Not Found"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/5", Kind: "ft", State: store.StateGone, Error: "404 Not Found"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/6", Kind: "ft", State: store.StateGone, Error: "404 Not Found"},
+		{ELIURL: "https://www.retsinformation.dk/eli/ft/2021/7", Kind: "ft", State: store.StateGone, Error: "404 Not Found"},
 	}
 	if err := st.PutInventoryBatch(ctx, seed); err != nil {
 		t.Fatal(err)
@@ -346,7 +346,7 @@ func TestFetchStateRetryVisitsEachRowOnce(t *testing.T) {
 	runOnce := func() {
 		done := make(chan error, 1)
 		go func() {
-			done <- c.Fetch(ctx, FetchOptions{Batch: 2, MaxAttempts: 5, States: []string{"gone"}})
+			done <- c.Fetch(ctx, FetchOptions{Batch: 2, States: []string{"gone"}})
 		}()
 		select {
 		case err := <-done:
@@ -420,7 +420,7 @@ func TestFetchReportsProgressOnResumeWithoutRequests(t *testing.T) {
 	c := New(cfg, st, ar, rihttp.New(cfg, lim))
 
 	var last FetchStats
-	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 2,
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10,
 		OnProgress: func(s FetchStats) { last = s }}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -472,9 +472,9 @@ func TestFetchClosesHTMLResponseWithoutRetrying(t *testing.T) {
 	}, 1.5, 2, time.Millisecond)
 	c := New(cfg, st, ar, rihttp.New(cfg, lim))
 
-	opt := FetchOptions{Batch: 10, MaxAttempts: 5}
+	opt := FetchOptions{Batch: 10}
 	var first FetchStats
-	if err := c.Fetch(ctx, FetchOptions{Batch: 10, MaxAttempts: 5,
+	if err := c.Fetch(ctx, FetchOptions{Batch: 10,
 		OnProgress: func(s FetchStats) { first = s }}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -595,7 +595,7 @@ func eliID(path string) string {
 // be the first request. Batch 2 forces the paging path.
 func TestFetchOrderDescendingAsksNewestFirst(t *testing.T) {
 	c, _, rec := newOrderTester(t, "1", "2", "3", "4", "5")
-	fetchToCompletion(t, c, FetchOptions{Batch: 2, MaxAttempts: 5, Order: store.OrderDesc})
+	fetchToCompletion(t, c, FetchOptions{Batch: 2, Order: store.OrderDesc})
 
 	want := []string{"5", "4", "3", "2", "1"}
 	var got []string
@@ -618,7 +618,7 @@ func TestFetchOrderDescendingAsksNewestFirst(t *testing.T) {
 func TestFetchOrderRandomVisitsEachRowOnce(t *testing.T) {
 	ids := []string{"1", "2", "3", "4", "5", "6", "7"}
 	c, _, rec := newOrderTester(t, ids...)
-	fetchToCompletion(t, c, FetchOptions{Batch: 2, MaxAttempts: 5, Order: store.OrderRandom, RandomSeed: 7})
+	fetchToCompletion(t, c, FetchOptions{Batch: 2, Order: store.OrderRandom, RandomSeed: 7})
 
 	got := rec.order()
 	if len(got) != len(ids) {
@@ -650,9 +650,9 @@ func TestFetchOrderRandomVisitsEachRowOnce(t *testing.T) {
 func TestFetchOrderRandomIsReproducible(t *testing.T) {
 	ids := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
 	c1, _, rec1 := newOrderTester(t, ids...)
-	fetchToCompletion(t, c1, FetchOptions{Batch: 3, MaxAttempts: 5, Order: store.OrderRandom, RandomSeed: 1234})
+	fetchToCompletion(t, c1, FetchOptions{Batch: 3, Order: store.OrderRandom, RandomSeed: 1234})
 	c2, _, rec2 := newOrderTester(t, ids...)
-	fetchToCompletion(t, c2, FetchOptions{Batch: 3, MaxAttempts: 5, Order: store.OrderRandom, RandomSeed: 1234})
+	fetchToCompletion(t, c2, FetchOptions{Batch: 3, Order: store.OrderRandom, RandomSeed: 1234})
 
 	a, b := rec1.order(), rec2.order()
 	if len(a) != len(b) {

@@ -63,7 +63,7 @@ as a script. There is no JavaScript, no build step, and no asset pipeline.
 --index/--artifact mean what they mean for "mcp". The search index is the server's own: when it
 is missing, unreadable or built from another artifact, the server rebuilds it from the artifact
 in the background (about a minute) and saves it; lookups and browsing answer meanwhile, and the
-site says search is on its way. A missing artifact is downloaded from --hf-repo, and a newer one
+site says search is on its way. A missing artifact is downloaded from --release, and a newer one
 installed every --auto-update; without one the server does not start, and one that is present but
 unreadable stops it.`,
 		Args: cobra.NoArgs,

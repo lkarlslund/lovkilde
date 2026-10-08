@@ -11,39 +11,55 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 )
 
 const (
-	// CurrentFile is what the mirror holds and knows; QueueFile the local retry bookkeeping;
-	// JournalFile the changes since either was written.
-	CurrentFile = "current.json"
-	QueueFile   = "queue.json"
-	JournalFile = "journal.jsonl"
-	lockFile    = "lock"
+	MetaFile      = "meta.json"
+	InventoryFile = "inventory.jsonl"
+	BodiesFile    = "bodies.jsonl"
+	ChangesFile   = "changes.jsonl"
+	JournalFile   = "journal.jsonl"
+	lockFile      = "lock"
 
-	// formatVersion is written into current.json. A file of another version is refused rather
-	// than half-read.
-	formatVersion = 1
+	// formatVersion is written into meta.json. Another version is refused rather than
+	// half-read.
+	formatVersion = 2
 
 	// compactAfter is how large the journal may grow before the files are rewritten. A full
 	// sitemap pass that touches every row journals about 40 MB; rewriting the files costs a
 	// second or two, so this keeps a replay short without rewriting during ordinary fetching.
 	compactAfter = 64 << 20
+
+	// changeRetention is how long feed changes are kept. The feed answers for ten days and a
+	// change matters until the document it names has been fetched after it
+	// (crawl.QueueFeedChanges), so two months is ample, and the table stops growing forever.
+	changeRetention = 60 * 24 * time.Hour
 )
+
+// Published are the files a release carries: what a fresh machine needs to carry on collecting.
+// The journal stays local.
+var Published = []string{MetaFile, InventoryFile, BodiesFile, ChangesFile}
 
 // entry is one journal line: exactly one field is set.
 type entry struct {
-	Inv  *Inventory `json:"inv,omitempty"`
-	Body *Body      `json:"body,omitempty"`
-	Acc  *Accession `json:"acc,omitempty"`
-	Chg  *Change    `json:"chg,omitempty"`
-	Day  string     `json:"day,omitempty"`
-	Meta *metaEntry `json:"meta,omitempty"`
+	Inv  *record   `json:"inv,omitempty"`
+	Body *Body     `json:"body,omitempty"`
+	Chg  *Change   `json:"chg,omitempty"`
+	Day  string    `json:"day,omitempty"`
+	Meta *metaPair `json:"meta,omitempty"`
 }
 
-type metaEntry struct {
+type metaPair struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+// metaDoc is meta.json.
+type metaDoc struct {
+	Version int               `json:"version"`
+	Meta    map[string]string `json:"meta"`
+	Days    []string          `json:"harvested_days"`
 }
 
 // Open loads the state kept in dir, creating the directory when it does not exist, and
@@ -58,14 +74,14 @@ func Open(dir string) (*Store, error) {
 		return nil, fmt.Errorf("state in %s: %w", dir, err)
 	}
 	s := &Store{
-		dir:        dir,
-		inventory:  newTable[Inventory](),
-		bodies:     newTable[Body](),
-		changes:    newTable[Change](),
-		accessions: map[string]Accession{},
-		days:       map[string]bool{},
-		meta:       map[string]string{},
-		unlock:     unlock,
+		dir:       dir,
+		inventory: newTable[record](),
+		bodies:    newTable[Body](),
+		changes:   newTable[Change](),
+		days:      map[string]bool{},
+		meta:      map[string]string{},
+		held:      map[string]string{},
+		unlock:    unlock,
 	}
 	if err := s.load(); err != nil {
 		unlock()
@@ -78,7 +94,7 @@ func Open(dir string) (*Store, error) {
 	return s, nil
 }
 
-// Close writes the state files, empties the journal and releases the lock.
+// Close writes the files that changed, empties the journal and releases the lock.
 func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -94,7 +110,7 @@ func (s *Store) Close() error {
 	return err
 }
 
-// Save writes the state files and empties the journal, without closing.
+// Save writes the files that changed and empties the journal, without closing.
 func (s *Store) Save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -123,86 +139,56 @@ func (s *Store) log(es ...entry) error {
 func (s *Store) apply(e entry) {
 	switch {
 	case e.Inv != nil:
-		s.inventory.put(e.Inv.ELIURL, *e.Inv)
+		s.setRecord(*e.Inv)
 	case e.Body != nil:
 		s.bodies.put(e.Body.ELIURL, *e.Body)
-	case e.Acc != nil:
-		s.accessions[e.Acc.Accession] = *e.Acc
 	case e.Chg != nil:
 		if _, ok := s.changes.rows[e.Chg.key()]; !ok {
 			s.changes.put(e.Chg.key(), *e.Chg)
 		}
 	case e.Day != "":
-		s.days[e.Day] = true
+		s.days[e.Day], s.metaDirty = true, true
 	case e.Meta != nil:
-		s.meta[e.Meta.Key] = e.Meta.Value
+		s.meta[e.Meta.Key], s.metaDirty = e.Meta.Value, true
 	}
 }
 
-// currentDoc is current.json. Rows are keyed by ELI URL (accessions by accession number,
-// changes by date|accession|reason), so a row's key is not repeated inside it.
-type currentDoc struct {
-	Version    int                  `json:"version"`
-	Meta       map[string]string    `json:"meta"`
-	Days       []string             `json:"harvested_days"`
-	Inventory  map[string]Inventory `json:"inventory"`
-	Bodies     map[string]Body      `json:"bodies"`
-	Accessions map[string]Accession `json:"accessions"`
-	Changes    map[string]Change    `json:"changes"`
-}
-
-// retry is a row's entry in queue.json.
-type retry struct {
-	Attempts int    `json:"attempts,omitempty"`
-	Error    string `json:"error,omitempty"`
-}
-
-// queueDoc is queue.json.
-type queueDoc struct {
-	Inventory map[string]retry `json:"inventory"`
-	Bodies    map[string]retry `json:"bodies"`
-}
-
-// load reads current.json, overlays queue.json and replays the journal. A directory with
+// load reads the files and replays the journal. A directory with
 // none of them is an empty state.
 func (s *Store) load() error {
-	var cur currentDoc
-	switch err := readJSON(filepath.Join(s.dir, CurrentFile), &cur); {
+	var m metaDoc
+	switch err := readJSON(filepath.Join(s.dir, MetaFile), &m); {
 	case errors.Is(err, fs.ErrNotExist):
+		if _, err := os.Stat(filepath.Join(s.dir, "current.json")); err == nil {
+			return errors.New("holds state in format 1 (current.json), which this build does not read")
+		}
 	case err != nil:
 		return err
-	case cur.Version != formatVersion:
-		return fmt.Errorf("%s is format %d, this build reads %d", CurrentFile, cur.Version, formatVersion)
+	case m.Version != formatVersion:
+		return fmt.Errorf("%s is format %d, this build reads %d", MetaFile, m.Version, formatVersion)
 	}
-	var q queueDoc
-	if err := readJSON(filepath.Join(s.dir, QueueFile), &q); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	for u, in := range cur.Inventory {
-		in.ELIURL = u
-		r := q.Inventory[u]
-		in.Attempts, in.Error = r.Attempts, r.Error
-		s.inventory.rows[u] = in.normal()
-	}
-	for u, b := range cur.Bodies {
-		b.ELIURL = u
-		r := q.Bodies[u]
-		b.Attempts, b.Error = r.Attempts, r.Error
-		s.bodies.rows[u] = b.normal()
-	}
-	for acc, a := range cur.Accessions {
-		a.Accession = acc
-		s.accessions[acc] = a
-	}
-	for _, c := range cur.Changes {
-		s.changes.rows[c.key()] = c
-	}
-	for _, d := range cur.Days {
-		s.days[d] = true
-	}
-	for k, v := range cur.Meta {
+	for k, v := range m.Meta {
 		s.meta[k] = v
 	}
+	for _, d := range m.Days {
+		s.days[d] = true
+	}
+	// Rows are read in file order, which is key order, so when two rows claim the same
+	// accession the index keeps the first, the same one on every load.
+	if err := readLines(filepath.Join(s.dir, InventoryFile), func(r record) {
+		r.Inventory = r.Inventory.normal()
+		s.setRecord(r)
+	}); err != nil {
+		return err
+	}
+	if err := readLines(filepath.Join(s.dir, BodiesFile), func(b Body) { s.bodies.put(b.ELIURL, b.normal()) }); err != nil {
+		return err
+	}
+	if err := readLines(filepath.Join(s.dir, ChangesFile), func(c Change) { s.changes.put(c.key(), c) }); err != nil {
+		return err
+	}
+	// What was read so far is what the files hold; only the journal's replay is unwritten.
+	s.inventory.dirty, s.bodies.dirty, s.changes.dirty, s.metaDirty = false, false, false, false
 	return replayJournal(filepath.Join(s.dir, JournalFile), s.apply)
 }
 
@@ -217,20 +203,77 @@ func readJSON(path string, v any) error {
 	return nil
 }
 
-// save writes both files, each under a temporary name renamed into place, and only then
-// empties the journal: a crash between the steps leaves a journal whose entries the files
-// already hold, and replaying them again changes nothing. The caller holds the write lock.
+// readLines decodes a JSON Lines file a line at a time. A missing file is an empty table.
+func readLines[T any](path string, fn func(T)) error {
+	f, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 1<<20), 16<<20)
+	for n := 1; sc.Scan(); n++ {
+		var v T
+		if err := json.Unmarshal(sc.Bytes(), &v); err != nil {
+			return fmt.Errorf("%s:%d: %w", path, n, err)
+		}
+		fn(v)
+	}
+	return sc.Err()
+}
+
+// save writes the files whose tables changed, each under a temporary name renamed into
+// place, and only then empties the journal: a crash between the steps leaves a journal whose
+// entries the files already hold, and replaying them again changes nothing. The caller holds
+// the write lock.
 func (s *Store) save() error {
-	if err := writeFile(filepath.Join(s.dir, CurrentFile), s.writeCurrent); err != nil {
-		return err
+	s.pruneChanges(time.Now())
+	write := func(name string, dirty bool, fn func(w *bufio.Writer) error) error {
+		if !dirty {
+			return nil
+		}
+		return writeFile(filepath.Join(s.dir, name), fn)
 	}
-	if err := writeFile(filepath.Join(s.dir, QueueFile), s.writeQueue); err != nil {
-		return err
+	for _, step := range []func() error{
+		func() error { return write(MetaFile, s.metaDirty, s.writeMeta) },
+		func() error {
+			return write(InventoryFile, s.inventory.dirty, func(w *bufio.Writer) error {
+				return writeLines(w, &s.inventory, func(r record) any { return r })
+			})
+		},
+		func() error {
+			return write(BodiesFile, s.bodies.dirty, func(w *bufio.Writer) error {
+				return writeLines(w, &s.bodies, func(b Body) any { return b })
+			})
+		},
+		func() error {
+			return write(ChangesFile, s.changes.dirty, func(w *bufio.Writer) error {
+				return writeLines(w, &s.changes, func(c Change) any { return c })
+			})
+		},
+	} {
+		if err := step(); err != nil {
+			return err
+		}
 	}
+	s.inventory.dirty, s.bodies.dirty, s.changes.dirty, s.metaDirty = false, false, false, false
 	if s.journal != nil {
 		return s.journal.truncate()
 	}
 	return nil
+}
+
+// pruneChanges drops feed changes older than changeRetention.
+func (s *Store) pruneChanges(now time.Time) {
+	cutoff := now.Add(-changeRetention).UTC().Format(time.DateOnly)
+	for k, c := range s.changes.rows {
+		if c.Date < cutoff {
+			s.changes.remove(k)
+		}
+	}
 }
 
 func writeFile(path string, write func(w *bufio.Writer) error) error {
@@ -257,109 +300,30 @@ func writeFile(path string, write func(w *bufio.Writer) error) error {
 	return os.Rename(tmp, path)
 }
 
-// writeCurrent writes current.json one row per line, in key order. The row's key is the
-// object key and is left out of the row; attempts and errors are queue.json's.
-func (s *Store) writeCurrent(w *bufio.Writer) error {
+func (s *Store) writeMeta(w *bufio.Writer) error {
 	days := make([]string, 0, len(s.days))
 	for d := range s.days {
 		days = append(days, d)
 	}
 	slices.Sort(days)
-	head, err := json.Marshal(struct {
-		Version int               `json:"version"`
-		Meta    map[string]string `json:"meta"`
-		Days    []string          `json:"harvested_days"`
-	}{formatVersion, s.meta, days})
-	if err != nil {
-		return err
-	}
-	// The head object, reopened so the tables follow inside it.
-	w.Write(head[:len(head)-1])
-	if err := writeRows(w, "inventory", &s.inventory, func(in Inventory) any {
-		in.ELIURL, in.Attempts, in.Error = "", 0, ""
-		return in
-	}); err != nil {
-		return err
-	}
-	if err := writeRows(w, "bodies", &s.bodies, func(b Body) any {
-		b.ELIURL, b.Attempts, b.Error = "", 0, ""
-		return b
-	}); err != nil {
-		return err
-	}
-	acc := table[Accession]{rows: s.accessions}
-	if err := writeRows(w, "accessions", &acc, func(a Accession) any {
-		a.Accession = ""
-		return a
-	}); err != nil {
-		return err
-	}
-	if err := writeRows(w, "changes", &s.changes, func(c Change) any { return c }); err != nil {
-		return err
-	}
-	_, err = w.WriteString("\n}\n")
-	return err
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", " ")
+	return enc.Encode(metaDoc{Version: formatVersion, Meta: s.meta, Days: days})
 }
 
-// writeQueue writes queue.json: attempts and errors of the rows not done. A fetched or empty
-// row's attempt count is history nothing reads -- the ceiling applies to rows still owed -- so
-// it is not kept, and a row that is republished starts its retries afresh.
-func (s *Store) writeQueue(w *bufio.Writer) error {
-	w.WriteString("{")
-	inv := table[retry]{rows: map[string]retry{}}
-	for u, in := range s.inventory.rows {
-		if !done(in.State) && (in.Attempts != 0 || in.Error != "") {
-			inv.rows[u] = retry{in.Attempts, in.Error}
-		}
-	}
-	bodies := table[retry]{rows: map[string]retry{}}
-	for u, b := range s.bodies.rows {
-		if !done(b.State) && (b.Attempts != 0 || b.Error != "") {
-			bodies.rows[u] = retry{b.Attempts, b.Error}
-		}
-	}
-	keep := func(r retry) any { return r }
-	if err := writeRowsFirst(w, "inventory", &inv, keep, true); err != nil {
-		return err
-	}
-	if err := writeRows(w, "bodies", &bodies, keep); err != nil {
-		return err
-	}
-	_, err := w.WriteString("\n}\n")
-	return err
-}
-
-// done is a state whose row was answered with content: nothing about its retries matters.
-func done(st State) bool { return st == StateFetched || st == StateEmpty }
-
-// writeRows writes `,"name":{` and then one `"key":row` per line, in key order.
-func writeRows[T any](w *bufio.Writer, name string, t *table[T], shape func(T) any) error {
-	return writeRowsFirst(w, name, t, shape, false)
-}
-
-func writeRowsFirst[T any](w *bufio.Writer, name string, t *table[T], shape func(T) any, first bool) error {
-	if !first {
-		w.WriteString(",")
-	}
-	fmt.Fprintf(w, "\n%q:{", name)
-	for i, k := range t.sorted() {
-		key, _ := json.Marshal(k)
+// writeLines writes a table as JSON Lines, one row per line, in key order.
+func writeLines[T any](w *bufio.Writer, t *table[T], shape func(T) any) error {
+	for _, k := range t.sorted() {
 		row, err := json.Marshal(shape(t.rows[k]))
 		if err != nil {
 			return err
 		}
-		if i > 0 {
-			w.WriteString(",")
-		}
-		w.WriteString("\n")
-		w.Write(key)
-		w.WriteString(":")
-		if _, err := w.Write(row); err != nil {
+		w.Write(row)
+		if err := w.WriteByte('\n'); err != nil {
 			return err
 		}
 	}
-	_, err := w.WriteString("\n}")
-	return err
+	return nil
 }
 
 // journal is the append-only change log.

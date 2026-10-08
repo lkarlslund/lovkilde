@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/artifactfetch"
 	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/retsinformation/internal/release"
 )
 
 func artifactCmd(resolve configFunc) *cobra.Command {
@@ -72,12 +72,12 @@ question in milliseconds instead of a failed start.`,
 // artifactDownloadCmd installs the published artifact now, the thing serve does by itself when
 // there is none and every --auto-update after that.
 func artifactDownloadCmd(resolve configFunc) *cobra.Command {
-	var from artifactfetch.Source
+	var from string
 	cmd := &cobra.Command{
 		Use:   "download",
 		Short: "Download the published artifact and make it current",
-		Long: `Read the release manifest in the Hugging Face dataset repository, download the artifact it
-names unless it is already current, check its size, SHA-256 and document model, and make it
+		Long: `Read the release manifest in the release repository (a directory, or a Hugging Face dataset
+repository), download the artifact it names unless it is already current, check its size, SHA-256 and document model, and make it
 current. A running server moves to it by itself.
 
 An artifact of another document model than this binary reads is not downloaded: the answer to
@@ -88,11 +88,15 @@ that is a newer retsin.`,
 			if err != nil {
 				return err
 			}
-			res, err := from.Fetch(cmd.Context(), cfg.DataDir)
+			repo, err := release.Open(from)
 			if err != nil {
 				return err
 			}
-			_ = artifactfetch.MarkChecked(cfg.DataDir)
+			res, err := release.FetchArtifact(cmd.Context(), repo, cfg.DataDir)
+			if err != nil {
+				return err
+			}
+			_ = release.MarkChecked(cfg.DataDir)
 			if !res.Installed {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s is already current\n", res.Path)
 				return nil
@@ -104,7 +108,7 @@ that is a newer retsin.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&from.Repo, "hf-repo", artifactfetch.DefaultRepo, "Hugging Face dataset repository to download from (none is published yet)")
-	cmd.Flags().StringVar(&from.Revision, "hf-revision", artifactfetch.DefaultRevision, "branch or tag of --hf-repo to read")
+	cmd.Flags().StringVar(&from, "release", release.DefaultSource,
+		"release repository to download from: a directory, or hf://owner/name[@revision] (none is published yet)")
 	return cmd
 }

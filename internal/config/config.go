@@ -3,13 +3,11 @@
 // does is visible in the invocation that started it, and a stale file cannot
 // silently change a multi-day crawl.
 //
-// Pacing is configurable by two numbers: DocumentFloor, the interval the learner
+// Pacing is configurable by two numbers: Floor, the interval every request bucket
 // starts at and returns to, and JitterPercent, how far each request may drift past
 // that interval. The learner that approaches the floor is tuned by constants in
 // internal/limiter, because every measured run behaved the same way and extra knobs
-// would only offer more ways to misconfigure a crawl. The floor itself is a default
-// rather than a limit — the one pace the terms actually impose (one harvest call per
-// 10 s) is a constant with no flag at all.
+// would only offer more ways to misconfigure a crawl.
 package config
 
 import (
@@ -22,29 +20,17 @@ import (
 // lets the operator reach us instead of banning our address.
 const DefaultUserAgent = "retsin-mirror/0.1 (open-data mirror; contact: https://github.com/lkarlslund/retsinformation)"
 
-// Limits that are obligations or measurements, not options. They are constants
-// so they cannot be misconfigured from a shell history.
 const (
-	// HarvestLimit is the harvesting service's own documented ceiling: it may be
-	// called at most once per 10 seconds and answers HTTP 429 beyond that.
-	HarvestLimit = 10 * time.Second
-	// HarvestInterval is the pace we actually keep: the published limit plus a
-	// margin for clock skew. There is no flag for it because there is no
-	// configuration in which going faster is acceptable.
-	HarvestInterval = 12 * time.Second
-	// SitemapInterval paces the ~22 sitemap requests.
-	SitemapInterval = 2 * time.Second
 	// DefaultJitterPercent is the share of the current interval added at random on
 	// top of each paced wait. Kept equal to limiter.JitterPercentDefault, which the
 	// limiter applies when nothing overrides it; a test asserts the two agree.
 	DefaultJitterPercent = 10
-	// DefaultDocumentFloor is where the document bucket is allowed to settle by
-	// default. Document responses are served uncached straight from the origin, so
-	// this is a judgement about a considerate pace, not a limit we enforce: an
-	// operator who sets --document-floor lower has chosen that themselves, and the
-	// adaptive learner will pursue it. The service answers a real 429 if the choice
-	// was wrong, and the learner slows down on its own when that happens.
-	DefaultDocumentFloor = 200 * time.Millisecond
+	// DefaultFloor is where every request bucket starts and is allowed to settle by
+	// default. It is a judgement about a considerate pace, not a limit we enforce: an
+	// operator who sets --floor lower has chosen that themselves, and the learner will
+	// pursue it. A service answers 429 if the choice was wrong, and the learner slows
+	// that service's bucket down on its own when it does.
+	DefaultFloor = 200 * time.Millisecond
 )
 
 // Config is the fully-resolved runtime configuration.
@@ -61,15 +47,14 @@ type Config struct {
 	// UserAgent sent on every request.
 	UserAgent string
 
-	// DocumentFloor is the fastest the adaptive document bucket may settle at.
-	// It defaults to DefaultDocumentFloor, but any positive value is honoured: the
-	// pace is the operator's choice, and the service's own 429 is what says so if
-	// the choice was too ambitious.
-	DocumentFloor time.Duration
+	// Floor is the fastest any request bucket may settle at. It defaults to
+	// DefaultFloor, but any positive value is honoured: the pace is the operator's
+	// choice, and a service's own 429 is what says so if the choice was too ambitious.
+	Floor time.Duration
 
 	// JitterPercent is how much of the current interval may be added at random on
 	// top of each paced wait, so a multi-day crawl does not run on a metronome. It
-	// only ever delays a request, so DocumentFloor remains a hard minimum. Zero
+	// only ever delays a request, so Floor remains a hard minimum. Zero
 	// gives exact spacing, which is the setting to choose when testing whether a
 	// service's own limits are the thing being hit.
 	JitterPercent float64
@@ -78,14 +63,14 @@ type Config struct {
 	RequestTimeout time.Duration
 }
 
-// Default returns production-sane defaults built around the published limits.
+// Default returns production-sane defaults.
 func Default() Config {
 	return Config{
 		DataDir:        "data",
 		SiteBase:       "https://www.retsinformation.dk",
 		HarvestBase:    "https://api.retsinformation.dk",
 		UserAgent:      DefaultUserAgent,
-		DocumentFloor:  DefaultDocumentFloor,
+		Floor:          DefaultFloor,
 		JitterPercent:  DefaultJitterPercent,
 		RequestTimeout: 60 * time.Second,
 	}
@@ -109,14 +94,14 @@ func (c Config) StoreDir() string { return c.DataDir + "/state" }
 func (c Config) SweepStampPath() string { return c.DataDir + "/sweep.stamp" }
 
 // Validate refuses configurations that cannot mean anything. It deliberately does
-// not police the document floor: how fast to ask for uncached documents is the
-// operator's call, and the service itself answers 429 if the answer was wrong.
+// not police the floor: how fast to ask is the operator's call, and a service answers
+// 429 if the answer was wrong.
 func (c Config) Validate() error {
 	if c.SiteBase == "" || c.HarvestBase == "" {
 		return fmt.Errorf("site_base and harvest_base must be set")
 	}
-	if c.DocumentFloor <= 0 {
-		return fmt.Errorf("document floor must be a positive duration; zero would leave documents unpaced")
+	if c.Floor <= 0 {
+		return fmt.Errorf("the pacing floor must be a positive duration; zero would leave requests unpaced")
 	}
 	if c.RequestTimeout <= 0 {
 		return fmt.Errorf("request timeout must be positive")

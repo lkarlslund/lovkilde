@@ -6,15 +6,14 @@ import (
 	"time"
 )
 
-func specs(start, floor, max time.Duration, pinned bool) map[string]Spec {
+func specs(start, floor, max time.Duration) map[string]Spec {
 	return map[string]Spec{
-		BucketDocument: {Start: start, Floor: floor, Max: max, Pinned: pinned},
-		BucketHarvest:  {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute, Pinned: true},
+		BucketDocument: {Start: start, Floor: floor, Max: max},
+		BucketHarvest:  {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute},
 	}
 }
 
-// The published harvesting limit is one call per 10 seconds and the service
-// answers 429 beyond it, so the pacing guarantee needs a direct test.
+// A bucket never fires faster than its interval: the pacing guarantee needs a direct test.
 func TestWaitEnforcesMinimumInterval(t *testing.T) {
 	const interval = 150 * time.Millisecond
 	l := NewTuned(map[string]Spec{BucketDocument: {Start: interval, Floor: interval, Max: interval * 4}}, 1.5, 20, time.Minute)
@@ -36,7 +35,7 @@ func TestWaitEnforcesMinimumInterval(t *testing.T) {
 // 2.8 day bootstrap into hours when the service tolerates it.
 func TestAdaptiveStepsDownAfterCleanWindow(t *testing.T) {
 	const start, floor = 1200 * time.Millisecond, 200 * time.Millisecond
-	l := NewTuned(specs(start, floor, 30*time.Second, false), 1.5, 5, 0)
+	l := NewTuned(specs(start, floor, 30*time.Second), 1.5, 5, 0)
 
 	// Fewer successes than the window must not change anything.
 	for i := 0; i < 4; i++ {
@@ -60,7 +59,7 @@ func TestAdaptiveStepsDownAfterCleanWindow(t *testing.T) {
 // Repeated clean windows must converge on the floor and then stop.
 func TestAdaptiveConvergesOnFloor(t *testing.T) {
 	const floor = 200 * time.Millisecond
-	l := NewTuned(specs(3*time.Second, floor, time.Minute, false), 1.5, 2, 0)
+	l := NewTuned(specs(3*time.Second, floor, time.Minute), 1.5, 2, 0)
 	for i := 0; i < 40; i++ {
 		l.Feedback(BucketDocument, OutcomeOK)
 		l.Feedback(BucketDocument, OutcomeOK)
@@ -81,7 +80,7 @@ func TestAdaptiveConvergesOnFloor(t *testing.T) {
 
 // Throttling must produce an immediate multiplicative slowdown.
 func TestThrottleDoublesInterval(t *testing.T) {
-	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 5, 0)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second), 1.5, 5, 0)
 	l.Feedback(BucketDocument, OutcomeThrottled)
 	cur, _ := l.Current(BucketDocument)
 	if cur != 2400*time.Millisecond {
@@ -98,7 +97,7 @@ func TestThrottleDoublesInterval(t *testing.T) {
 // Growth must be capped so a bad patch cannot park a multi-day crawl.
 func TestThrottleGrowthIsCapped(t *testing.T) {
 	const max = 5 * time.Second
-	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, max, false), 1.5, 5, 0)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, max), 1.5, 5, 0)
 	for i := 0; i < 10; i++ {
 		l.Feedback(BucketDocument, OutcomeThrottled)
 	}
@@ -107,27 +106,10 @@ func TestThrottleGrowthIsCapped(t *testing.T) {
 	}
 }
 
-// A pinned bucket represents the published 10s obligation. Observations, good or
-// bad, must never move it.
-func TestPinnedBucketNeverAdapts(t *testing.T) {
-	l := NewTuned(specs(time.Second, 200*time.Millisecond, time.Hour, false), 1.5, 2, 0)
-	for i := 0; i < 50; i++ {
-		l.Feedback(BucketHarvest, OutcomeOK)
-		l.Feedback(BucketHarvest, OutcomeThrottled)
-	}
-	cur, _ := l.Current(BucketHarvest)
-	if cur != 10*time.Second {
-		t.Errorf("pinned harvest interval moved to %s; must stay at 10s", cur)
-	}
-	if l.Steps() != 0 {
-		t.Errorf("pinned bucket caused %d interval changes", l.Steps())
-	}
-}
-
 // After being throttled, the learner must hold the safe interval for a cooldown
 // period rather than immediately probing faster and provoking another 429.
 func TestCooldownSuppressesStepDownAfterThrottle(t *testing.T) {
-	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 3, time.Hour)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second), 1.5, 3, time.Hour)
 	l.Feedback(BucketDocument, OutcomeThrottled) // 1.2s -> 2.4s, marks throttledAt
 
 	for i := 0; i < 20; i++ {
@@ -143,7 +125,7 @@ func TestCooldownSuppressesStepDownAfterThrottle(t *testing.T) {
 // happens across genuinely clean windows. Without the reset, OK OK would complete
 // the window of 3 that the two pre-neutral successes had already started.
 func TestNeutralOutcomeBreaksStreak(t *testing.T) {
-	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 3, 0)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second), 1.5, 3, 0)
 	l.Feedback(BucketDocument, OutcomeOK)
 	l.Feedback(BucketDocument, OutcomeOK) // streak is 2 of 3
 	l.Feedback(BucketDocument, OutcomeNeutral)
@@ -163,7 +145,7 @@ func TestNeutralOutcomeBreaksStreak(t *testing.T) {
 func TestBucketsAreIndependent(t *testing.T) {
 	l := NewTuned(map[string]Spec{
 		BucketDocument: {Start: 10 * time.Millisecond, Floor: 10 * time.Millisecond, Max: time.Second},
-		BucketHarvest:  {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute, Pinned: true},
+		BucketHarvest:  {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute},
 	}, 1.5, 20, time.Minute)
 	ctx := context.Background()
 	if err := l.Wait(ctx, BucketHarvest); err != nil {
@@ -188,7 +170,7 @@ func TestUnknownBucketFails(t *testing.T) {
 }
 
 func TestWaitHonoursContextCancellation(t *testing.T) {
-	l := NewTuned(map[string]Spec{BucketHarvest: {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute, Pinned: true}}, 1.5, 20, time.Minute)
+	l := NewTuned(map[string]Spec{BucketHarvest: {Start: 10 * time.Second, Floor: 10 * time.Second, Max: time.Minute}}, 1.5, 20, time.Minute)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 	if err := l.Wait(ctx, BucketHarvest); err != nil { // consumes the free slot
@@ -200,18 +182,17 @@ func TestWaitHonoursContextCancellation(t *testing.T) {
 }
 
 func TestStatesSnapshot(t *testing.T) {
-	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second, false), 1.5, 20, time.Minute)
+	l := NewTuned(specs(1200*time.Millisecond, 200*time.Millisecond, 30*time.Second), 1.5, 20, time.Minute)
 	states := l.States()
 	if len(states) != 2 {
 		t.Fatalf("States() returned %d entries, want 2", len(states))
 	}
-	for _, s := range states {
-		if s.Name == BucketHarvest && !s.Pinned {
-			t.Error("harvest bucket should be pinned")
-		}
-		if s.Name == BucketDocument && s.Pinned {
-			t.Error("document bucket should be adaptive")
-		}
+	// In name order, so a status line reads the same on every run.
+	if states[0].Name != BucketDocument || states[1].Name != BucketHarvest {
+		t.Errorf("States() order = %s, %s; want document, harvest", states[0].Name, states[1].Name)
+	}
+	if states[0].Interval != 1200*time.Millisecond || states[0].Floor != 200*time.Millisecond {
+		t.Errorf("document bucket = %+v", states[0])
 	}
 }
 

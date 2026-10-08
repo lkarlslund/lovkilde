@@ -48,6 +48,12 @@ const (
 	// has neither, and read as version 3 would answer every as-of question with no amendments.
 	artifactVersion = 3
 
+	// layerVersion is an artifact written as a layer over another (ArtifactHeader.Base): the same
+	// frames, but its document table lists every document, and the ones marked base are read
+	// from the base artifact rather than from a frame of this file. A version 3 reader would
+	// take those entries for frames it does not have, so the layer has its own number.
+	layerVersion = 4
+
 	// maxFrameBytes is the boundary the container itself enforces: the seek table records each
 	// frame's compressed and uncompressed size as a uint32, so a frame of 4 GiB or more cannot be
 	// described at all. Checking it where the cast happens is the only place it can be checked —
@@ -119,6 +125,35 @@ type ArtifactHeader struct {
 	// possibly far from the machine that collected it, and a pass that ran after the build is not
 	// in the text. Nil when the build had no record of a pass.
 	Collection *Collection `json:"collection,omitempty"`
+
+	// Incremental is set when the build carried documents over from an earlier artifact rather
+	// than compiling every one: which artifact, and how many it compiled and carried.
+	Incremental *Incremental `json:"incremental,omitempty"`
+
+	// Base is the artifact this one is a layer over (version 4): the documents its table marks
+	// base are read from that file, which sits beside this one.
+	Base *BaseRef `json:"base,omitempty"`
+}
+
+// Incremental is what an incremental build continued from.
+type Incremental struct {
+	From     string `json:"from"`     // the earlier artifact's stamp
+	Compiled int    `json:"compiled"` // documents compiled from the XML
+	Carried  int    `json:"carried"`  // documents taken over from the earlier artifact unchanged
+}
+
+// BaseRef names the base of a layer: the file beside it, and the stamp its header must carry.
+type BaseRef struct {
+	File  string `json:"file"`
+	Stamp string `json:"stamp"`
+}
+
+// Provenance is what a build records about where it came from, besides the source directory.
+// Base makes the artifact a layer (layerVersion).
+type Provenance struct {
+	Pass        *Collection
+	Incremental *Incremental
+	Base        *BaseRef
 }
 
 // Collection is what a collection pass recorded about itself: when it pulled, and what it could
@@ -128,7 +163,7 @@ type Collection struct {
 	PulledAt    time.Time `json:"pulled_at"`
 	IssuesKnown bool      `json:"issues_known,omitempty"`
 	Owed        int64     `json:"owed,omitempty"`
-	Stalled     int64     `json:"stalled,omitempty"`
+	Failed      int64     `json:"failed,omitempty"` // documents the site refused, retried weekly
 	Digest      string    `json:"digest,omitempty"`
 }
 
@@ -156,12 +191,24 @@ func describeDictionary(d []byte) (DictionaryInfo, error) {
 	return DictionaryInfo{ID: binary.LittleEndian.Uint32(d[4:]), Bytes: len(d), SHA256: hex.EncodeToString(sum[:])}, nil
 }
 
+// CurrentDictionary describes the dictionary new artifacts are written with.
+func CurrentDictionary() DictionaryInfo {
+	info, err := describeDictionary(dictionary.Current)
+	if err != nil {
+		panic(err) // the embedded dictionary is part of the build
+	}
+	return info
+}
+
 // DocRef is where one document sits in the artifact.
 type DocRef struct {
 	Accession string `json:"accession"`
 	Offset    uint64 `json:"offset"` // byte offset of the document's own frame
 	Length    uint64 `json:"length"` // compressed bytes of that frame
 	Raw       uint64 `json:"raw"`    // JSON bytes it decodes to
+	// Base marks a document a layer reads from its base artifact; Offset and Length are then
+	// the base's, filled in when the layer is opened, and the layer's own table records neither.
+	Base bool `json:"base,omitempty"`
 }
 
 // Writer builds an artifact, document by document.
@@ -194,19 +241,24 @@ type Writer struct {
 
 // NewWriter writes the header frame and returns the writer.
 func NewWriter(w io.Writer, source string) (*Writer, error) {
-	return newWriter(w, source, artifactVersion, dictionary.Current, nil)
+	return newWriter(w, source, artifactVersion, dictionary.Current, Provenance{})
 }
 
-// NewWriterAfter is NewWriter for an artifact built from an archive whose last collection pass
-// is known: the header records it (ArtifactHeader.Collection).
-func NewWriterAfter(w io.Writer, source string, pass *Collection) (*Writer, error) {
-	return newWriter(w, source, artifactVersion, dictionary.Current, pass)
+// NewWriterAfter is NewWriter for a build that knows more about where it came from: the
+// collection pass the archive last completed, the artifact it continued, and the base it is a
+// layer over (see Provenance).
+func NewWriterAfter(w io.Writer, source string, p Provenance) (*Writer, error) {
+	version := artifactVersion
+	if p.Base != nil {
+		version = layerVersion
+	}
+	return newWriter(w, source, version, dictionary.Current, p)
 }
 
 // newWriter takes the version and dictionary explicitly so a test can write an artifact from
 // another build and prove the reader refuses it, or one with another dictionary and prove the
 // reader uses the file's own. Callers get NewWriter, which pins both.
-func newWriter(w io.Writer, source string, version int, dict []byte, pass *Collection) (*Writer, error) {
+func newWriter(w io.Writer, source string, version int, dict []byte, p Provenance) (*Writer, error) {
 	info, err := describeDictionary(dict)
 	if err != nil {
 		return nil, err
@@ -240,7 +292,9 @@ func newWriter(w io.Writer, source string, version int, dict []byte, pass *Colle
 			Source:      source,
 			Model:       ModelVersion,
 			Dictionary:  info,
-			Collection:  pass,
+			Collection:  p.Pass,
+			Incremental: p.Incremental,
+			Base:        p.Base,
 		},
 	}
 	if stamp, ok := CurrentBuild(); ok {
@@ -334,6 +388,20 @@ func (wr *Writer) WriteFrame(f CompiledFrame) error {
 	wr.sizes = append(wr.sizes, [2]uint32{uint32(compressed), uint32(f.Raw)})
 	wr.recordSize(f.Raw)
 	wr.refs = append(wr.refs, DocRef{Accession: f.Accession, Offset: start, Length: compressed, Raw: uint64(f.Raw)})
+	return nil
+}
+
+// WriteBaseRef records a document a layer reads from its base, in the place it takes among the
+// documents. Nothing is written to the file for it.
+func (wr *Writer) WriteBaseRef(accession string, raw uint64) error {
+	if wr.done {
+		return errors.New("artifact writer is already closed")
+	}
+	if wr.header.Base == nil {
+		return fmt.Errorf("%s: only a layer reads documents from a base artifact", accession)
+	}
+	wr.recordSize(int(raw))
+	wr.refs = append(wr.refs, DocRef{Accession: accession, Raw: raw, Base: true})
 	return nil
 }
 

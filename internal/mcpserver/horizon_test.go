@@ -244,12 +244,12 @@ func TestHorizonCarriesUnresolvedWork(t *testing.T) {
 	servedAfter(t, s, compiled.Collection{
 		PulledAt:    time.Date(2026, 9, 18, 9, 16, 52, 0, time.UTC),
 		Owed:        1,
-		Stalled:     14,
+		Failed:      14,
 		Digest:      "6f2c1a9d",
 		IssuesKnown: true,
 	})
 	line := s.horizon().Line()
-	for _, want := range []string{"15 unresolved", "issues 6f2c1a9d", "1 owed", "14 past the retry ceiling"} {
+	for _, want := range []string{"15 unresolved", "issues 6f2c1a9d", "1 owed", "14 refused by the site"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("horizon drops %q: %q", want, line)
 		}
