@@ -19,6 +19,7 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/cli"
 	"github.com/lkarlslund/retsinformation/internal/config"
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 )
 
 // version is reported by --version and identifies the tool.
@@ -55,6 +56,10 @@ func newRootCmd() *cobra.Command {
 		Version: version,
 		Long: `Serve Danish legislation from a compiled artifact: an MCP endpoint and reading pages,
 lookup by ELI path or accession, laws as of a date, and full-text search.
+
+` + disclaimer.ShortEnglish + `
+
+` + disclaimer.ConsolidatedEnglish + `
 
   retsin serve        HTTP: the reading pages and the MCP endpoint at /mcp
   retsin mcp          MCP over stdio

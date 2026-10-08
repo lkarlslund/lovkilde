@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
@@ -91,5 +92,21 @@ func TestRefusedChangesAreListedAndMarked(t *testing.T) {
 	}
 	if !strings.Contains(r.Text, "§ 5.\n\n> **Change not placed here:** see item 1") || !strings.Contains(r.Text, "§ 3 a.\n\n> **Change not placed here:** see item 2") {
 		t.Errorf("provisions are not marked:\n%s", r.Text)
+	}
+}
+
+// Every answer says it is unofficial and at the user's own risk; a consolidated one says first
+// that the mirror consolidated it and that it can be wrong.
+func TestEveryAnswerCarriesTheDisclaimer(t *testing.T) {
+	issued := (&LookupResult{Citation: "Lov"}).String()
+	consolidated := (&LookupResult{Citation: "Lov", AsOf: "2026-01-01"}).String()
+	search := (&SearchResult{Query: "ord"}).String()
+	for name, answer := range map[string]string{"issued": issued, "consolidated": consolidated, "search": search} {
+		if !strings.Contains(answer, disclaimer.ShortEnglish) {
+			t.Errorf("the %s answer carries no disclaimer:\n%s", name, answer)
+		}
+	}
+	if !strings.Contains(consolidated, disclaimer.ConsolidatedEnglish) || strings.Contains(issued, disclaimer.ConsolidatedEnglish) {
+		t.Errorf("only the consolidated answer should carry the consolidation warning")
 	}
 }

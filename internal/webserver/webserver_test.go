@@ -17,6 +17,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/lexdania"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
 	"github.com/lkarlslund/retsinformation/internal/search"
@@ -228,6 +229,9 @@ func TestEveryInternalLinkResolves(t *testing.T) {
 			if code != http.StatusOK {
 				t.Errorf("GET %s → %d", path, code)
 				continue
+			}
+			if !strings.Contains(body, disclaimer.ShortDanish) {
+				t.Errorf("GET %s carries no disclaimer", path)
 			}
 			for _, href := range hrefs(body) {
 				href = html.UnescapeString(href)
@@ -465,5 +469,22 @@ func TestUnknownPathIsNotFound(t *testing.T) {
 	}
 	if _, code := get(t, site, "/dok"); code != http.StatusBadRequest {
 		t.Errorf("a document page with no ref answered %d, want 400", code)
+	}
+}
+
+// A text the mirror consolidated itself is the one most likely to be wrong, and says so above
+// everything else on the page; the text as issued does not carry that warning.
+func TestAConsolidatedPageWarnsThatItCanBeWrong(t *testing.T) {
+	site, _ := newTestSite(t, false)
+	issued, _ := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical))
+	consolidated, code := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical)+"&as_of=2026-01-01")
+	if code != http.StatusOK {
+		t.Fatalf("as_of page: %d", code)
+	}
+	if !strings.Contains(consolidated, disclaimer.ConsolidatedDanish) {
+		t.Errorf("the consolidated page does not warn that it can be wrong")
+	}
+	if strings.Contains(issued, disclaimer.ConsolidatedDanish) {
+		t.Errorf("the page as issued carries the consolidation warning")
 	}
 }

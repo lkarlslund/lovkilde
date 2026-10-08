@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
 )
 
@@ -694,6 +695,7 @@ func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprint(w, h.srv.StatusDA())
+	fmt.Fprintf(w, "\n%s\n", disclaimer.ShortDanish)
 }
 
 // documentLink is the one way a link to a provision gets built, so every link in the interface

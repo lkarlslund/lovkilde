@@ -17,9 +17,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 )
 
 var templateFuncs = template.FuncMap{
+	// The notices every page carries, and the stronger one a consolidated text carries: the
+	// mirror is not the official register, and a text it consolidated itself can be wrong.
+	"disclaimer":             func() string { return disclaimer.ShortDanish },
+	"consolidatedDisclaimer": func() string { return disclaimer.ConsolidatedDanish },
 	// provenanceLabel says how trustworthy the text on screen is, in the words the README
 	// uses. A page that showed "xml" would be showing a filename instead of a warning.
 	"provenanceLabel":     provenanceLabel,
@@ -369,6 +375,9 @@ aside.related li { margin: .3rem 0; font-size: .92rem; }
 aside.related .unheld { color: var(--muted); }
 pre.plain { white-space: pre-wrap; word-break: break-word; font-size: .9rem; }
 footer { color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line); margin-top: 2.5rem; }
+.disclaimer { border: 2px solid var(--amber); border-radius: 8px; background: var(--band); padding: .6rem .9rem; margin: 1rem 0; font: .9rem/1.5 var(--ui); }
+.disclaimer b { color: var(--red); }
+.disclaimer.consolidated { border-color: var(--red); }
 @media (max-width: 36rem) { .filters legend { float: none; width: auto; } </style>
 </head>
 <body>
@@ -377,9 +386,11 @@ footer { color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line
 {{block "headsearch" .}}<form class="joined" method="get" action="/search" role="search"><input type="search" name="q" placeholder="Søg i lovgivningen" aria-label="Søg" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
 <nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a></nav>
 </div></header>
-<main class="wrap">{{template "content" .}}</main>
-<footer><div class="wrap">Frit og offentligt indhold. Teksten er læst fra Retsinformation;
-kilder og usikkerhed står ved hvert svar. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
+<main class="wrap"><p class="disclaimer" role="note"><b>Ansvarsfraskrivelse:</b> {{disclaimer}}</p>
+{{template "content" .}}</main>
+<footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
+retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar
+for fejl eller tab. Ikke juridisk rådgivning. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
 <script>
 // Progressive help only: every page works without this. It does four things — a long contents
 // list folds on a phone, a ticked toggle applies itself, an empty field stays out of the
@@ -486,6 +497,7 @@ const documentBody = `{{define "content"}}
 {{if .DateTool}}<form method="get" action="/dok"><input type="hidden" name="ref" value="{{.Ref}}">{{if .Addr}}<input type="hidden" name="addr" value="{{.Addr}}">{{end}}<label for="asof">Teksten pr.</label><input id="asof" type="date" name="as_of" value="{{.AsOf}}"><button type="submit" class="quiet">Vis</button>{{if .AsOf}} <a href="{{.OriginalLink}}">som udstedt</a>{{end}}</form>{{end}}
 {{if .ELI}}<a href="{{.ELI}}">Retsinformation ↗</a>{{end}}
 </div>
+{{if .AsOf}}<p class="disclaimer consolidated" role="note"><b>Advarsel:</b> {{consolidatedDisclaimer}}</p>{{end}}
 {{if .AmendmentsNote}}<p class="note">{{.AmendmentsNote}}{{if .ConsolidateLink}} <a href="{{.ConsolidateLink}}">Se teksten, som den gælder {{.ConsolidateOn}}</a>.{{end}}</p>{{end}}
 {{range .Warnings}}<p class="warn">{{.}}</p>{{end}}
 {{if .Refused}}<details class="refused" open><summary>Ændringer, der ikke er indarbejdet ({{len .Refused}})</summary>

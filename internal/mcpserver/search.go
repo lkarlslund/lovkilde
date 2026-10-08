@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/lkarlslund/retsinformation/internal/chain"
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 	"github.com/lkarlslund/retsinformation/internal/search"
 )
@@ -340,7 +341,7 @@ func (r *SearchResult) String() string {
 	if r.Next > 0 {
 		fmt.Fprintf(&b, "; more with `offset=%d`", r.Next)
 	}
-	b.WriteString("\n\n")
+	fmt.Fprintf(&b, "\n> **Disclaimer:** %s\n\n", disclaimer.ShortEnglish)
 	if len(r.Hits) == 0 {
 		b.WriteString("No matches in the indexed corpus.\n")
 	}

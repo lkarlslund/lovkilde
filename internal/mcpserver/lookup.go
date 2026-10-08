@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/chain"
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 )
 
@@ -652,6 +653,11 @@ func (r *LookupResult) String() string {
 	if r.Amendments != "" {
 		fmt.Fprintf(&b, "- **Later documents naming this one (per its own metadata):** %s\n", r.Amendments)
 	}
+	notice := disclaimer.ShortEnglish
+	if r.AsOf != "" {
+		notice = disclaimer.ConsolidatedEnglish + " " + disclaimer.ShortEnglish
+	}
+	fmt.Fprintf(&b, "> **Disclaimer:** %s\n", notice)
 	for _, w := range r.Warnings {
 		fmt.Fprintf(&b, "> **Warning:** %s\n", w)
 	}

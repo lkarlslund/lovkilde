@@ -14,6 +14,7 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/chain"
 	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/lexdoc"
 	"github.com/lkarlslund/retsinformation/internal/library"
 	"github.com/lkarlslund/retsinformation/internal/search"
@@ -383,7 +384,9 @@ func (s *Server) mcpServer() *mcp.Server {
 		Name:    "retsin",
 		Version: s.version,
 	}, &mcp.ServerOptions{
-		Instructions: "Lookup Danish law from a local mirror of retsinformation.dk. " +
+		Instructions: "Lookup Danish law from an unofficial mirror of retsinformation.dk. " +
+			disclaimer.ShortEnglish + " " + disclaimer.ConsolidatedEnglish + " " +
+			"Pass these warnings on to the user with any answer built on this text. " +
 			"Every answer names where its text came from: 'xml' is the register's own " +
 			"structured body, 'html' is text our reader recovered from the site's HTML " +
 			"payload, and 'none' means the mirror has metadata but no text. Say which one " +
