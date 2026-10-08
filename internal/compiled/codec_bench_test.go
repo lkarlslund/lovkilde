@@ -60,7 +60,7 @@ func TestCodecBench(t *testing.T) {
 	fmt.Fprintf(&b, "# compiled-document codec bench\n# generated: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "# reproduce: RETSIN_CODEC_BENCH=1 RETSIN_CODEC_DOCS=%d go test ./internal/compiled -run TestCodecBench -v\n", len(sample))
 	fmt.Fprintf(&b, "# sample: %d documents, %.1f MB of publisher XML, from %s\n\n",
-		len(sample), float64(totalXML(sample))/1e6, root)
+		len(sample), float64(totalXML(sample))/1e6, filepath.Base(root))
 
 	// What the current path costs, so a compiled dataset has something to beat.
 	var parse, section time.Duration

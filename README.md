@@ -3116,3 +3116,8 @@ governed by [Civilstyrelsens terms](https://www.retsinformation.dk/api): free an
 unrestricted, including commercial use, provided you do not imply official endorsement
 and do not burden the service disproportionately. This tool identifies itself with a
 contact address and self-throttles on those grounds.
+
+## License
+
+The code is under the [MIT License](LICENSE). The documents it mirrors are not covered by it;
+see above.

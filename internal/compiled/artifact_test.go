@@ -435,7 +435,7 @@ func TestArtifactOnCorpus(t *testing.T) {
 	fmt.Fprintf(&b, "# compiled artifact measurement\n# generated: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "# reproduce: RETSIN_ARTIFACT_BENCH=1 RETSIN_ARTIFACT_DOCS=%d go test ./internal/compiled -run TestArtifactOnCorpus -v\n", len(sample))
 	fmt.Fprintf(&b, "# sample: %d documents, %.1f MB of publisher XML, from %s\n\n",
-		len(sample), mb(float64(totalXML(sample))), root)
+		len(sample), mb(float64(totalXML(sample))), filepath.Base(root))
 
 	// What the artifact is built from, and what it costs to build. Model() is part of the build
 	// cost, not of the serving cost: the compile step pays it once per document.
