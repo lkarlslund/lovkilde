@@ -2,7 +2,7 @@
 # The weekly Hugging Face release, from a fresh checkout: a GitHub runner
 # (.github/workflows/hf-release.yml) or any machine with Go and the hf command.
 #
-#   HF_REPO=owner/name HF_TOKEN=hf_... scripts/hf-release.sh
+#   HF_REPO=owner/name HF_TOKEN=hf_... scripts/hf-release.sh   (or put both in .env)
 #
 # 1. restore the published collection state and artifact (and its base, when it is a layer)
 # 2. update: harvest the change feed and fetch what changed since the published pass
@@ -23,6 +23,10 @@
 #   bin/retsin-update publish --release hf://owner/name --with-xml
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
+# A local run reads HF_REPO and HF_TOKEN from .env (git-ignored); a runner has them as secrets.
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+
 : "${HF_REPO:?set HF_REPO to owner/name or hf://owner/name}"
 # The script publishes to Hugging Face only; a bare owner/name would otherwise name a directory.
 case "$HF_REPO" in hf://*) ;; *) HF_REPO="hf://$HF_REPO" ;; esac
@@ -30,7 +34,6 @@ case "$HF_REPO" in hf://*) ;; *) HF_REPO="hf://$HF_REPO" ;; esac
 mode="${MODE:-layer}"
 case "$mode" in layer | patch | full) ;; *) echo "MODE is layer, patch or full, not $mode" >&2; exit 2 ;; esac
 
-cd "$(dirname "$0")/.."
 data=data
 mkdir -p bin
 go build -o bin/retsin-update ./cmd/retsin-update
