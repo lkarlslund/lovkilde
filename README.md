@@ -1,5 +1,20 @@
 # retsin — Danish legislation mirror
 
+> [!CAUTION]
+> **Unofficial copy — not the official Retsinformation, and not legal advice.** The texts are
+> fetched automatically from [retsinformation.dk](https://www.retsinformation.dk) and processed
+> by machine, and they can contain errors. **Consolidated texts in particular** (a law "as of a
+> date", with its amending acts worked in) are produced automatically by this program, not by
+> Civilstyrelsen: changes may be missing, misplaced or misread, and dates of entry into force
+> may be judged wrongly. **All use is at your own risk.** Always check against the official
+> version at retsinformation.dk, and seek legal advice before acting on any text.
+>
+> This project is not affiliated with, endorsed by or connected to Civilstyrelsen or
+> retsinformation.dk. The software and the data are provided "as is", without warranty of any
+> kind, express or implied, including fitness for a particular purpose and accuracy or
+> completeness of the texts. The authors and contributors accept no liability for any loss or
+> damage of any kind arising from the use of, or reliance on, the software or the data.
+
 Mirrors [retsinformation.dk](https://www.retsinformation.dk) into a local archive of
 canonical ELI XML, and keeps itself current through Civilstyrelsens official change
 feed. Written for a full bootstrap of ~200k documents plus years of daily updates,
@@ -842,8 +857,7 @@ learner answers by doubling that service's interval on its own.
 
 A throttle answer is a request to slow down, not a refusal, and nothing records it as one. A
 throttled harvest day is asked for again (up to 10 times) once the doubled interval allows,
-so one busy moment does not end an update — a run from a fresh runner was throttled six
-times and settled at 12.8 s, the site's own documented pace, by itself. A throttled document
+so one busy moment does not end an update. A throttled document
 is left as it was rather than marked failed, so the next run asks again instead of the
 weekly retry of documents the site refused.
 
@@ -1814,6 +1828,7 @@ artifact-20261001T0310Z-c41e9b07.retsin    its base, when the artifact is a laye
 state/meta.json, state/inventory.jsonl,    the collection state a fresh machine continues from
 state/bodies.jsonl, state/changes.jsonl
 xml/lta/1995.tar.zst, …                    the XML archive, one pack per kind and year (--with-xml)
+README.md                                  the dataset card, written from the manifest
 ```
 
 - `retsin-update publish --release <repo>` publishes the current artifact and the state, with
@@ -1827,24 +1842,17 @@ xml/lta/1995.tar.zst, …                    the XML archive, one pack per kind 
   `update` and an incremental build need: `update` fetches only what changed. `--with-xml`
   also unpacks the XML archive, for a full build.
 - `retsin serve` and `retsin mcp` download the published artifact when they have none
-  (`--release`), and while they run look for a newer one every `--auto-update` (a week by
+  (`--release`), and while they run look for a newer one every `--auto-update` (a day by
   default; `0` turns it off), install it and move to it as to any new current artifact.
   `retsin artifact download` does it by hand. The last check is kept in
-  `<data-dir>/artifact.checked`, so restarting does not reset the week.
+  `<data-dir>/artifact.checked`, so restarting does not reset the schedule.
 
 The manifest's document model is checked before downloading, so a binary never fetches an
 artifact it would refuse; the size and SHA-256 after, and the artifact's own header before it
 becomes current.
 
-**A snapshot is a release in a directory.** `data/snapshots/2026-10-07` holds the mirror as
-it stood that morning (pull record 2026-10-06 11:32Z), so an incremental collection can be run
-from the same starting point as often as needed, the way a fresh runner would:
-
-```bash
-rm -rf /tmp/try
-retsin-update --data-dir /tmp/try restore --release data/snapshots/2026-10-07
-retsin-update --data-dir /tmp/try update
-```
+**A snapshot is a release in a directory**, so an incremental collection can be run from the
+same starting point as often as needed, the way a fresh runner would.
 
 **Publishing to Hugging Face** is one commit made with the Hub's own client, `hf upload`
 (`pip install huggingface_hub`), with `HF_TOKEN`: the release's files are staged under their
@@ -1853,33 +1861,32 @@ the next. Large files go to Xet storage in content-defined chunks, so a whole ar
 mostly unchanged costs its changed chunks. Downloads send `HF_TOKEN` when it is set, for a
 private repository.
 
-**The weekly release runs on a GitHub runner**: `.github/workflows/hf-release.yml` (Mondays,
-or by hand with a mode) runs `scripts/hf-release.sh` from the checkout, with the repository
+**The daily release runs on a GitHub runner**: `.github/workflows/hf-release.yml` (daily at
+03:17 UTC, or by hand with a mode) runs `scripts/hf-release.sh` from the checkout, with the repository
 secrets `HF_REPO` (`owner/name`) and `HF_TOKEN`. The script:
 
 1. `restore --with-artifact`: the state and the artifact (and its base) from the release;
 2. `update`: the change feed and the documents it names;
 3. `artifact build --mode layer`; when the published artifact cannot be continued (another
    document model or dictionary), `restore --xml-only` and a full build;
-4. `publish --with-xml`: the artifact, the state and the packs this week touched.
+4. `publish --with-xml`: the artifact, the state, the packs this pass touched, and the dataset
+   card (`README.md` in the dataset, written from `internal/release/card.md` and the manifest,
+   so the page always describes the release it came with).
 
-Tried against a local release made from this machine's data: 36 s from an empty checkout —
-restore, a harvest throttled six times, 39 documents tried (25 stored, 13 still answering
-500), a 17.5 MB layer over the 1.3 GB base, 11 packs repacked from 2.5 GB of archive on disk.
-The data directory is `data`, as here, because documents record paths under the archive root.
+The data directory is `data`, because documents record paths under the archive root.
 
-The first release is published once from a machine holding the whole archive:
-`hf repo create owner/name --repo-type dataset`, then `retsin-update publish --release
-hf://owner/name --with-xml` (1.3 GB of artifact, 1.4 GB of packs).
+Releases live at `hf://lkarlslund/retsinformation`, the server's default `--release`; a server
+checks it for a newer artifact daily.
 
-**Not done yet (placeholder):** the default repository a server downloads from, which is empty
-because nothing is published, so a server without an artifact still refuses to start, naming
-`--release` as the other remedy.
+**The server is built daily too**: `.github/workflows/server-builds.yml` runs the tests and
+`scripts/build-server.sh` (retsin for Linux, macOS and Windows on amd64 and arm64, one archive
+each and a `SHA256SUMS`), and publishes them as the rolling `nightly` GitHub release, whose
+tag moves to the commit built. A day without a new commit builds nothing.
 
 #### Incremental builds: patch, layer, and the XML packs
 
 A full build compiles every file of the 13 GB archive, which a fresh machine does not have:
-restoring gives it the state, the artifact and this week's fetched files. Three ways to make
+restoring gives it the state, the artifact and the files fetched since the last release. Three ways to make
 the next artifact from that, all through `retsin-update artifact build --mode`:
 
 | | `full` + `restore --with-xml` | `--mode patch` | `--mode layer` |
@@ -1889,18 +1896,12 @@ the next artifact from that, all through `retsin-update artifact build --mode`:
 | a server downloads | the whole artifact | the whole artifact | the layer (the base it has already) |
 | survives a new document model or dictionary | yes | no: build in full | no: build in full |
 
-Measured on the whole mirror (191,613 documents; 3 corrected and 1 new):
-
-| | time | output |
-|---|---|---|
-| full build | 55 s | 1,308 MB |
-| patch, every file on disk | 4.0 s | 1,308 MB, frame for frame and catalogue byte for byte the full build's |
-| patch, only the 4 changed files on disk | 3.7 s | the same, from 1.3 GB on disk instead of 14 GB |
-| layer | 4.2 s | 17.2 MB over the 1,308 MB base; reads exactly like the full build |
+A patch is frame for frame and catalogue byte for byte what a full build of the same files
+writes, and a layer reads exactly like it.
 
 **How a patch knows what changed.** The catalogue records what each document was compiled
 from: the hash of its XML and of its body sidecar (`XMLHash`, `BodyHash`). A patch hashes the
-files on disk — 13 GB in about two seconds from the page cache — and compiles those whose
+files on disk and compiles those whose
 hashes differ, or that are new; every other document's frame is copied from the earlier
 artifact as compressed bytes, which is what it would compress to again under the same
 dictionary. A document whose XML is not on disk is carried, so a runner holding only what
@@ -1919,18 +1920,16 @@ the archive; on a runner, after `restore --with-xml`.
 document in build order, marking the ones read from the base, and its header names the base
 file and its stamp. A reader opens both and sees one artifact; a base that is missing or has
 another stamp is refused. A layer is always over a whole artifact: the next layer goes over
-the same base and carries the documents the previous layer held, so it grows week by week.
+the same base and carries the documents the previous layer held, so it grows release by release.
 When it would replace more than `--rebase-at` of the documents (5 % by default) the build
 writes a whole artifact instead, which becomes the next base. Most of a layer is what it
-repeats whole: the catalogue (219 MB of JSON for the mirror) and the document table. Pruning keeps the
+repeats whole: the catalogue and the document table. Pruning keeps the
 base of every artifact it keeps; `publish` sends a layer's base only when the release does not
 hold it already, and a server downloads it only when it does not have it.
 
-**The XML packs** are one `tar.zst` per kind and year: 659 packs, 1.4 GB for the 13 GB
-archive. Each carries a digest of its files' paths and SHA-256s, so `publish --with-xml` packs
-and sends only the shards whose files changed (27 s to pack everything, 1.4 s when nothing
-changed), and `restore --with-xml` skips the shards already on disk as published (30 s to
-unpack everything, file for file the archive it was packed from). The entries carry no owner
+**The XML packs** are one `tar.zst` per kind and year. Each carries a digest of its files'
+paths and SHA-256s, so `publish --with-xml` packs and sends only the shards whose files
+changed, and `restore --with-xml` skips the shards already on disk as published. The entries carry no owner
 or time, so a pack depends only on its files.
 
 The search index is cut from the artifact too, by the server, when it is missing or was cut from

@@ -61,7 +61,7 @@ Modes (--mode):
   patch   continue an earlier artifact (--from, default the current one): compile only the
           documents whose XML or body sidecar on disk differs from what it was compiled
           from, and copy every other document's frame from it byte for byte. Documents
-          whose XML is not on disk are carried, so a machine holding only this week's
+          whose XML is not on disk are carried, so a machine holding only the latest pass's
           files builds the whole artifact; on a machine holding every file the result is
           what a full build makes. Refused when the earlier artifact holds another
           document model or dictionary: build in full then.

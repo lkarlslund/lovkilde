@@ -107,6 +107,16 @@ func TestANewReleaseReplacesTheArtifact(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo.Dir, m.File)); err != nil {
 		t.Errorf("a state-only release removed the artifact: %v", err)
 	}
+	// The card describes the release it was published with, the state-only one included.
+	card, err := os.ReadFile(filepath.Join(repo.Dir, CardFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"| Documents in the artifact | 1 |", "`" + m.File + "`", kept.Published.Format("2006-01-02 15:04 UTC")} {
+		if !strings.Contains(string(card), want) {
+			t.Errorf("the card does not say %q:\n%s", want, card)
+		}
+	}
 }
 
 // What the manifest promises is checked before anything becomes current: the size and hash of

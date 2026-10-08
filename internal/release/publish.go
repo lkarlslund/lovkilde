@@ -32,14 +32,15 @@ type Release struct {
 	XMLDir string
 }
 
-// Publish commits a release: the state files, the artifact, and the manifest naming them last.
+// Publish commits a release: the state files, the artifact, the dataset card describing them,
+// and the manifest naming them last.
 // An artifact the repository held before and this release replaces is deleted with it.
 func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 	prev, err := Latest(ctx, r)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Manifest{}, err
 	}
-	m := Manifest{File: prev.File, Size: prev.Size, SHA256: prev.SHA256, Model: prev.Model, Base: prev.Base, XML: prev.XML, Published: time.Now().UTC()}
+	m := Manifest{File: prev.File, Size: prev.Size, SHA256: prev.SHA256, Model: prev.Model, Documents: prev.Documents, Base: prev.Base, XML: prev.XML, Published: time.Now().UTC()}
 	var c Commit
 	if rel.XMLDir != "" {
 		tmp, err := os.MkdirTemp("", "retsin-packs-*")
@@ -74,6 +75,7 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 			return Manifest{}, err
 		}
 		m.Model = a.Header.Model
+		m.Documents = len(a.Documents())
 		base := a.Header.Base
 		a.Close()
 		ref, err := describe(rel.Artifact, filepath.Base(rel.Artifact))
@@ -108,6 +110,13 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 			}
 		}
 	}
+	// The card describes the release, so it is rewritten with it.
+	card, err := writeCard(m, r.String())
+	if err != nil {
+		return Manifest{}, err
+	}
+	defer os.Remove(card)
+	c.Add = append(c.Add, Upload{Path: CardFile, From: card})
 	// The manifest goes last: a reader that reads it first never finds it naming a file that
 	// is not there yet.
 	raw, err := json.MarshalIndent(m, "", " ")

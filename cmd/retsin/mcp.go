@@ -37,7 +37,7 @@ type serveOptions struct {
 // addFetchFlags registers the download settings serve and mcp share.
 func addFetchFlags(cmd *cobra.Command, o *serveOptions) {
 	cmd.Flags().StringVar(&o.Release, "release", release.DefaultSource,
-		"release repository the artifact is downloaded from when there is none, and updated from: a directory, or hf://owner/name[@revision] (none is published yet)")
+		"release repository the artifact is downloaded from when there is none, and updated from: a directory, or hf://owner/name[@revision]")
 	cmd.Flags().DurationVar(&o.AutoUpdate, "auto-update", release.DefaultEvery,
 		"check --release for a newer artifact this often, and install it; 0 turns it off")
 }

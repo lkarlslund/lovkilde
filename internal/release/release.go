@@ -5,9 +5,8 @@
 // A release repository is anything that can open a published file and commit a set of files
 // at once (Repo). Two exist: a local directory, which works completely and is how publishing is
 // tried out and how a snapshot is kept to start from again; and a Hugging Face dataset
-// repository, which downloads but cannot upload yet (PLACEHOLDER: nothing is published there,
-// and committing needs a write token). Both are named by one string (Open): a directory path,
-// or hf://owner/name[@revision].
+// repository, which uploads through the hf command. Both are named by one string (Open): a
+// directory path, or hf://owner/name[@revision].
 //
 // A release is a manifest beside the files it names:
 //
@@ -16,6 +15,7 @@
 //	artifact-20261001T0310Z-c41e9b07.retsin       its base, when the artifact is a layer
 //	state/meta.json, state/inventory.jsonl, …     the collection state (internal/store)
 //	xml/lta/1995.tar.zst, …                       the XML archive, one pack per shard (optional)
+//	README.md                                     the dataset card, written from the manifest
 //
 // The XML archive is published only when asked for: the state and the artifact are all a
 // collection pass needs to continue, and the archive is what a machine needs to build an
@@ -39,9 +39,9 @@ import (
 )
 
 const (
-	// DefaultSource is where a server downloads artifacts from. PLACEHOLDER: empty until the
-	// first artifact is published; set it then (hf://owner/name).
-	DefaultSource = ""
+	// DefaultSource is where a server downloads artifacts from: the dataset the daily release
+	// (.github/workflows/hf-release.yml) publishes to.
+	DefaultSource = "hf://lkarlslund/retsinformation"
 	// ManifestFile names the release manifest at the repository root.
 	ManifestFile = "latest.json"
 	// StateDir is where the collection state is published, inside the repository.
@@ -49,7 +49,7 @@ const (
 )
 
 // ErrNoRepo is returned when no release repository is named.
-var ErrNoRepo = errors.New("no release repository is configured (none is published yet; name a directory or hf://owner/name with --release)")
+var ErrNoRepo = errors.New("no release repository is configured (name a directory or hf://owner/name with --release)")
 
 // Repo is a release repository.
 type Repo interface {
@@ -82,6 +82,8 @@ type Manifest struct {
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
 	Model  int    `json:"model"`
+	// Documents is how many documents the artifact holds, for the dataset card.
+	Documents int `json:"documents,omitempty"`
 	// Base is the whole artifact File is a layer over (compiled.ArtifactHeader.Base); nil when
 	// File is whole.
 	Base      *FileRef  `json:"base,omitempty"`

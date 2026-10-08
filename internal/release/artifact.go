@@ -16,10 +16,11 @@ import (
 )
 
 const (
-	// DefaultEvery is how often a server checks for a newer artifact.
-	DefaultEvery = 7 * 24 * time.Hour
+	// DefaultEvery is how often a server checks for a newer artifact: a release is published
+	// daily, and a check that finds the current one downloads only the manifest.
+	DefaultEvery = 24 * time.Hour
 	// CheckedFile, in the data directory, records when the last check finished, so the schedule
-	// survives restarts: a server restarted every few days would otherwise never reach a week.
+	// survives restarts: a server restarted more often than it checks would otherwise never check.
 	CheckedFile = "artifact.checked"
 )
 

@@ -1,0 +1,67 @@
+# The daily server build: retsin for Linux, macOS and Windows on amd64 and arm64, published as
+# the rolling "nightly" GitHub release (its tag moves to the commit built). A day with no new
+# commit builds nothing.
+name: Server builds
+
+on:
+  schedule:
+    - cron: "41 2 * * *" # daily 02:41 UTC, before the dataset release
+  workflow_dispatch:
+
+concurrency:
+  group: server-builds
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          fetch-depth: 0
+      - name: Anything new since the last nightly?
+        id: new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          built="$(git rev-parse -q --verify 'refs/tags/nightly^{commit}' || true)"
+          if [ "$built" = "$GITHUB_SHA" ] && [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            echo "nightly is $built already"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-go@v5
+        if: steps.new.outputs.build == 'true'
+        with:
+          go-version-file: go.mod
+      - name: Test
+        if: steps.new.outputs.build == 'true'
+        run: go test ./...
+      - name: Build
+        if: steps.new.outputs.build == 'true'
+        run: scripts/build-server.sh dist
+      - name: Publish the nightly release
+        if: steps.new.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f nightly "$GITHUB_SHA"
+          git push -f origin refs/tags/nightly
+          notes="retsin built from ${GITHUB_SHA::12} on $(date -u +%Y-%m-%d). It downloads its data from the Hugging Face dataset by itself.
+
+          > [!CAUTION]
+          > **Unofficial, and not legal advice.** retsin serves an unofficial copy of retsinformation.dk, processed by machine, and the texts can contain errors. Consolidated texts (a law as of a date, with its amending acts worked in) are produced automatically by this program, not by Civilstyrelsen, and changes may be missing, misplaced or misread. All use is at your own risk. Always check against the official version at retsinformation.dk.
+          >
+          > Not affiliated with Civilstyrelsen or retsinformation.dk. Provided \"as is\", without warranty of any kind; the authors accept no liability for any loss or damage arising from its use."
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --prerelease --title "Nightly build" --notes "$notes"
+          else
+            gh release create nightly --prerelease --title "Nightly build" --notes "$notes" --verify-tag
+          fi
+          gh release upload nightly dist/* --clobber

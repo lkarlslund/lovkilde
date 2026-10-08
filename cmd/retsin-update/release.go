@@ -27,7 +27,7 @@ func publishCmd(resolve configFunc) *cobra.Command {
 artifact, the collection state (state/meta.json, inventory, bodies and feed changes; the
 journal stays local), and a manifest naming every file with its size and SHA-256, committed
 last. When the artifact is a layer (artifact build --mode layer), its base is published with
-it unless the release holds it already, so a weekly layer release is megabytes.
+it unless the release holds it already, so a daily layer release is megabytes.
 
 --with-xml also publishes the XML archive, one pack per kind and year (xml/lta/1995.tar.zst):
 what a machine needs to build an artifact in full without crawling. Only the packs whose
@@ -41,7 +41,7 @@ start from again (see "restore"); the artifact is hard-linked into it where it c
 snapshot costs the state's size, not the artifact's. Publishing to Hugging Face is one commit
 made with the hf command (pip install huggingface_hub), which needs HF_TOKEN with write access.
 
-With --with-xml on a machine holding only part of the archive (a runner holds what this week's
+With --with-xml on a machine holding only part of the archive (a runner holds what the latest
 pass fetched), a changed shard is completed from its published pack before it is packed again,
 and a shard not on disk stays published as it is.
 

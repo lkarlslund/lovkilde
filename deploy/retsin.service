@@ -24,9 +24,8 @@
 # put a reverse proxy in front before the port leaves the LAN.
 #
 # With no artifact the server downloads the published one from a release repository
-# (--release: a directory, or hf://owner/name), and checks for a newer one weekly
-# (--auto-update). Nothing is published yet, so the default is empty and this does nothing
-# until it is set.
+# (--release: a directory, or hf://owner/name; by default the published dataset), and checks
+# for a newer one daily (--auto-update).
 #
 # RestartSec is deliberately slow. Without a readable artifact the unit fails at startup;
 # a 30 second gap means the journal keeps one readable reason per attempt instead of a

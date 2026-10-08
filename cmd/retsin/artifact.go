@@ -109,6 +109,6 @@ that is a newer retsin.`,
 		},
 	}
 	cmd.Flags().StringVar(&from, "release", release.DefaultSource,
-		"release repository to download from: a directory, or hf://owner/name[@revision] (none is published yet)")
+		"release repository to download from: a directory, or hf://owner/name[@revision]")
 	return cmd
 }

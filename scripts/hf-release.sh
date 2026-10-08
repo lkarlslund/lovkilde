@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The weekly Hugging Face release, from a fresh checkout: a GitHub runner
+# The daily Hugging Face release, from a fresh checkout: a GitHub runner
 # (.github/workflows/hf-release.yml) or any machine with Go and the hf command.
 #
 #   HF_REPO=owner/name HF_TOKEN=hf_... scripts/hf-release.sh   (or put both in .env)
@@ -9,7 +9,8 @@
 # 3. build the next artifact as a layer over the published one; when the published artifact
 #    cannot be continued (another document model or dictionary), unpack the published XML
 #    archive and build in full
-# 4. publish the artifact, the state and the XML packs this week touched, in one commit
+# 4. publish the artifact, the state, the XML packs this pass touched and the dataset card, in
+#    one commit
 #
 # MODE=patch writes a whole artifact instead of a layer; MODE=full always builds in full.
 #
