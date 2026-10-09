@@ -121,8 +121,16 @@ func downloadMissing(ctx context.Context, dataDir, spec string) (string, error) 
 		return "", fmt.Errorf("no compiled artifact in %s, and downloading it from %s failed: %w", artifactdir.Dir(dataDir), repo, err)
 	}
 	_ = release.MarkChecked(dataDir)
-	slog.Info("downloaded the published artifact", "path", res.Path, "bytes", res.Manifest.Size)
+	logTransfer(res.Transfer)
+	slog.Info("downloaded the published artifact", "path", res.Path, "downloaded", res.Downloaded, "reused", res.Reused)
 	return res.Path, nil
+}
+
+// logTransfer warns when Xet storage could not be used and an artifact was downloaded whole.
+func logTransfer(t release.Transfer) {
+	if t.XetErr != nil {
+		slog.Warn("downloaded the artifact whole: Xet storage failed", "err", t.XetErr)
+	}
 }
 
 // autoCheckInterval is how often autoUpdate asks whether a check is due. The schedule itself is
@@ -146,7 +154,8 @@ func autoUpdate(ctx context.Context, dataDir string, from release.Repo, every ti
 			case err != nil:
 				slog.Warn("checking for a newer published artifact failed", "release", from.String(), "err", err)
 			case res.Installed:
-				slog.Info("installed a newer published artifact", "path", res.Path)
+				logTransfer(res.Transfer)
+				slog.Info("installed a newer published artifact", "path", res.Path, "downloaded", res.Downloaded, "reused", res.Reused)
 			default:
 				slog.Info("the published artifact is the current one", "file", res.Manifest.File)
 			}

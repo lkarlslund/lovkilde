@@ -167,7 +167,7 @@ func RestoreState(ctx context.Context, r Repo, dir string) (Manifest, error) {
 	for _, f := range m.State {
 		dst := filepath.Join(dir, path.Base(f.Path))
 		tmp := dst + ".restoring"
-		if err := download(ctx, r, f, tmp); err != nil {
+		if _, err := download(ctx, r, f, tmp); err != nil {
 			return m, err
 		}
 		all = append(all, got{tmp, dst})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/artifactdir"
 	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/retsinformation/internal/xet"
 )
 
 const (
@@ -29,6 +31,23 @@ type Installed struct {
 	Manifest  Manifest
 	Path      string // the installed artifact, or the current one when nothing was downloaded
 	Installed bool   // false when the current artifact is already the published one
+	Transfer
+}
+
+// Transfer says how the downloaded files came to be on disk.
+type Transfer struct {
+	Downloaded int64 // bytes received over the network
+	Reused     int64 // bytes copied from the artifacts already on disk, which Xet storage shares
+	// XetErr is why a file in Xet storage was downloaded whole instead; nil when none was.
+	XetErr error
+}
+
+func (t *Transfer) add(u Transfer) {
+	t.Downloaded += u.Downloaded
+	t.Reused += u.Reused
+	if u.XetErr != nil {
+		t.XetErr = u.XetErr
+	}
 }
 
 // FetchArtifact installs the published artifact into dataDir and makes it current, unless the
@@ -61,7 +80,9 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 			return out, fmt.Errorf("the release in %s names %q as the base, which is not an artifact file name", r, b.Path)
 		}
 		part := filepath.Join(artifactdir.Dir(dataDir), b.Path+artifactdir.PartExt)
-		if err := download(ctx, r, *b, part); err != nil {
+		t, err := downloadArtifact(ctx, r, *b, part)
+		out.add(t)
+		if err != nil {
 			return out, err
 		}
 		placed, err := artifactdir.Place(dataDir, part)
@@ -82,7 +103,9 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 		return out, nil
 	}
 	part := filepath.Join(artifactdir.Dir(dataDir), m.File+artifactdir.PartExt)
-	if err := download(ctx, r, FileRef{Path: m.File, Size: m.Size, SHA256: m.SHA256}, part); err != nil {
+	t, err := downloadArtifact(ctx, r, FileRef{Path: m.File, Size: m.Size, SHA256: m.SHA256}, part)
+	out.add(t)
+	if err != nil {
 		return out, err
 	}
 	if err := checkModel(part); err != nil {
@@ -103,37 +126,95 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 	return out, nil
 }
 
-// download copies a published file to dst, checking its size and hash; dst is removed when
-// they do not match.
-func download(ctx context.Context, r Repo, f FileRef, dst string) error {
-	if len(f.SHA256) != 64 || f.Size < 0 {
-		return fmt.Errorf("the release in %s gives no size or SHA-256 for %s", r, f.Path)
+// downloadArtifact is download for an artifact file. One in Xet storage is assembled from the
+// chunks it shares with the artifacts beside dst and the others, fetched; when that fails, it is
+// downloaded whole.
+func downloadArtifact(ctx context.Context, r Repo, f FileRef, dst string) (Transfer, error) {
+	var t Transfer
+	if err := f.described(r); err != nil {
+		return t, err
+	}
+	if hf, ok := r.(*HuggingFace); ok {
+		hash, st, err := hf.downloadXet(ctx, f.Path, dst)
+		t.Downloaded, t.Reused = st.Fetched, st.Reused
+		if err == nil {
+			if err = verify(dst, f); err == nil {
+				// Recorded for the next download, which reads what the two share from this one.
+				_ = os.WriteFile(filepath.Join(filepath.Dir(dst), f.Path+artifactdir.XetExt), []byte(hash+"\n"), 0o644)
+				return t, nil
+			}
+			os.Remove(dst)
+		}
+		if !errors.Is(err, xet.ErrNotXet) {
+			t.XetErr = err
+		}
+		t.Reused = 0
+	}
+	n, err := download(ctx, r, f, dst)
+	t.Downloaded += n
+	return t, err
+}
+
+// download copies a published file to dst, checking its size and hash, and returns how many
+// bytes it received; dst is removed when they do not match.
+func download(ctx context.Context, r Repo, f FileRef, dst string) (int64, error) {
+	if err := f.described(r); err != nil {
+		return 0, err
 	}
 	rc, err := r.Open(ctx, f.Path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer rc.Close()
 	out, err := os.Create(dst)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	h := sha256.New()
 	n, err := io.Copy(io.MultiWriter(out, h), io.LimitReader(rc, f.Size+1))
 	if cerr := out.Close(); err == nil {
 		err = cerr
 	}
-	switch {
-	case err != nil:
-	case n != f.Size:
-		err = fmt.Errorf("downloaded %d bytes of %s, the manifest says %d", n, f.Path, f.Size)
-	case hex.EncodeToString(h.Sum(nil)) != strings.ToLower(f.SHA256):
-		err = fmt.Errorf("%s does not match the SHA-256 in the manifest", f.Path)
+	if err == nil {
+		err = f.check(n, h.Sum(nil))
 	}
 	if err != nil {
 		os.Remove(dst)
 	}
-	return err
+	return n, err
+}
+
+// verify checks a file on disk against what the manifest says it is.
+func verify(path string, f FileRef) error {
+	in, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, in)
+	if err != nil {
+		return err
+	}
+	return f.check(n, h.Sum(nil))
+}
+
+// described says whether the manifest gives what f must be.
+func (f FileRef) described(r Repo) error {
+	if len(f.SHA256) != 64 || f.Size < 0 {
+		return fmt.Errorf("the release in %s gives no size or SHA-256 for %s", r, f.Path)
+	}
+	return nil
+}
+
+func (f FileRef) check(size int64, sum []byte) error {
+	switch {
+	case size != f.Size:
+		return fmt.Errorf("downloaded %d bytes of %s, the manifest says %d", size, f.Path, f.Size)
+	case hex.EncodeToString(sum) != strings.ToLower(f.SHA256):
+		return fmt.Errorf("%s does not match the SHA-256 in the manifest", f.Path)
+	}
+	return nil
 }
 
 func checkModel(path string) error {

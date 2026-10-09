@@ -3,6 +3,8 @@ package release
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -225,6 +227,37 @@ func TestHuggingFaceDownloads(t *testing.T) {
 	}
 	if _, err := hf.Open(context.Background(), "state/meta.json"); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("a missing file: %v", err)
+	}
+}
+
+// An artifact Xet storage cannot deliver is downloaded whole, and the reason is reported.
+func TestAnArtifactXetCannotDeliverIsDownloadedWhole(t *testing.T) {
+	art := buildArtifact(t, t.TempDir(), "Lov")
+	body, _ := os.ReadFile(art)
+	sum := sha256.Sum256(body)
+	m, _ := json.Marshal(Manifest{File: filepath.Base(art), Size: int64(len(body)), SHA256: hex.EncodeToString(sum[:]), Model: compiled.ModelVersion})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/datasets/o/n/resolve/main/")
+		switch {
+		case r.Method == http.MethodHead && name == filepath.Base(art):
+			w.Header().Set("X-Xet-Hash", strings.Repeat("ab", 32))
+			w.WriteHeader(http.StatusFound)
+		case name == ManifestFile:
+			w.Write(m)
+		case name == filepath.Base(art):
+			w.Write(body)
+		default: // the Xet token among them
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		}
+	}))
+	defer srv.Close()
+	data := t.TempDir()
+	res, err := FetchArtifact(context.Background(), &HuggingFace{Repo: "o/n", BaseURL: srv.URL}, data)
+	if err != nil || !res.Installed || res.Downloaded != int64(len(body)) || res.XetErr == nil {
+		t.Fatalf("fetch: %+v, %v", res, err)
+	}
+	if fileExists(filepath.Join(artifactdir.Dir(data), filepath.Base(art)+artifactdir.XetExt)) {
+		t.Error("a Xet hash was recorded for an artifact Xet did not deliver")
 	}
 }
 

@@ -12,12 +12,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/lkarlslund/retsinformation/internal/artifactdir"
+	"github.com/lkarlslund/retsinformation/internal/xet"
 )
 
 // HuggingFace is a release repository in a Hugging Face dataset repository.
 //
 // Downloads go through the resolve endpoint, with HF_TOKEN when it is set (a private repository
-// needs it). Commits go through the Hub's own client, the hf command (pip install
+// needs it); an artifact goes through Xet storage, which reads the chunks it shares with the
+// artifacts already on disk from them. Commits go through the Hub's own client, the hf command (pip install
 // huggingface_hub): it speaks the upload protocol — large files go to Xet storage in
 // content-defined chunks, so a file that is mostly unchanged costs only its changed chunks —
 // and it reads HF_TOKEN itself.
@@ -78,6 +82,47 @@ func (h *HuggingFace) Open(ctx context.Context, name string) (io.ReadCloser, err
 		resp.Body.Close()
 		return nil, fmt.Errorf("%s: %s", h.url(name), resp.Status)
 	}
+}
+
+func (h *HuggingFace) xetHub() *xet.Hub {
+	return &xet.Hub{Repo: h.Repo, Revision: h.Revision, BaseURL: h.BaseURL, Token: os.Getenv("HF_TOKEN"), Client: h.Client}
+}
+
+// downloadXet writes the published file name to dst through Xet storage, reading what it shares
+// with the artifacts beside dst from them, and returns its Xet hash.
+func (h *HuggingFace) downloadXet(ctx context.Context, name, dst string) (string, xet.Stats, error) {
+	hub := h.xetHub()
+	hash, err := hub.FileHash(ctx, name)
+	if err != nil {
+		return "", xet.Stats{}, err
+	}
+	st, err := hub.Download(ctx, hash, dst, artifactsInXet(ctx, hub, filepath.Dir(dst)))
+	return hash, st, err
+}
+
+// artifactsInXet is the artifacts in dir with their Xet hashes: recorded beside each when it was
+// downloaded, or, for one downloaded or built before, asked of the repository while it still
+// publishes it — and then recorded.
+func artifactsInXet(ctx context.Context, hub *xet.Hub, dir string) []xet.Have {
+	entries, _ := os.ReadDir(dir)
+	var have []xet.Have
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasPrefix(name, "artifact-") || !strings.HasSuffix(name, artifactdir.Ext) {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		recorded, err := os.ReadFile(path + artifactdir.XetExt)
+		hash := strings.TrimSpace(string(recorded))
+		if err != nil {
+			if hash, err = hub.FileHash(ctx, name); err != nil {
+				continue
+			}
+			_ = os.WriteFile(path+artifactdir.XetExt, []byte(hash+"\n"), 0o644)
+		}
+		have = append(have, xet.Have{Path: path, Hash: hash})
+	}
+	return have
 }
 
 // Commit publishes the files in one commit of the repository, deleting c.Delete in the same

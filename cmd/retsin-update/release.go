@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -151,7 +152,10 @@ before a full build.`,
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "installed %s\n", res.Path)
+				if res.XetErr != nil {
+					slog.Warn("downloaded the artifact whole: Xet storage failed", "err", res.XetErr)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "installed %s: downloaded %d bytes, reused %d from the artifacts on disk\n", res.Path, res.Downloaded, res.Reused)
 			}
 			return nil
 		},

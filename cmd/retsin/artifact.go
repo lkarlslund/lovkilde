@@ -104,7 +104,8 @@ that is a newer retsin.`,
 			if removed, err := artifactdir.Prune(cfg.DataDir); err == nil && len(removed) > 0 {
 				slog.Info("pruned artifacts no longer kept", "removed", removed)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "installed %s\n", res.Path)
+			logTransfer(res.Transfer)
+			fmt.Fprintf(cmd.OutOrStdout(), "installed %s: downloaded %d bytes, reused %d from the artifacts on disk\n", res.Path, res.Downloaded, res.Reused)
 			return nil
 		},
 	}

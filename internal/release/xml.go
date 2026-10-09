@@ -254,7 +254,7 @@ func fetchPack(ctx context.Context, r Repo, p Pack, root string) error {
 		return err
 	}
 	tmp := filepath.Join(root, strings.ReplaceAll(p.Shard, "/", "_")+".tar.zst.restoring")
-	if err := download(ctx, r, p.FileRef, tmp); err != nil {
+	if _, err := download(ctx, r, p.FileRef, tmp); err != nil {
 		return err
 	}
 	err := unpack(tmp, root, p.Shard)

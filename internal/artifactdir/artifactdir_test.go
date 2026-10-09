@@ -53,8 +53,11 @@ func TestArtifactsAreNamedInstalledAndPruned(t *testing.T) {
 		if cur, err := Current(data); err != nil || cur != path {
 			t.Fatalf("current is %q (%v) after installing %s", cur, err, path)
 		}
-		// An index beside each, as a server would keep it.
+		// An index and a Xet hash beside each, as a server would keep them.
 		if err := os.WriteFile(IndexPath(path, h.Stamp), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path+XetExt, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		names = append(names, filepath.Base(path))
@@ -105,6 +108,14 @@ func TestArtifactsAreNamedInstalledAndPruned(t *testing.T) {
 	}
 	if indexes != 2 {
 		t.Errorf("%d indexes kept, want the two kept artifacts' own: %v", indexes, have)
+	}
+	for n := range have {
+		if strings.HasSuffix(n, XetExt) && !have[strings.TrimSuffix(n, XetExt)] {
+			t.Errorf("the Xet hash %s outlived its artifact", n)
+		}
+	}
+	if !have[filepath.Base(current)+XetExt] {
+		t.Errorf("the current artifact's Xet hash was pruned: %v", have)
 	}
 }
 

@@ -1861,6 +1861,13 @@ the next. Large files go to Xet storage in content-defined chunks, so a whole ar
 mostly unchanged costs its changed chunks. Downloads send `HF_TOKEN` when it is set, for a
 private repository.
 
+**An artifact is downloaded through Xet storage** too (`internal/xet`, after the
+[protocol](https://huggingface.co/docs/xet)): the server cuts the artifacts it already has into
+the chunks Xet stores them under, copies every chunk the new artifact shares with them from disk,
+and fetches only the others. Each artifact's Xet hash is kept beside it
+(`artifact-….retsin.xet`), so the next download knows what it holds. When Xet storage fails, the
+artifact is downloaded whole, and the server says why.
+
 **The daily release runs on a GitHub runner**: `.github/workflows/hf-release.yml` (daily at
 03:17 UTC, or by hand with a mode) runs `scripts/hf-release.sh` from the checkout, with the repository
 secrets `HF_REPO` (`owner/name`) and `HF_TOKEN`. The script:

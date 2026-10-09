@@ -7,6 +7,7 @@
 //	data/artifacts/artifact-20261006T1520Z-8f3a2c1d.retsin   the artifact
 //	data/artifacts/search-8f3a2c1d.idx                       the index cut from it
 //	data/artifacts/artifact-20261007T0310Z-c41e9b07.retsin.part   one being written or downloaded
+//	data/artifacts/artifact-20261006T1520Z-8f3a2c1d.retsin.xet    its Xet hash, when downloaded
 //	data/artifact.current                                    the current artifact's file name
 //
 // Two artifacts are kept: the current one and the one before it, with the base of either when it is
@@ -44,6 +45,9 @@ const (
 	// Ext is an artifact's extension; PartExt is appended while it is being written.
 	Ext     = ".retsin"
 	PartExt = ".part"
+	// XetExt is appended for the file holding an artifact's Xet hash: what Hugging Face stores
+	// it under, so that a later download reads the chunks the two share from it.
+	XetExt = ".xet"
 
 	// legacyArtifact and legacyIndex are where artifacts and indexes lived before this layout.
 	legacyArtifact = "artifact.bin"
@@ -175,8 +179,8 @@ func migrate(dataDir string) (string, error) {
 }
 
 // Prune removes what is no longer kept: every artifact but the current one and the newest other
-// (and the base of either when it is a layer), the indexes whose artifact is gone, and .part files old enough to be abandoned. It returns what
-// it removed.
+// (and the base of either when it is a layer), the indexes and Xet hashes whose artifact is gone,
+// and .part files old enough to be abandoned. It returns what it removed.
 func Prune(dataDir string) ([]string, error) {
 	current, err := Current(dataDir)
 	if err != nil {
@@ -230,6 +234,10 @@ func Prune(dataDir string) ([]string, error) {
 			}
 		case strings.HasPrefix(n, "artifact-") && strings.HasSuffix(n, Ext):
 			if !keep[n] {
+				remove(n)
+			}
+		case strings.HasPrefix(n, "artifact-") && strings.HasSuffix(n, Ext+XetExt):
+			if !keep[strings.TrimSuffix(n, XetExt)] {
 				remove(n)
 			}
 		case strings.HasPrefix(n, "search-") && strings.HasSuffix(n, ".idx"):
