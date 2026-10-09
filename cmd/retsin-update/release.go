@@ -27,8 +27,8 @@ func publishCmd(resolve configFunc) *cobra.Command {
 		Long: `Publish what a server downloads and what the next collection continues from: the current
 artifact, the collection state (state/meta.json, inventory, bodies and feed changes; the
 journal stays local), and a manifest naming every file with its size and SHA-256, committed
-last. When the artifact is a layer (artifact build --mode layer), its base is published with
-it unless the release holds it already, so a daily layer release is megabytes.
+last. The artifact is always whole: Xet storage keeps only the chunks a new one does not share
+with the last, and a server downloads only those.
 
 --with-xml also publishes the XML archive, one pack per kind and year (xml/lta/1995.tar.zst):
 what a machine needs to build an artifact in full without crawling. Only the packs whose
@@ -79,7 +79,7 @@ run beside a collection pass.`,
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "published to %s: artifact %s%s, %d state files, %d XML packs\n", repo, orNone(m.File), overBase(m), len(m.State), len(m.XML))
+			fmt.Fprintf(cmd.OutOrStdout(), "published to %s: artifact %s, %d state files, %d XML packs\n", repo, orNone(m.File), len(m.State), len(m.XML))
 			return nil
 		},
 	}
@@ -104,9 +104,8 @@ checked against the manifest, and none is put in place until all of them arrived
   retsin-update --data-dir /tmp/try update
 
 The data directory must not hold state already. --with-artifact also installs the published
-artifact (and its base, when it is a layer): what "artifact build --mode patch" or "--mode
-layer" continues from, so the XML archive is not needed and an incremental pass fetches only
-what changed. --with-xml also unpacks the published XML archive, for a full build; a file
+artifact: what "artifact build --mode patch" continues from, so the XML archive is not needed
+and an incremental pass fetches only what changed. --with-xml also unpacks the published XML archive, for a full build; a file
 already on disk is kept (it was fetched since), and a shard already on disk as published is
 not downloaded, so an interrupted restore continues. --xml-only unpacks the archive and
 nothing else, beside state that is already there: what a machine that ran "update" needs
@@ -168,14 +167,6 @@ before a full build.`,
 	cmd.MarkFlagsMutuallyExclusive("xml-only", "with-artifact")
 	_ = cmd.MarkFlagRequired("release")
 	return cmd
-}
-
-// overBase names a layer's base for a report line, "" for a whole artifact.
-func overBase(m release.Manifest) string {
-	if m.Base == nil {
-		return ""
-	}
-	return " (a layer over " + m.Base.Path + ")"
 }
 
 func orNone(s string) string {

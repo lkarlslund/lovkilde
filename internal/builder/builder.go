@@ -39,13 +39,10 @@ type Options struct {
 	// Report receives the one-line summary of what was built.
 	Report io.Writer
 
-	// Mode is how documents are got (Full when empty). Patch and Layer continue From, the
-	// current artifact in DataDir when it is empty.
+	// Mode is how documents are got (Full when empty). Patch continues From, the current
+	// artifact in DataDir when it is empty.
 	Mode Mode
 	From string
-	// RebaseAt is the share of the base's documents a layer may replace before a Layer build
-	// writes a whole artifact instead (DefaultRebaseAt when zero).
-	RebaseAt float64
 }
 
 // Artifact compiles the archive and returns the path of the file written.
@@ -136,46 +133,20 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		seen[e.Accession] = true
 	}
 
-	// What an incremental build carries, and whether it writes a layer or a whole artifact.
+	// What an incremental build carries.
 	var prov compiled.Provenance
 	prov.Pass = pass
-	var base *compiled.Artifact // the layer's base, whose frames stay where they are
 	if prev != nil {
 		inc := &compiled.Incremental{From: prev.Header.Stamp}
-		var layered int // documents a layer over prev's base would hold itself
 		for _, acc := range want {
-			if _, ok := carry[acc]; !ok {
+			if _, ok := carry[acc]; ok {
+				inc.Carried++
+			} else {
 				inc.Compiled++
-				layered++
-				continue
-			}
-			inc.Carried++
-			if ref, _ := prev.Ref(acc); prev.Base() != nil && !ref.Base {
-				layered++
 			}
 		}
 		prov.Incremental = inc
-		if mode == Layer {
-			base = prev
-			if prev.Base() != nil {
-				base = prev.Base()
-			}
-			rebaseAt := o.RebaseAt
-			if rebaseAt == 0 {
-				rebaseAt = DefaultRebaseAt
-			}
-			if share := float64(layered) / float64(max(len(want), 1)); share > rebaseAt {
-				slog.Info("the layer would replace too much of its base: writing a whole artifact instead",
-					"layer_documents", layered, "documents", len(want), "rebase_at", rebaseAt)
-				base = nil
-			} else {
-				if filepath.Dir(base.Path()) != filepath.Dir(out) {
-					return "", fmt.Errorf("a layer is written beside its base, and %s is not in %s", base.Path(), filepath.Dir(out))
-				}
-				prov.Base = &compiled.BaseRef{File: filepath.Base(base.Path()), Stamp: base.Header.Stamp}
-			}
-		}
-		slog.Info("incremental build", "mode", mode, "from", prev.Header.Stamp, "compile", inc.Compiled, "carry", inc.Carried, "layer", base != nil)
+		slog.Info("incremental build", "mode", mode, "from", prev.Header.Stamp, "compile", inc.Compiled, "carry", inc.Carried)
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return "", err
@@ -210,7 +181,6 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 	tLoop := time.Now()
 	type ready struct {
 		frames   []compiled.CompiledFrame
-		inBase   []bool // carried documents a layer reads from its base
 		missing  int
 		failed   string
 		firstErr error
@@ -222,7 +192,7 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		defer close(batches)
 		for lo := 0; lo < len(want); lo += chunk {
 			hi := min(lo+chunk, len(want))
-			batch := ready{frames: make([]compiled.CompiledFrame, hi-lo), inBase: make([]bool, hi-lo)}
+			batch := ready{frames: make([]compiled.CompiledFrame, hi-lo)}
 			errs := make([]error, hi-lo)
 			opened := make([]bool, hi-lo)
 			tCompile := time.Now()
@@ -236,13 +206,7 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 						return
 					}
 					opened[i] = true
-					ref, _ := prev.Ref(acc)
-					if base != nil && (ref.Base || prev == base) {
-						batch.frames[i] = compiled.CompiledFrame{Accession: acc, Raw: int(ref.Raw)}
-						batch.inBase[i] = true
-						return
-					}
-					batch.frames[i], _, errs[i] = prev.Frame(acc)
+					batch.frames[i], errs[i] = prev.Frame(acc)
 					return
 				}
 				doc, path, ok := a.Open(acc)
@@ -295,15 +259,7 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		}
 		unreadable += batch.missing
 		tWrite := time.Now()
-		for i, fr := range batch.frames {
-			if batch.inBase[i] {
-				if err := wr.WriteBaseRef(fr.Accession, uint64(fr.Raw)); err != nil {
-					f.Close()
-					os.Remove(tmp)
-					return "", err
-				}
-				continue
-			}
+		for _, fr := range batch.frames {
 			if err := wr.WriteFrame(fr); err != nil {
 				f.Close()
 				os.Remove(tmp)
@@ -378,7 +334,6 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 	slog.Info("artifact built",
 		"path", out,
 		"mode", mode,
-		"layer_over", layerOver(opened.Header),
 		"documents", wr.Documents(),
 		"bytes", st.Size(),
 		"model_json", archive.SizeHint(int64(rawTotal)),
@@ -404,17 +359,9 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		archive.SizeHint(int64(rawTotal)), archive.SizeHint(int64(largest)), sizeHistogram(bands, counts),
 		noAccession, duplicates, unreadable)
 	if inc := opened.Header.Incremental; inc != nil {
-		fmt.Fprintf(o.Report, "  %s build from %s: compiled %d, carried %d%s\n", mode, inc.From[:min(8, len(inc.From))], inc.Compiled, inc.Carried, layerOver(opened.Header))
+		fmt.Fprintf(o.Report, "  %s build from %s: compiled %d, carried %d\n", mode, inc.From[:min(8, len(inc.From))], inc.Compiled, inc.Carried)
 	}
 	return out, nil
-}
-
-// layerOver says what a layer is over, "" for a whole artifact.
-func layerOver(h compiled.ArtifactHeader) string {
-	if h.Base == nil {
-		return ""
-	}
-	return ", a layer over " + h.Base.File
 }
 
 // sizeHistogram renders the compiled document sizes as one log field, e.g.

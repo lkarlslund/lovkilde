@@ -4,15 +4,16 @@
 #
 #   HF_REPO=owner/name HF_TOKEN=hf_... scripts/hf-release.sh   (or put both in .env)
 #
-# 1. restore the published collection state and artifact (and its base, when it is a layer)
+# 1. restore the published collection state and artifact
 # 2. update: harvest the change feed and fetch what changed since the published pass
-# 3. build the next artifact as a layer over the published one; when the published artifact
+# 3. build the next artifact as a patch of the published one; when the published artifact
 #    cannot be continued (another document model or dictionary), unpack the published XML
 #    archive and build in full
 # 4. publish the artifact, the state, the XML packs this pass touched and the dataset card, in
 #    one commit
 #
-# MODE=patch writes a whole artifact instead of a layer; MODE=full always builds in full.
+# MODE=full always builds in full. The artifact is always whole: Xet storage uploads only the
+# chunks it does not share with the last one, and a server downloads only those.
 #
 # The data directory is ./data, as on the machine that published the first release: a
 # document records its sidecar's path under the archive root, so an incremental build refuses
@@ -32,8 +33,8 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 # The script publishes to Hugging Face only; a bare owner/name would otherwise name a directory.
 case "$HF_REPO" in hf://*) ;; *) HF_REPO="hf://$HF_REPO" ;; esac
 : "${HF_TOKEN:?set HF_TOKEN to a token with write access to the repository}"
-mode="${MODE:-layer}"
-case "$mode" in layer | patch | full) ;; *) echo "MODE is layer, patch or full, not $mode" >&2; exit 2 ;; esac
+mode="${MODE:-patch}"
+case "$mode" in patch | full) ;; *) echo "MODE is patch or full, not $mode" >&2; exit 2 ;; esac
 
 data=data
 mkdir -p bin

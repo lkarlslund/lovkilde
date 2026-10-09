@@ -40,7 +40,7 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Manifest{}, err
 	}
-	m := Manifest{File: prev.File, Size: prev.Size, SHA256: prev.SHA256, Model: prev.Model, Documents: prev.Documents, Base: prev.Base, XML: prev.XML, Published: time.Now().UTC()}
+	m := Manifest{File: prev.File, Size: prev.Size, SHA256: prev.SHA256, Model: prev.Model, Documents: prev.Documents, XML: prev.XML, Published: time.Now().UTC()}
 	var c Commit
 	if rel.XMLDir != "" {
 		tmp, err := os.MkdirTemp("", "retsin-packs-*")
@@ -76,7 +76,6 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 		}
 		m.Model = a.Header.Model
 		m.Documents = len(a.Documents())
-		base := a.Header.Base
 		a.Close()
 		ref, err := describe(rel.Artifact, filepath.Base(rel.Artifact))
 		if err != nil {
@@ -84,30 +83,8 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 		}
 		m.File, m.Size, m.SHA256 = ref.Path, ref.Size, ref.SHA256
 		c.Add = append(c.Add, Upload{Path: ref.Path, From: rel.Artifact})
-		// A layer is published with its base. The base is usually published already — as the
-		// last release's base, or as the last release's whole artifact — and is then not sent
-		// again: that is what makes a layer release megabytes.
-		m.Base = nil
-		if base != nil {
-			switch {
-			case prev.Base != nil && prev.Base.Path == base.File:
-				m.Base = prev.Base
-			case prev.File == base.File:
-				m.Base = &FileRef{Path: prev.File, Size: prev.Size, SHA256: prev.SHA256}
-			default:
-				from := filepath.Join(filepath.Dir(rel.Artifact), base.File)
-				ref, err := describe(from, base.File)
-				if err != nil {
-					return Manifest{}, err
-				}
-				m.Base = &ref
-				c.Add = append(c.Add, Upload{Path: ref.Path, From: from})
-			}
-		}
-		for _, old := range []string{prev.File, prev.Base.pathOrEmpty()} {
-			if old != "" && old != m.File && (m.Base == nil || old != m.Base.Path) {
-				c.Delete = append(c.Delete, old)
-			}
+		if prev.File != "" {
+			c.Delete = append(c.Delete, prev.File)
 		}
 	}
 	// The card describes the release, so it is rewritten with it.
@@ -178,14 +155,6 @@ func RestoreState(ctx context.Context, r Repo, dir string) (Manifest, error) {
 		}
 	}
 	return m, nil
-}
-
-// pathOrEmpty is the path of a reference that may be absent.
-func (f *FileRef) pathOrEmpty() string {
-	if f == nil {
-		return ""
-	}
-	return f.Path
 }
 
 // describe is the reference a manifest keeps for a local file published at name.

@@ -40,7 +40,7 @@ This card is written by the release that publishes the files below; it describes
 | Published | {{.Published.Format "2006-01-02 15:04 UTC"}} |
 | Documents in the artifact | {{.Documents}} |
 | Document model | {{.Model}} |
-| Artifact | `{{.File}}`, {{size .Size}}{{if .Base}}, a layer over `{{.Base.Path}}` ({{size .Base.Size}}){{end}} |
+| Artifact | `{{.File}}`, {{size .Size}} |
 {{- if .XML}}
 | Source archive | {{len .XML}} packs, {{.XMLFiles}} files, {{size .XMLSize}} |
 {{- end}}
@@ -54,8 +54,7 @@ packs that changed in one commit.
 - **`latest.json`**: the manifest. It names every file below with its size and SHA-256, and
   is committed last, so a reader that starts from it never finds a file missing.
 - **`artifact-*.retsin`**: the compiled artifact, every document parsed into one model (seekable
-  zstd, one frame per document). When the manifest names a `base`, the artifact is a layer:
-  it holds the documents that changed and reads the rest from the base beside it.
+  zstd, one frame per document).
 - **`xml/<kind>/<year>.tar.zst`**: the source archive, as the site publishes it. Each pack holds
   the documents' XML and, beside them, JSON sidecars from the site's document API, whose
   `documentHtml` carries the text as HTML where the XML has none.
@@ -72,7 +71,7 @@ retsin serve --release {{.Repo}}
 ```
 
 `retsin artifact download --release {{.Repo}}` installs it without serving. A server that
-holds the base downloads only the layer.
+already has an artifact downloads only the chunks the new one does not share with it.
 
 The source packs are plain `tar` compressed with zstd:
 

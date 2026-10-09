@@ -25,7 +25,6 @@ func artifactCmd(resolve configFunc) *cobra.Command {
 // nightly crawl.
 func artifactBuildCmd(resolve configFunc) *cobra.Command {
 	var out, mode, from string
-	var rebaseAt float64
 
 	cmd := &cobra.Command{
 		Use:   "build",
@@ -65,11 +64,9 @@ Modes (--mode):
           files builds the whole artifact; on a machine holding every file the result is
           what a full build makes. Refused when the earlier artifact holds another
           document model or dictionary: build in full then.
-  layer   as patch, but write only the changed documents, as a layer over the earlier
-          artifact (or over its base, when it is a layer itself), which stays as it is
-          beside it. A server downloads the layer instead of the whole file. When the
-          layer would replace more than --rebase-at of the documents, a whole artifact is
-          written instead.`,
+
+A server downloading the next artifact fetches only the chunks it does not share with the
+one it has (Xet storage), so an artifact is always written whole.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := resolve()
@@ -83,7 +80,6 @@ Modes (--mode):
 			_, err = builder.Artifact(cmd.Context(), builder.Options{
 				Mode:             m,
 				From:             from,
-				RebaseAt:         rebaseAt,
 				XMLDir:           cfg.XMLDir(),
 				DataDir:          cfg.DataDir,
 				Out:              out,
@@ -93,9 +89,8 @@ Modes (--mode):
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&mode, "mode", string(builder.Full), "full, patch or layer (see above)")
-	cmd.Flags().StringVar(&from, "from", "", "the earlier artifact a patch or layer build continues (default: the current one)")
-	cmd.Flags().Float64Var(&rebaseAt, "rebase-at", builder.DefaultRebaseAt, "share of the documents a layer may replace before a whole artifact is written instead")
+	cmd.Flags().StringVar(&mode, "mode", string(builder.Full), "full or patch (see above)")
+	cmd.Flags().StringVar(&from, "from", "", "the earlier artifact a patch build continues (default: the current one)")
 	cmd.Flags().StringVar(&out, "out", "", "write the artifact to this file instead of installing it as the current one in <data-dir>/"+artifactdir.Subdir)
 	return cmd
 }

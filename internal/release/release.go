@@ -12,7 +12,6 @@
 //
 //	latest.json                                   Manifest
 //	artifact-20261007T0648Z-61f208f4.retsin       the artifact it names
-//	artifact-20261001T0310Z-c41e9b07.retsin       its base, when the artifact is a layer
 //	state/meta.json, state/inventory.jsonl, …     the collection state (internal/store)
 //	xml/lta/1995.tar.zst, …                       the XML archive, one pack per shard (optional)
 //	README.md                                     the dataset card, written from the manifest
@@ -83,10 +82,7 @@ type Manifest struct {
 	SHA256 string `json:"sha256"`
 	Model  int    `json:"model"`
 	// Documents is how many documents the artifact holds, for the dataset card.
-	Documents int `json:"documents,omitempty"`
-	// Base is the whole artifact File is a layer over (compiled.ArtifactHeader.Base); nil when
-	// File is whole.
-	Base      *FileRef  `json:"base,omitempty"`
+	Documents int       `json:"documents,omitempty"`
 	State     []FileRef `json:"state,omitempty"`
 	XML       []Pack    `json:"xml,omitempty"`
 	Published time.Time `json:"published"`
@@ -129,9 +125,6 @@ func Latest(ctx context.Context, r Repo) (Manifest, error) {
 	}
 	if m.File != "" && !validName(m.File) {
 		return m, fmt.Errorf("%s in %s names %q, which is not a file in it", ManifestFile, r, m.File)
-	}
-	if m.Base != nil && (!validName(m.Base.Path) || strings.Contains(m.Base.Path, "/")) {
-		return m, fmt.Errorf("%s in %s names %q as the base, which is not an artifact file in it", ManifestFile, r, m.Base.Path)
 	}
 	refs := slices.Clone(m.State)
 	for _, p := range m.XML {

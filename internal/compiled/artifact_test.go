@@ -224,7 +224,7 @@ func TestArtifactRefusesWhatItCannotRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wr, err := newWriter(f, "/mirror", layerVersion+1, dictionary.Current, Provenance{})
+	wr, err := newWriter(f, "/mirror", artifactVersion+1, dictionary.Current, Provenance{})
 	if err != nil {
 		t.Fatal(err)
 	}

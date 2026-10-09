@@ -131,8 +131,7 @@ Phases (each independent, resumable and idempotent):
   changes    read the change feed back and reconcile it against the archive
   artifact build
              compile the archive into the artifact the server reads (retsin serve);
-             --mode patch or layer continues the current artifact, compiling only what
-             changed
+             --mode patch continues the current artifact, compiling only what changed
   publish    publish the artifact and the collection state to a release repository
              (a directory, or hf://owner/name); --with-xml adds the XML archive
   restore    restore the collection state from one into an empty data directory

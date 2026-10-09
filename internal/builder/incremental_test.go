@@ -32,7 +32,7 @@ func put(t *testing.T, data, rel, fixture string, replace ...string) {
 
 func build(t *testing.T, data string, mode Mode, out string) string {
 	t.Helper()
-	path, err := Artifact(context.Background(), Options{XMLDir: filepath.Join(data, "xml"), DataDir: data, Out: out, Mode: mode, RebaseAt: 1})
+	path, err := Artifact(context.Background(), Options{XMLDir: filepath.Join(data, "xml"), DataDir: data, Out: out, Mode: mode})
 	if err != nil {
 		t.Fatalf("%s build: %v", mode, err)
 	}
@@ -57,8 +57,8 @@ func sameContent(t *testing.T, what, wantPath, gotPath string) {
 		t.Fatalf("%s holds %v, a full build %v", what, got.Documents(), want.Documents())
 	}
 	for _, acc := range want.Documents() {
-		w, _, err1 := want.Frame(acc)
-		g, _, err2 := got.Frame(acc)
+		w, err1 := want.Frame(acc)
+		g, err2 := got.Frame(acc)
 		if err1 != nil || err2 != nil || !bytes.Equal(w.Compressed, g.Compressed) {
 			t.Errorf("%s: %s is not the frame a full build writes (%v, %v)", what, acc, err1, err2)
 		}
@@ -72,8 +72,8 @@ func sameContent(t *testing.T, what, wantPath, gotPath string) {
 
 // An incremental build is only worth having if it makes what a full build makes. The mirror
 // changes the ways it does in a week — a document is corrected, a new one is published — and
-// the patch, the layer, and a patch on a machine that holds only the changed files must each
-// read exactly like a full build of the result.
+// the patch, and a patch on a machine that holds only the changed files, must each read exactly
+// like a full build of the result.
 func TestIncrementalBuildsMakeWhatAFullBuildMakes(t *testing.T) {
 	data := t.TempDir()
 	put(t, data, "lta/1942/542.xml", "lta-1942-542.xml")
@@ -95,19 +95,6 @@ func TestIncrementalBuildsMakeWhatAFullBuildMakes(t *testing.T) {
 		t.Errorf("the patch says it compiled and carried %+v, want 2 compiled and 1 carried", inc)
 	}
 	p.Close()
-
-	layer := build(t, data, Layer, "")
-	sameContent(t, "the layer", full, layer)
-	// The next layer goes over the same base, not over the layer.
-	again := build(t, data, Layer, "")
-	a, err := compiled.OpenArtifact(again)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a.Header.Base == nil || a.Header.Base.File != filepath.Base(base) {
-		t.Errorf("a layer over a layer names base %+v, want %s", a.Header.Base, filepath.Base(base))
-	}
-	a.Close()
 
 	// A fresh machine holds the published artifact and the files this week's pass fetched.
 	if err := artifactdir.SetCurrent(data, filepath.Base(base)); err != nil {

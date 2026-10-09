@@ -13,10 +13,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "layer (default), patch (a whole artifact), or full (rebuild from the XML archive)"
+        description: "patch (default: continue the published artifact) or full (rebuild from the XML archive)"
         type: choice
-        options: [layer, patch, full]
-        default: layer
+        options: [patch, full]
+        default: patch
       squash:
         description: "squash the dataset's history into one commit after publishing"
         type: boolean
@@ -49,7 +49,7 @@ jobs:
         env:
           HF_REPO: ${{ secrets.HF_REPO }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          MODE: ${{ inputs.mode || 'layer' }}
+          MODE: ${{ inputs.mode || 'patch' }}
       # Every release is a commit and the Hub keeps every file one names, so once a month (and
       # when asked) the history is squashed into the current release. Here, after publishing and
       # in the same job, so it never rewrites the branch while a release is being committed.

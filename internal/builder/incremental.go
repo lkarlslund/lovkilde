@@ -26,25 +26,18 @@ const (
 	// earlier artifact and copying every other document's frame from it byte for byte. It needs
 	// the earlier artifact and the changed files, not the archive.
 	Patch Mode = "patch"
-	// Layer writes only what changed, as a layer over a whole base artifact that stays as it is
-	// (compiled.ArtifactHeader.Base): a server downloads megabytes instead of the whole file.
-	Layer Mode = "layer"
 )
 
 // ParseMode reads a --mode value.
 func ParseMode(s string) (Mode, error) {
 	switch m := Mode(s); m {
-	case Full, Patch, Layer:
+	case Full, Patch:
 		return m, nil
 	case "":
 		return Full, nil
 	}
-	return "", fmt.Errorf("build mode %q: full, patch or layer", s)
+	return "", fmt.Errorf("build mode %q: full or patch", s)
 }
-
-// DefaultRebaseAt is the share of a base's documents a layer may replace before a layer build
-// writes a whole artifact instead (Options.RebaseAt).
-const DefaultRebaseAt = 0.05
 
 // plan is what an incremental build works from: the archive as a full scan of the earlier
 // artifact's files plus the files on disk would see it, and the documents it carries over.
@@ -69,16 +62,11 @@ type plan struct {
 // document model (compiled.ModelVersion, which a change to what a document compiles to must
 // bump) and the same dictionary, since a carried frame is compressed against it.
 func planIncremental(ctx context.Context, prev *compiled.Artifact, root string) (*plan, error) {
-	for _, in := range []*compiled.Artifact{prev, prev.Base()} {
-		if in == nil {
-			continue
-		}
-		if in.Header.Model != compiled.ModelVersion {
-			return nil, fmt.Errorf("%s holds document model %d and this build compiles model %d: its documents cannot be carried over, so build in full", in.Path(), in.Header.Model, compiled.ModelVersion)
-		}
-		if in.Header.Dictionary != compiled.CurrentDictionary() {
-			return nil, fmt.Errorf("%s is compressed against dictionary %d and this build writes %d: its frames cannot be carried over, so build in full", in.Path(), in.Header.Dictionary.ID, compiled.CurrentDictionary().ID)
-		}
+	if prev.Header.Model != compiled.ModelVersion {
+		return nil, fmt.Errorf("%s holds document model %d and this build compiles model %d: its documents cannot be carried over, so build in full", prev.Path(), prev.Header.Model, compiled.ModelVersion)
+	}
+	if prev.Header.Dictionary != compiled.CurrentDictionary() {
+		return nil, fmt.Errorf("%s is compressed against dictionary %d and this build writes %d: its frames cannot be carried over, so build in full", prev.Path(), prev.Header.Dictionary.ID, compiled.CurrentDictionary().ID)
 	}
 	// A document's model records where its sidecar was read from, under the archive root, so a
 	// frame is only what compiling it again would make when it is compiled from the same root.

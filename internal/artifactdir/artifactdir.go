@@ -10,8 +10,7 @@
 //	data/artifacts/artifact-20261006T1520Z-8f3a2c1d.retsin.xet    its Xet hash, when downloaded
 //	data/artifact.current                                    the current artifact's file name
 //
-// Two artifacts are kept: the current one and the one before it, with the base of either when it is
-// a layer (compiled.ArtifactHeader.Base), which is read beside it. The new one is written beside the
+// Two artifacts are kept: the current one and the one before it. The new one is written beside the
 // old under a .part name, becomes a .retsin only once it is complete and verified, and becomes
 // current when the pointer is replaced — a rename, so a reader sees the old name or the new one
 // and never half of either. A serving process notices the new pointer, builds the new index while
@@ -27,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -127,19 +125,6 @@ func SetCurrent(dataDir, name string) error {
 // makes it current. It is opened first, so a file that is not a readable artifact never becomes
 // current, and its name is taken from its own header.
 func Install(dataDir, file string) (string, error) {
-	dst, err := Place(dataDir, file)
-	if err != nil {
-		return "", err
-	}
-	if err := SetCurrent(dataDir, filepath.Base(dst)); err != nil {
-		return "", err
-	}
-	return dst, nil
-}
-
-// Place is Install without making the artifact current: what a layer's base needs, which is
-// read beside the layer and never served on its own.
-func Place(dataDir, file string) (string, error) {
 	a, err := compiled.OpenArtifact(file)
 	if err != nil {
 		return "", err
@@ -151,6 +136,9 @@ func Place(dataDir, file string) (string, error) {
 	}
 	dst := filepath.Join(Dir(dataDir), name)
 	if err := os.Rename(file, dst); err != nil {
+		return "", err
+	}
+	if err := SetCurrent(dataDir, name); err != nil {
 		return "", err
 	}
 	return dst, nil
@@ -178,9 +166,9 @@ func migrate(dataDir string) (string, error) {
 	return Install(dataDir, legacy)
 }
 
-// Prune removes what is no longer kept: every artifact but the current one and the newest other
-// (and the base of either when it is a layer), the indexes and Xet hashes whose artifact is gone,
-// and .part files old enough to be abandoned. It returns what it removed.
+// Prune removes what is no longer kept: every artifact but the current one and the newest other,
+// the indexes and Xet hashes whose artifact is gone, and .part files old enough to be abandoned.
+// It returns what it removed.
 func Prune(dataDir string) ([]string, error) {
 	current, err := Current(dataDir)
 	if err != nil {
@@ -203,15 +191,6 @@ func Prune(dataDir string) ([]string, error) {
 		if !keep[n] {
 			keep[n] = true
 			break
-		}
-	}
-	// A layer is read together with its base, so a kept layer keeps its base.
-	for n := range maps.Clone(keep) {
-		if a, err := compiled.OpenArtifact(filepath.Join(Dir(dataDir), n)); err == nil {
-			if a.Header.Base != nil {
-				keep[a.Header.Base.File] = true
-			}
-			a.Close()
 		}
 	}
 	keptStamps := map[string]bool{}

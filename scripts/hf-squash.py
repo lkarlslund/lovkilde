@@ -4,7 +4,7 @@
     HF_REPO=owner/name HF_TOKEN=hf_... scripts/hf-squash.py [--dry-run]
 
 Every daily release is a commit, and the Hub keeps every file any commit ever named, so the
-dataset grows by a layer and the touched packs each day, and by a whole artifact at each rebase.
+dataset grows by the artifact's changed chunks and the touched packs each day.
 A release is whatever latest.json on main names, so squashing changes nothing for a server or
 for the next release; it only gives up fetching an earlier release by commit.
 

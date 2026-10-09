@@ -73,27 +73,6 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 	if err := os.MkdirAll(artifactdir.Dir(dataDir), 0o755); err != nil {
 		return out, err
 	}
-	// A layer is read with its base beside it, so the base comes first: usually it is the
-	// artifact this server already has, and only the layer is downloaded.
-	if b := m.Base; b != nil && !fileExists(filepath.Join(artifactdir.Dir(dataDir), b.Path)) {
-		if !strings.HasSuffix(b.Path, artifactdir.Ext) {
-			return out, fmt.Errorf("the release in %s names %q as the base, which is not an artifact file name", r, b.Path)
-		}
-		part := filepath.Join(artifactdir.Dir(dataDir), b.Path+artifactdir.PartExt)
-		t, err := downloadArtifact(ctx, r, *b, part)
-		out.add(t)
-		if err != nil {
-			return out, err
-		}
-		placed, err := artifactdir.Place(dataDir, part)
-		if err != nil {
-			os.Remove(part)
-			return out, err
-		}
-		if filepath.Base(placed) != b.Path {
-			return out, fmt.Errorf("placed the base as %s, but the manifest calls it %s", filepath.Base(placed), b.Path)
-		}
-	}
 	if have := filepath.Join(artifactdir.Dir(dataDir), m.File); fileExists(have) {
 		// Downloaded before and since replaced, or installed by hand: verified when it was installed.
 		if err := artifactdir.SetCurrent(dataDir, m.File); err != nil {

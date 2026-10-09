@@ -1824,7 +1824,6 @@ directory is a complete stand-in for Hugging Face, and is how publishing is trie
 ```
 latest.json                                manifest: every file's size and SHA-256, the model
 artifact-20261007T0648Z-61f208f4.retsin    the artifact a server downloads
-artifact-20261001T0310Z-c41e9b07.retsin    its base, when the artifact is a layer
 state/meta.json, state/inventory.jsonl,    the collection state a fresh machine continues from
 state/bodies.jsonl, state/changes.jsonl
 xml/lta/1995.tar.zst, …                    the XML archive, one pack per kind and year (--with-xml)
@@ -1838,7 +1837,7 @@ README.md                                  the dataset card, written from the ma
   ever rewritten in place, so a release costs no space beside the data it came from.
 - `retsin-update restore --release <repo>` downloads the state into an empty data directory,
   each file checked against the manifest and none put in place until all arrived whole;
-  `--with-artifact` installs the artifact too (and its base, for a layer). That is everything
+  `--with-artifact` installs the artifact too. That is everything
   `update` and an incremental build need: `update` fetches only what changed. `--with-xml`
   also unpacks the XML archive, for a full build.
 - `retsin serve` and `retsin mcp` download the published artifact when they have none
@@ -1874,7 +1873,7 @@ secrets `HF_REPO` (`owner/name`) and `HF_TOKEN`. The script:
 
 1. `restore --with-artifact`: the state and the artifact (and its base) from the release;
 2. `update`: the change feed and the documents it names;
-3. `artifact build --mode layer`; when the published artifact cannot be continued (another
+3. `artifact build --mode patch`; when the published artifact cannot be continued (another
    document model or dictionary), `restore --xml-only` and a full build;
 4. `publish --with-xml`: the artifact, the state, the packs this pass touched, and the dataset
    card (`README.md` in the dataset, written from `internal/release/card.md` and the manifest,
@@ -1897,21 +1896,22 @@ current release does not use, and deletes none of them.
 each and a `SHA256SUMS`), and publishes them as the rolling `nightly` GitHub release, whose
 tag moves to the commit built. A day without a new commit builds nothing.
 
-#### Incremental builds: patch, layer, and the XML packs
+#### Incremental builds: patch, and the XML packs
 
 A full build compiles every file of the 13 GB archive, which a fresh machine does not have:
-restoring gives it the state, the artifact and the files fetched since the last release. Three ways to make
-the next artifact from that, all through `retsin-update artifact build --mode`:
+restoring gives it the state, the artifact and the files fetched since the last release. Two ways to make
+the next artifact from that, both through `retsin-update artifact build --mode`:
 
-| | `full` + `restore --with-xml` | `--mode patch` | `--mode layer` |
-|---|---|---|---|
-| builds from | every file, unpacked from the release | the current artifact + the files on disk | the same |
-| writes | a whole artifact | a whole artifact | only the changed documents, over the base beside it |
-| a server downloads | the whole artifact | the whole artifact | the layer (the base it has already) |
-| survives a new document model or dictionary | yes | no: build in full | no: build in full |
+| | `full` + `restore --with-xml` | `--mode patch` |
+|---|---|---|
+| builds from | every file, unpacked from the release | the current artifact + the files on disk |
+| survives a new document model or dictionary | yes | no: build in full |
 
-A patch is frame for frame and catalogue byte for byte what a full build of the same files
-writes, and a layer reads exactly like it.
+Both write a whole artifact, and a patch is frame for frame and catalogue byte for byte what a
+full build of the same files writes. A patch copies every unchanged document's frame, so the
+new artifact shares all but the changed stretches with the last one, and Xet storage, which
+stores files in content-defined chunks, keeps and sends only the chunks that differ: a daily
+release uploads megabytes, and a server that has the last artifact downloads about as much.
 
 **How a patch knows what changed.** The catalogue records what each document was compiled
 from: the hash of its XML and of its body sidecar (`XMLHash`, `BodyHash`). A patch hashes the
@@ -1924,22 +1924,11 @@ disk cannot be compiled there, and is reported; the document keeps the text it h
 build has the XML.
 
 **When a patch refuses.** Carrying a frame is only right when compiling it again would give the
-same bytes, so a patch or a layer refuses an earlier artifact holding another document model
+same bytes, so a patch refuses an earlier artifact holding another document model
 (`compiled.ModelVersion`, which a change to what a document compiles to must bump), another
 dictionary, or one built from another archive root: a document's model records its sidecar's
 path, so the same `--data-dir` is needed. A full build is the answer in every case: here, from
 the archive; on a runner, after `restore --with-xml`.
-
-**A layer** is artifact format version 4: the same frames, but its document table lists every
-document in build order, marking the ones read from the base, and its header names the base
-file and its stamp. A reader opens both and sees one artifact; a base that is missing or has
-another stamp is refused. A layer is always over a whole artifact: the next layer goes over
-the same base and carries the documents the previous layer held, so it grows release by release.
-When it would replace more than `--rebase-at` of the documents (5 % by default) the build
-writes a whole artifact instead, which becomes the next base. Most of a layer is what it
-repeats whole: the catalogue and the document table. Pruning keeps the
-base of every artifact it keeps; `publish` sends a layer's base only when the release does not
-hold it already, and a server downloads it only when it does not have it.
 
 **The XML packs** are one `tar.zst` per kind and year. Each carries a digest of its files'
 paths and SHA-256s, so `publish --with-xml` packs and sends only the shards whose files
