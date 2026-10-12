@@ -3,6 +3,7 @@ package builder
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,6 +105,13 @@ func TestIncrementalBuildsMakeWhatAFullBuildMakes(t *testing.T) {
 		t.Fatal(err)
 	}
 	sameContent(t, "a patch with only the changed files", full, build(t, data, Patch, filepath.Join(t.TempDir(), "runner.retsin")))
+
+	// A day on which nothing changed writes nothing: the earlier artifact is still the answer.
+	out := filepath.Join(t.TempDir(), "unchanged.retsin")
+	_, err = Artifact(context.Background(), Options{XMLDir: filepath.Join(data, "xml"), DataDir: data, Out: out, Mode: Patch, From: full})
+	if _, statErr := os.Stat(out); !errors.Is(err, ErrUnchanged) || statErr == nil {
+		t.Errorf("a patch with nothing to compile: %v, and it wrote a file: %v", err, statErr == nil)
+	}
 }
 
 // Carrying a frame is only right when this build would compile it the same way.

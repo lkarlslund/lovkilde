@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/spf13/cobra"
 
 	"github.com/lkarlslund/retsinformation/internal/artifactdir"
@@ -63,7 +65,8 @@ Modes (--mode):
           whose XML is not on disk are carried, so a machine holding only the latest pass's
           files builds the whole artifact; on a machine holding every file the result is
           what a full build makes. Refused when the earlier artifact holds another
-          document model or dictionary: build in full then.
+          document model or dictionary: build in full then. When no document changed,
+          nothing is written and the earlier artifact stays current.
 
 A server downloading the next artifact fetches only the chunks it does not share with the
 one it has (Xet storage), so an artifact is always written whole.`,
@@ -86,6 +89,10 @@ one it has (Xet storage), so an artifact is always written whole.`,
 				CollectionRecord: cfg.SweepStampPath(),
 				Report:           gate.LogWriter(),
 			})
+			if errors.Is(err, builder.ErrUnchanged) {
+				cmd.Println("no document changed since the earlier artifact: nothing written")
+				return nil
+			}
 			return err
 		},
 	}

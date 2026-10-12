@@ -6,6 +6,7 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -44,6 +45,10 @@ type Options struct {
 	Mode Mode
 	From string
 }
+
+// ErrUnchanged is returned by a patch build that would compile nothing and carry every document
+// of the earlier artifact: what it would write holds the same documents, so nothing is written.
+var ErrUnchanged = errors.New("no document changed since the earlier artifact")
 
 // Artifact compiles the archive and returns the path of the file written.
 func Artifact(ctx context.Context, o Options) (string, error) {
@@ -147,6 +152,9 @@ func Artifact(ctx context.Context, o Options) (string, error) {
 		}
 		prov.Incremental = inc
 		slog.Info("incremental build", "mode", mode, "from", prev.Header.Stamp, "compile", inc.Compiled, "carry", inc.Carried)
+		if inc.Compiled == 0 && inc.Carried == len(prev.Documents()) {
+			return "", ErrUnchanged
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return "", err

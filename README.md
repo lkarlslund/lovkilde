@@ -1871,13 +1871,14 @@ artifact is downloaded whole, and the server says why.
 03:17 UTC, or by hand with a mode) runs `scripts/hf-release.sh` from the checkout, with the repository
 secrets `HF_REPO` (`owner/name`) and `HF_TOKEN`. The script:
 
-1. `restore --with-artifact`: the state and the artifact (and its base) from the release;
+1. `restore --with-artifact`: the state and the artifact from the release;
 2. `update`: the change feed and the documents it names;
 3. `artifact build --mode patch`; when the published artifact cannot be continued (another
    document model or dictionary), `restore --xml-only` and a full build;
 4. `publish --with-xml`: the artifact, the state, the packs this pass touched, and the dataset
    card (`README.md` in the dataset, written from `internal/release/card.md` and the manifest,
-   so the page always describes the release it came with).
+   so the page always describes the release it came with). A patch build with no changed
+   document writes nothing, and the script then publishes nothing.
 
 The data directory is `data`, because documents record paths under the archive root.
 

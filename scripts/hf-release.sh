@@ -10,7 +10,7 @@
 #    cannot be continued (another document model or dictionary), unpack the published XML
 #    archive and build in full
 # 4. publish the artifact, the state, the XML packs this pass touched and the dataset card, in
-#    one commit
+#    one commit; when no document changed, the build writes nothing and nothing is published
 #
 # MODE=full always builds in full. The artifact is always whole: Xet storage uploads only the
 # chunks it does not share with the last one, and a server downloads only those.
@@ -54,6 +54,7 @@ echo "== update"
 u update
 
 echo "== build ($mode)"
+published="$(cat "$data/artifact.current" 2>/dev/null || true)"
 if [ "$mode" = full ] || ! u artifact build --mode "$mode"; then
   if [ -n "${GITHUB_ACTIONS:-}" ]; then
     # The archive unpacks to 14 GB; a hosted runner has room for it once the preinstalled
@@ -63,6 +64,12 @@ if [ "$mode" = full ] || ! u artifact build --mode "$mode"; then
   fi
   u restore --release "$HF_REPO" --xml-only
   u artifact build --mode full
+fi
+
+if [ "$mode" = patch ] && [ "$(cat "$data/artifact.current")" = "$published" ]; then
+  echo "no document changed since $published: no release"
+  u status
+  exit 0
 fi
 
 echo "== publish to $HF_REPO"

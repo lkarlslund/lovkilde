@@ -45,9 +45,9 @@ This card is written by the release that publishes the files below; it describes
 | Source archive | {{len .XML}} packs, {{.XMLFiles}} files, {{size .XMLSize}} |
 {{- end}}
 
-A new release is published daily: the collector picks up what changed on the site since the
-last one, builds the artifact, and commits the artifact, the collection state and the source
-packs that changed in one commit.
+The collector checks the site daily. When a document changed since the last release, it builds
+a new artifact and commits the artifact, the collection state and the source packs that changed
+in one commit; a day with no changed document publishes no release.
 
 ## Files
 
