@@ -438,7 +438,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar
-for fejl eller tab. Ikke juridisk rådgivning. <a href="/eula">Vilkår for brug</a>. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
+for fejl eller tab. Ikke juridisk rådgivning. <a href="/eula">Vilkår for brug</a>. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>. <a href="https://github.com/lkarlslund/lovkilde">Lovkilde på GitHub</a>.</div></footer>
 <script>
 // Progressive help only: every page works without this. It does four things — a long contents
 // list folds on a phone, a ticked toggle applies itself, an empty field stays out of the
