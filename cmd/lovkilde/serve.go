@@ -40,15 +40,17 @@ const serveShutdown = 5 * time.Second
 
 func serveCmd(resolve configFunc) *cobra.Command {
 	var (
-		o       serveOptions
-		addr    string
-		verbose bool
+		o         serveOptions
+		addr      string
+		verbose   bool
+		noBrowser bool
 	)
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Serve the mirror as a website and an MCP endpoint on one port",
+		Short: "Serve the mirror as a website and an MCP endpoint on one port (the default command)",
 		Long: `Serve the local mirror over HTTP: a search box, readable documents, and the MCP
-endpoint at /mcp.
+endpoint at /mcp. This is what "lovkilde" with no command does. Once the server listens, it
+opens the website in the browser; --no-browser does not.
 
   lovkilde serve
   curl 'http://127.0.0.1:8787/search?q=for%C3%A6ldrepension'
@@ -94,6 +96,11 @@ unreadable stops it.`,
 				return err
 			}
 			fmt.Fprintf(gate.LogWriter(), "serving %s at http://%s/ (MCP endpoint at /mcp)\n", srv.Status(), service.Addr())
+			if !noBrowser {
+				if err := openBrowser(browserURL(service.Addr())); err != nil && !errors.Is(err, errNoDisplay) {
+					fmt.Fprintf(gate.LogWriter(), "could not open a browser: %v\n", err)
+				}
+			}
 			return service.Wait()
 		},
 	}
@@ -108,6 +115,8 @@ unreadable stops it.`,
 		"serve this artifact file and no other (default: the current one, followed as new ones are installed)")
 	cmd.Flags().IntVar(&o.ArtifactCacheMB, "artifact-cache-mb", mcpserver.DefaultArtifactCacheBytes>>20,
 		"megabytes of artifact payloads the serving cache may hold")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false,
+		"do not open the website in the browser once the server listens")
 	cmd.Flags().BoolVar(&verbose, "verbose-requests", false,
 		"log every request line; off by default because a public page's traffic is a list of other people's questions")
 	addFetchFlags(cmd, &o)

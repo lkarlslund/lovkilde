@@ -84,8 +84,10 @@ Nyttige flag til `fetch`:
 
 ## Datamappen
 
+Standard er `.lovkilde` i hjemmemappen, både for `lovkilde` og `lovkilde-update`.
+
 ```
-data/
+.lovkilde/
   xml/<type>/<år>/<nr>.xml     dokumenterne, som retsinformation.dk udleverer dem
   xml/<type>/<år>/<nr>.json    teksten fra websiden, for dokumenter uden tekst i XML
   state/                       indsamlingens tilstand (JSON Lines)

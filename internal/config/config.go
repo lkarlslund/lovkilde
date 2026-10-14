@@ -12,6 +12,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -63,10 +65,22 @@ type Config struct {
 	RequestTimeout time.Duration
 }
 
+// DefaultDataDir is the data directory when none is given: .lovkilde in the user's home folder,
+// on every platform, so the program finds the same data however and from wherever it is started
+// (on Windows, a double-click starts it in the download folder). Without a home folder it is
+// "data" in the working directory.
+func DefaultDataDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "data"
+	}
+	return filepath.Join(home, ".lovkilde")
+}
+
 // Default returns production-sane defaults.
 func Default() Config {
 	return Config{
-		DataDir:        "data",
+		DataDir:        DefaultDataDir(),
 		SiteBase:       "https://www.retsinformation.dk",
 		HarvestBase:    "https://api.retsinformation.dk",
 		UserAgent:      DefaultUserAgent,

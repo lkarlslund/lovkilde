@@ -35,21 +35,23 @@ Hjemmesiden og MCP-serveren giver de samme svar fra de samme data.
 
 1. Hent programmet til dit styresystem fra
    [den seneste udgivelse](https://github.com/lkarlslund/lovkilde/releases/tag/nightly) og pak det ud.
-2. Start det:
+2. Start det: dobbeltklik på det, eller kør det fra en terminal:
 
    ```bash
-   lovkilde serve
+   lovkilde
    ```
 
-3. Åbn <http://127.0.0.1:8787> og accepter vilkårene.
+3. Hjemmesiden åbner i din browser på <http://127.0.0.1:8787>. Accepter vilkårene.
 
 Første gang henter Lovkilde datasættet (ca. 1,3 GB) og bygger sit søgeindeks. Siderne virker,
-mens indekset bygges; søgningen slår til, når det er færdigt. Data lægges i mappen `data` i den
-mappe, du starter fra, eller hvor du peger med `--data-dir`.
+mens indekset bygges; søgningen slår til, når det er færdigt.
+
+Data ligger i mappen `.lovkilde` i din hjemmemappe, uanset hvorfra programmet startes, eller hvor
+du peger med `--data-dir`. Har serveren allerede hentet nyere data, bruges de.
 
 ## Brug med en AI-assistent
 
-Lovkilde er en MCP-server. Når `lovkilde serve` kører, er den på `http://127.0.0.1:8787/mcp`.
+Lovkilde er en MCP-server. Når `lovkilde` kører, er den på `http://127.0.0.1:8787/mcp`.
 
 **Claude Code:**
 
@@ -65,7 +67,7 @@ taler MCP over stdin/stdout:
   "mcpServers": {
     "lovkilde": {
       "command": "/sti/til/lovkilde",
-      "args": ["mcp", "--data-dir", "/sti/til/data"]
+      "args": ["mcp"]
     }
   }
 }
@@ -97,7 +99,7 @@ Værktøjerne:
 Som standard lytter Lovkilde kun på denne maskine. Sådan gør du den tilgængelig for andre:
 
 ```bash
-lovkilde serve --addr 0.0.0.0:8787
+lovkilde serve --addr 0.0.0.0:8787 --no-browser
 ```
 
 Så står der ⚠ ved "Indstillinger", indtil du har sat en **API-nøgle** dér. En nøgle er altid
@@ -125,7 +127,8 @@ også kan køres med det samme.
 ## Kommandoer
 
 ```
-lovkilde serve               hjemmeside og MCP-server på én port
+lovkilde                     det samme som lovkilde serve
+lovkilde serve               hjemmeside og MCP-server på én port; åbner browseren
 lovkilde mcp                 MCP over stdin/stdout
 lovkilde search "ord"        søg fra kommandolinjen
 lovkilde index build         byg søgeindekset (serve gør det selv)
@@ -133,7 +136,7 @@ lovkilde artifact download   hent det udgivne datasæt
 lovkilde artifact check      kan denne version læse datasættet på disken?
 ```
 
-Vigtige flag til `serve` og `mcp`: `--data-dir`, `--addr` (kun `serve`), `--max-chars` (længste
+Vigtige flag til `serve` og `mcp`: `--data-dir`, `--addr` og `--no-browser` (kun `serve`), `--max-chars` (længste
 MCP-svar, standard 20.000 tegn) og `--auto-update` (hvor ofte der tjekkes for nye data; `0` slår
 det fra). `lovkilde --help` viser resten.
 

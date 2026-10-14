@@ -41,7 +41,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/github-repos/retsinformation
-ExecStart=%h/github-repos/retsinformation/bin/lovkilde serve --addr 0.0.0.0:8787 --data-dir %h/github-repos/retsinformation/data
+ExecStart=%h/github-repos/retsinformation/bin/lovkilde serve --no-browser --addr 0.0.0.0:8787 --data-dir %h/github-repos/retsinformation/data
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=15

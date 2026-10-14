@@ -10,10 +10,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 
@@ -39,8 +41,20 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(gate.LogWriter(), "error: %v\n", err)
+		holdWindow()
 		os.Exit(1)
 	}
+}
+
+// holdWindow keeps the console window open after an error when the program was started with no
+// arguments on Windows, which is what a double-click does: the window would otherwise close
+// before the error could be read.
+func holdWindow() {
+	if runtime.GOOS != "windows" || len(os.Args) > 1 {
+		return
+	}
+	fmt.Fprint(gate.LogWriter(), "Tryk Enter for at lukke.")
+	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
 // configFunc resolves the validated flags without opening any storage.
@@ -61,7 +75,8 @@ lookup by ELI path or accession, laws as of a date, and full-text search.
 
 ` + disclaimer.ConsolidatedEnglish + `
 
-  lovkilde serve        HTTP: the reading pages and the MCP endpoint at /mcp
+  lovkilde serve        HTTP: the reading pages and the MCP endpoint at /mcp; opens the
+                      browser unless --no-browser. "lovkilde" alone does the same
   lovkilde mcp          MCP over stdio
   lovkilde search       full-text search from the command line
   lovkilde index build  cut the search index from the artifact (serve does this itself)
@@ -97,9 +112,14 @@ Data layout:
 		cli.SetLogger(logLevel)
 		return cfg, nil
 	}
+	// With no command, lovkilde serves: the program someone downloads and starts should show
+	// them the website.
+	serve := serveCmd(resolve)
+	root.RunE = serve.RunE
+	root.Flags().AddFlagSet(serve.Flags())
 	root.AddCommand(
 		mcpCmd(resolve),
-		serveCmd(resolve),
+		serve,
 		indexCmd(resolve),
 		artifactCmd(resolve),
 		searchCmd(resolve),
