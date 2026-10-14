@@ -60,7 +60,6 @@ type LookupResult struct {
 	Number    int
 	DiesSigni string
 	Status    string
-	Path      string
 
 	// Provenance is "xml", "html" or "none" — lexdoc.Source, widened to a
 	// string so a client sees a plain value.
@@ -200,11 +199,10 @@ func (s *Server) lookup(req LookupRequest, wantHTML bool) (*LookupResult, error)
 		return s.lookupAsOf(req, entry, res, wantHTML)
 	}
 
-	m, path, err := s.model(entry)
+	m, err := s.model(entry)
 	if err != nil {
 		return nil, err
 	}
-	res.Path = path
 	res.provenance(m)
 	res.noteAmendments(m, s.horizon().Now)
 
@@ -275,7 +273,6 @@ func (s *Server) lookupAsOf(req LookupRequest, entry chain.Entry, res *LookupRes
 	if err != nil {
 		return nil, err
 	}
-	res.Path = view.Path
 	res.AsOf = asOf.Format("2006-01-02")
 	res.Language = req.Language
 	res.ChainActs = len(view.Chain)
@@ -555,20 +552,19 @@ const maxNamedAmendments = 6
 // one it parses, and says so through Status. A document the artifact does not hold is an error
 // naming the remedy: the artifact's coverage is a claim about the mirror, and an answer that quietly
 // came back empty would turn a stale file into a law with nothing in it.
-func (s *Server) model(entry chain.Entry) (*lexdoc.Document, string, error) {
+func (s *Server) model(entry chain.Entry) (*lexdoc.Document, error) {
 	if s.cache() != nil {
 		m, err := s.cache().Document(entry.Accession)
 		if err != nil {
-			return nil, "", fmt.Errorf("%s is indexed but not in the compiled artifact (%s): %w. Rebuild it with `lovkilde-update artifact build`",
-				entry.Accession, s.cache().Artifact().Path(), err)
+			return nil, fmt.Errorf("%s is indexed but not in the compiled artifact: %w. Rebuild it with `lovkilde-update artifact build`", entry.Accession, err)
 		}
-		return m, s.cache().Artifact().Path(), nil
+		return m, nil
 	}
-	m, path, ok := s.lib().Model(entry.Accession)
+	m, _, ok := s.lib().Model(entry.Accession)
 	if !ok {
-		return nil, "", fmt.Errorf("%s is indexed but could not be read from %s: the file may be mid-write, re-run", entry.Accession, entry.Path)
+		return nil, fmt.Errorf("%s is indexed but could not be read: the file may be mid-write, re-run", entry.Accession)
 	}
-	return m, path, nil
+	return m, nil
 }
 
 // provenance records which text this is, in the words a client will read. It reads the model's own
@@ -601,9 +597,6 @@ func (r *LookupResult) provenance(m *lexdoc.Document) {
 		// spelling in one format, and what a reader needs to know is that this is the structured
 		// text the register publishes rather than a reconstruction.
 		r.ProvenanceNote = "the register's own structured body, decoded from canonical ELI XML"
-	}
-	if r.Path == "" {
-		r.Path = m.Provenance.Sidecar
 	}
 }
 
@@ -660,9 +653,6 @@ func (r *LookupResult) String() string {
 	fmt.Fprintf(&b, "> **Disclaimer:** %s\n", notice)
 	for _, w := range r.Warnings {
 		fmt.Fprintf(&b, "> **Warning:** %s\n", w)
-	}
-	if r.Path != "" {
-		fmt.Fprintf(&b, "- **Stored at:** `%s`\n", r.Path)
 	}
 
 	r.writeRefused(&b)

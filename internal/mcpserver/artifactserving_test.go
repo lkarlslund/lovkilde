@@ -70,17 +70,13 @@ func TestArtifactServingAnswersWhatTheParseAnswers(t *testing.T) {
 		if strings.Join(got.Warnings, "\n") != strings.Join(want.Warnings, "\n") {
 			t.Errorf("%s: warnings differ: %q vs %q", key, want.Warnings, got.Warnings)
 		}
-		if want.Text == "" && !strings.HasPrefix(want.Text, "ERROR") && got.Path == "" {
-			t.Errorf("%s: an answer that carries text carries no source path", key)
-		}
 	}
 
-	// The path is the one field allowed to differ, because it names what was actually read: an
-	// answer served from the artifact that claimed a file it never opened would send a reader to
-	// check the wrong thing.
+	// An answer names no file on the server: it is of no use to a client, and tells it how the
+	// operator's disk is laid out.
 	whole := byArtifact[accCanon+"|"]
-	if !strings.Contains(whole.Path, artPath) {
-		t.Errorf("the answer names %q as its source, not the artifact it was read from", whole.Path)
+	if out := whole.String(); strings.Contains(out, artPath) || strings.Contains(out, filepath.Dir(artPath)) {
+		t.Errorf("the answer names a file on the server:\n%s", out)
 	}
 }
 

@@ -221,7 +221,7 @@ func (s *Server) Related(ref string) ([]RelatedGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, _, err := s.model(entry)
+	m, err := s.model(entry)
 	if err != nil {
 		return nil, err
 	}
