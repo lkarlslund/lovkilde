@@ -430,7 +430,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 <header class="site"><div class="wrap">
 <a class="brand" href="/"><svg class="seal" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="15.5" fill="var(--accent)"/><circle cx="16" cy="16" r="12.6" fill="none" stroke="var(--wash)" stroke-width=".9" stroke-dasharray="1.6 1.1"/><text x="16" y="22.6" text-anchor="middle" font-family="Georgia,Times New Roman,serif" font-size="19" font-weight="700" fill="var(--wash)">§</text></svg><span>Lovkilde</span></a>
 {{block "headsearch" .}}<form class="joined" method="get" action="/search" role="search"><input type="search" name="q" placeholder="Søg i lovgivningen" aria-label="Søg" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
-<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/indstillinger">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a></nav>
+<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/settings">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a></nav>
 </div></header>
 <main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér lovkilde for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
 {{else}}<b>Ny version af lovkilde:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
@@ -511,7 +511,7 @@ const searchBody = `{{define "headsearch"}}{{/* the page has its own, larger box
 <fieldset><legend>Type</legend><div class="row">{{range .Kinds}}<label class="chip" title="{{.Hint}}"><input type="checkbox" name="kind" value="{{.Value}}" {{if .On}}checked{{end}}><span>{{.Label}} <small>{{num .Count}}</small></span></label>{{end}}</div></fieldset>
 <fieldset><legend>Status</legend><div class="row">{{range .Statuses}}<label class="chip"><input type="checkbox" name="status" value="{{.Value}}" {{if .On}}checked{{end}}><span>{{.Label}} <small>{{num .Count}}</small></span></label>{{end}}</div></fieldset>
 <fieldset><legend>Periode</legend><div class="row"><input type="number" name="since" value="{{.Since}}" placeholder="fra år" min="1800" max="2100" aria-label="fra år"> – <input type="number" name="until" value="{{.Until}}" placeholder="til år" min="1800" max="2100" aria-label="til år"></div></fieldset>
-<fieldset><legend>Kilde</legend><div class="row">{{range .Sources}}<label class="chip" title="{{.Hint}}"><input type="checkbox" name="kilde" value="{{.Value}}" {{if .On}}checked{{end}}><span>{{.Label}} <small>{{num .Count}}</small></span></label>{{end}}</div></fieldset>
+<fieldset><legend>Kilde</legend><div class="row">{{range .Sources}}<label class="chip" title="{{.Hint}}"><input type="checkbox" name="source" value="{{.Value}}" {{if .On}}checked{{end}}><span>{{.Label}} <small>{{num .Count}}</small></span></label>{{end}}</div></fieldset>
 <div class="actions">{{if .Filtered}}<a href="/search?q={{.Query}}">Nulstil filtre</a>{{end}}<button type="submit" class="quiet">Anvend</button></div>
 </div>
 </form>
@@ -542,7 +542,7 @@ const documentBody = `{{define "content"}}
 <div class="kv">{{if .Kind}}<b>{{kindName .Kind}}</b>{{end}}{{if .Year}}<span>· {{.Year}}</span>{{end}}<span class="pill {{statusClass .Status}}">{{statusLabel .Status}}</span><span class="prov {{.Provenance}}" title="{{provenanceExplained .Provenance}}">{{provenanceLabel .Provenance}}</span>{{if .Accession}}<span>{{.Accession}}</span>{{end}}{{if .ProvenanceNote}}<span>{{provenanceNoteLabel .ProvenanceNote}}</span>{{end}}</div>
 <div class="toolbar">
 {{if .Accession}}<form class="joined" method="get" action="/search" role="search"><input type="hidden" name="in" value="{{.Accession}}"><input type="search" name="q" placeholder="Søg i dette dokument" aria-label="Søg i dette dokument" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
-{{if .DateTool}}<form method="get" action="/dok"><input type="hidden" name="ref" value="{{.Ref}}">{{if .Addr}}<input type="hidden" name="addr" value="{{.Addr}}">{{end}}<label for="asof">Teksten pr.</label><input id="asof" type="date" name="as_of" value="{{.AsOf}}"><button type="submit" class="quiet">Vis</button>{{if .AsOf}} <a href="{{.OriginalLink}}">som udstedt</a>{{end}}</form>{{end}}
+{{if .DateTool}}<form method="get" action="/doc"><input type="hidden" name="ref" value="{{.Ref}}">{{if .Addr}}<input type="hidden" name="addr" value="{{.Addr}}">{{end}}<label for="asof">Teksten pr.</label><input id="asof" type="date" name="as_of" value="{{.AsOf}}"><button type="submit" class="quiet">Vis</button>{{if .AsOf}} <a href="{{.OriginalLink}}">som udstedt</a>{{end}}</form>{{end}}
 {{if .ELI}}<a href="{{.ELI}}">Retsinformation ↗</a>{{end}}
 </div>
 {{if .AsOf}}<p class="disclaimer consolidated" role="note"><b>Advarsel:</b> {{consolidatedDisclaimer}}</p>{{end}}
@@ -601,7 +601,7 @@ const termsBody = `{{define "headsearch"}}{{""}}{{end}}{{define "content"}}
 {{else}}<form method="post" action="/eula">
 <input type="hidden" name="next" value="{{.Next}}">
 {{if .Unticked}}<p class="warn">Sæt kryds for at bekræfte, at du accepterer vilkårene.</p>{{end}}
-<label><input type="checkbox" name="accepterer" value="ja" required> {{.Accept}}</label>
+<label><input type="checkbox" name="accept" value="yes" required> {{.Accept}}</label>
 <div class="actions"><button type="submit">Jeg accepterer – fortsæt</button>
 <a href="https://www.retsinformation.dk/">Jeg accepterer ikke – gå til den officielle Retsinformation</a></div>
 </form>{{end}}
@@ -637,7 +637,7 @@ const statusBody = `{{define "content"}}
 </dl></section>{{end}}
 {{if .Checks}}<section class="panel"><h2>Automatiske tjek</h2><dl class="facts">
 {{range .Checks}}<dt>{{.Title}}</dt><dd>{{.Every.Label}}; sidst {{when .Last.At}}{{if .Last.Err}} — <span class="bad">fejlede: {{.Last.Err}}</span>{{else if .Last.Summary}} — {{.Last.Summary}}{{end}}</dd>
-{{end}}</dl><p><a href="/indstillinger">Skift hvor ofte, eller tjek nu</a></p></section>{{end}}
+{{end}}</dl><p><a href="/settings">Skift hvor ofte, eller tjek nu</a></p></section>{{end}}
 <section class="panel legal" aria-labelledby="legal"><h2 id="legal">Ansvarsfraskrivelse</h2>
 <p><b>{{.Short}}</b></p>
 {{range $i, $t := .Terms}}<h3>{{inc $i}}. {{$t.Heading}}</h3><p>{{$t.Text}}</p>
@@ -647,27 +647,27 @@ const statusBody = `{{define "content"}}
 const settingsBody = `{{define "extrahead"}}{{if .Running}}<meta http-equiv="refresh" content="3">{{end}}{{end}}{{define "content"}}
 <h1>Indstillinger</h1>
 <p>Hvor ofte serveren selv tjekker, om der er noget nyt. Valget gemmes på serveren og gælder for alle, der bruger den.</p>
-<form method="post" action="/indstillinger">
+<form method="post" action="/settings">
 {{range .Checks}}<section class="panel check"><h2>{{.Title}}</h2>
 <p>{{.Explains}}</p>
 <div class="choices" role="radiogroup" aria-label="{{.Title}}">{{$cur := .Every}}{{$name := .Name}}{{range .Intervals}}<label><input type="radio" name="{{$name}}" value="{{.}}"{{if eq . $cur}} checked{{end}}> {{.Label}}</label>{{end}}</div>
 <p class="outcome">{{if .Running}}<b>Tjekker nu …</b>{{else}}Sidst tjekket {{when .Last.At}}{{if .Last.Err}}: <span class="bad">fejlede: {{.Last.Err}}</span>{{else if .Last.Summary}}: {{.Last.Summary}}{{end}}{{end}}</p>
-<button type="submit" name="tjek" value="{{.Name}}"{{if .Running}} disabled{{end}}>↻ Tjek nu</button>
+<button type="submit" name="check" value="{{.Name}}"{{if .Running}} disabled{{end}}>↻ Tjek nu</button>
 </section>{{else}}<p class="note">Denne server følger ikke en udgivelse og har ingen automatiske tjek.</p>{{end}}
 {{if not .Software}}<p class="note">Denne version af programmet ved ikke, hvilken kode den er bygget fra, og kan derfor ikke tjekke for nyere versioner.</p>{{end}}
 {{if .Checks}}<div class="actions"><button type="submit">Gem</button></div>{{end}}
 </form>
-{{if .CanKey}}<form method="post" action="/indstillinger" autocomplete="off"><section class="panel check{{if and .Exposed (not .KeySet)}} exposed{{end}}" id="noegle"><h2>{{if and .Exposed (not .KeySet)}}<span class="warnsign" aria-hidden="true">⚠</span> {{end}}API-nøgle</h2>
+{{if .CanKey}}<form method="post" action="/settings" autocomplete="off"><section class="panel check{{if and .Exposed (not .KeySet)}} exposed{{end}}" id="key"><h2>{{if and .Exposed (not .KeySet)}}<span class="warnsign" aria-hidden="true">⚠</span> {{end}}API-nøgle</h2>
 {{if .Exposed}}<p>Serveren lytter ikke kun på denne maskine, men kan nås fra netværket.{{if not .KeySet}} <b>Uden en API-nøgle kan alle, der kan nå den, bruge den og ændre disse indstillinger.</b>{{end}}</p>
 {{else}}<p>Serveren lytter kun på denne maskine.</p>{{end}}
 <p>En API-nøgle er altid valgfri. Er der sat en, svarer serveren kun dem, der kender den: en browser bliver bedt om nøglen én gang, og et program eller en MCP-klient sender den som <code>Authorization: Bearer &lt;nøgle&gt;</code>. Kun nøglens hash gemmes på serveren.</p>
 {{with .Problem}}<p class="bad"><b>{{.}}</b></p>{{end}}
 {{with .Made}}<p><b>Den nye nøgle vises kun denne ene gang — gem den nu:</b></p><p class="newkey">{{.}}</p>{{end}}
 <p class="outcome">{{if .KeySet}}Der er sat en API-nøgle.{{else}}Der er ingen API-nøgle; serveren svarer alle.{{end}}</p>
-<div class="keyform"><input type="password" name="ny_noegle" minlength="{{.MinKey}}" placeholder="Ny nøgle, mindst {{.MinKey}} tegn" aria-label="Ny API-nøgle" autocomplete="new-password">
-<button type="submit" name="noegle" value="gem">Brug denne nøgle</button></div>
-<div class="actions"><button type="submit" name="noegle" value="lav" formnovalidate>Lav en tilfældig nøgle</button>
-{{if .KeySet}}<button type="submit" name="noegle" value="fjern" formnovalidate>Fjern nøglen</button>{{end}}</div>
+<div class="keyform"><input type="password" name="new_key" minlength="{{.MinKey}}" placeholder="Ny nøgle, mindst {{.MinKey}} tegn" aria-label="Ny API-nøgle" autocomplete="new-password">
+<button type="submit" name="key" value="set">Brug denne nøgle</button></div>
+<div class="actions"><button type="submit" name="key" value="generate" formnovalidate>Lav en tilfældig nøgle</button>
+{{if .KeySet}}<button type="submit" name="key" value="remove" formnovalidate>Fjern nøglen</button>{{end}}</div>
 </section></form>{{end}}
 {{end}}`
 
@@ -675,10 +675,10 @@ const accessBody = `{{define "headsearch"}}{{""}}{{end}}{{define "content"}}
 <section class="terms" aria-labelledby="access-title">
 <h1 id="access-title">API-nøgle</h1>
 <p>Denne server kræver en API-nøgle. Spørg den, der driver serveren, om nøglen.</p>
-<form method="post" action="/adgang">
+<form method="post" action="/access">
 <input type="hidden" name="next" value="{{.Next}}">
 {{if .Wrong}}<p class="warn">Nøglen passer ikke.</p>{{end}}
-<div class="keyform"><input type="password" name="noegle" required autofocus aria-label="API-nøgle" autocomplete="current-password">
+<div class="keyform"><input type="password" name="key" required autofocus aria-label="API-nøgle" autocomplete="current-password">
 <button type="submit">Fortsæt</button></div>
 </form>
 </section>

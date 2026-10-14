@@ -17,7 +17,7 @@ const termsTool = "eula"
 // termsInput is the terms tool's argument object; see lookupInput for why the tag is the
 // description.
 type termsInput struct {
-	Accept bool `json:"accepterer,omitempty" jsonschema:"true only after the user has read the terms this tool returned and said themselves that they accept them; omit to fetch the terms"`
+	Accept bool `json:"accept,omitempty" jsonschema:"true only after the user has read the terms this tool returned and said themselves that they accept them; omit to fetch the terms"`
 }
 
 // terms is which sessions have been shown the terms and which have accepted them. A session is
@@ -55,7 +55,7 @@ func sessionID(req *mcp.CallToolRequest) string {
 
 const termsInstructions = "Show the user these terms in full, in Danish and word for word, and ask whether they " +
 	"accept them. Only when the user has answered that they accept, call the tool " + termsTool +
-	" again with accepterer: true. Never accept on the user's behalf. Until then no other tool answers.\n\n"
+	" again with accept: true. Never accept on the user's behalf. Until then no other tool answers.\n\n"
 
 func textResult(isError bool, text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{IsError: isError, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
@@ -86,5 +86,5 @@ func (s *Server) gate(req *mcp.CallToolRequest) *mcp.CallToolResult {
 	}
 	return textResult(true, "The user has not accepted the terms of use in this session. Call the tool "+
 		termsTool+" without arguments to fetch them, show them to the user, and call it with "+
-		"accepterer: true once the user has accepted. No other tool answers until then.")
+		"accept: true once the user has accepted. No other tool answers until then.")
 }

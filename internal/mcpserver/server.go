@@ -389,7 +389,7 @@ func (s *Server) mcpServer() *mcp.Server {
 	}, &mcp.ServerOptions{
 		Instructions: "Lookup Danish law from an unofficial mirror of retsinformation.dk. " +
 			"Before anything else, call the tool " + termsTool + " to fetch the terms of use, show them to the " +
-			"user in full, and call it again with accepterer: true only once the user has accepted them; " +
+			"user in full, and call it again with accept: true only once the user has accepted them; " +
 			"no other tool answers before that. " +
 			disclaimer.ShortEnglish + " " + disclaimer.ConsolidatedEnglish + " " +
 			"Pass these warnings on to the user with any answer built on this text. " +
@@ -402,7 +402,7 @@ func (s *Server) mcpServer() *mcp.Server {
 		Name: termsTool,
 		Description: "The terms of use (vilkår), which the user must accept before any other tool answers. " +
 			"Call without arguments to fetch them, show them to the user in full, and call again with " +
-			"accepterer: true only once the user has said they accept. Never accept on the user's behalf.",
+			"accept: true only once the user has said they accept. Never accept on the user's behalf.",
 	}, s.termsTool)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "lookup",

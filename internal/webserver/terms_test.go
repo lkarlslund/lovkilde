@@ -24,7 +24,7 @@ func TestPagesAnswerOnlyOnceTheTermsAreAccepted(t *testing.T) {
 		t.Fatalf("a page before the terms: %s, to %q", resp.Status, loc)
 	}
 	body, code := getAnon(t, site.URL+"/eula?next=%2Fbrowse")
-	if code != http.StatusOK || !strings.Contains(body, disclaimer.Terms[len(disclaimer.Terms)-1].Text) || !strings.Contains(body, `name="accepterer"`) {
+	if code != http.StatusOK || !strings.Contains(body, disclaimer.Terms[len(disclaimer.Terms)-1].Text) || !strings.Contains(body, `name="accept"`) {
 		t.Errorf("the terms page (%d) does not show the terms and the box to tick:\n%s", code, body)
 	}
 	if body, code := getAnon(t, site.URL+"/status"); code != http.StatusForbidden || !strings.Contains(body, disclaimer.Terms[0].Text) {
@@ -43,11 +43,11 @@ func TestPagesAnswerOnlyOnceTheTermsAreAccepted(t *testing.T) {
 	if resp := post(url.Values{"next": {"/browse"}}); resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 0 {
 		t.Errorf("unticked: %s, cookies %v", resp.Status, resp.Cookies())
 	}
-	resp = post(url.Values{"next": {"//elsewhere.example/"}, "accepterer": {"ja"}})
+	resp = post(url.Values{"next": {"//elsewhere.example/"}, "accept": {"yes"}})
 	if loc := resp.Header.Get("Location"); loc != "/" {
 		t.Errorf("accepting sent the browser to %q, want this site's front page", loc)
 	}
-	resp = post(url.Values{"next": {"/browse?kind=lta"}, "accepterer": {"ja"}})
+	resp = post(url.Values{"next": {"/browse?kind=lta"}, "accept": {"yes"}})
 	if loc := resp.Header.Get("Location"); loc != "/browse?kind=lta" || len(resp.Cookies()) != 1 || resp.Cookies()[0].Value != disclaimer.TermsVersion {
 		t.Fatalf("accepting: to %q, cookies %v", loc, resp.Cookies())
 	}

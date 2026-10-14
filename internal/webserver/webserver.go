@@ -10,12 +10,12 @@
 //
 //	/                 search box, facets, what the server holds
 //	/search           results, each linking to the provision it matched
-//	/dok              one document: table of contents, text, related acts
+//	/doc              one document: table of contents, text, related acts
 //	/browse           a listing by type and year
 //	/status           what is served and how current it is; plain text for curl
-//	/indstillinger    how often the server checks for a newer dataset and software, "check now",
+//	/settings    how often the server checks for a newer dataset and software, "check now",
 //	                  and the optional API key
-//	/adgang           where a browser gives the API key, while one is set; nothing else answers
+//	/access           where a browser gives the API key, while one is set; nothing else answers
 //	                  without it
 //	/eula          the terms of use, which a browser accepts before any other page answers
 //	/mcp              the MCP endpoint, so one port serves both audiences; it asks for the terms
@@ -125,7 +125,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.index(w, r)
 	case "/search":
 		h.search(w, r)
-	case "/dok":
+	case "/doc":
 		h.document(w, r)
 	case "/browse":
 		h.browse(w, r)
@@ -264,7 +264,7 @@ func (h *Handler) search(w http.ResponseWriter, r *http.Request) {
 		Limit:    searchPageSize,
 		Language: "da",
 	}
-	req.Sources = nonEmpty(v["kilde"])
+	req.Sources = nonEmpty(v["source"])
 	facets := h.srv.Browse(mcpserver.BrowseRequest{Limit: 1})
 	page := searchPage{
 		Query:     q,
@@ -794,7 +794,7 @@ func documentLink(ref, addr string) string {
 	if addr != "" {
 		values.Set("addr", addr)
 	}
-	return "/dok?" + values.Encode()
+	return "/doc?" + values.Encode()
 }
 
 func browseQueryArgs(kind string, year int, title, status, typeCode string, offset int) string {

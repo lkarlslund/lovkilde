@@ -17,7 +17,7 @@ func TestEveryPageCarriesItsLayout(t *testing.T) {
 		{"/", "Søg i dansk lovgivning"},
 		{"/browse", "Alle dokumenter"},
 		{"/search?q=testlov", "Søgning"},
-		{"/dok?ref=" + accCanonical, "Testlov"},
+		{"/doc?ref=" + accCanonical, "Testlov"},
 	} {
 		body, code := get(t, site, tc.path)
 		if code != 200 {

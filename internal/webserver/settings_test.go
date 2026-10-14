@@ -36,7 +36,7 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 
 	post := func(form url.Values) {
 		t.Helper()
-		req, _ := http.NewRequest(http.MethodPost, site.URL+"/indstillinger", strings.NewReader(form.Encode()))
+		req, _ := http.NewRequest(http.MethodPost, site.URL+"/settings", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.AddCookie(&http.Cookie{Name: termsCookie, Value: disclaimer.TermsVersion})
 		resp, err := http.DefaultClient.Do(req)
@@ -52,7 +52,7 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 	if s, _ := chk.State(checks.Software); s.Every != checks.Weekly {
 		t.Errorf("software interval %s, want weekly", s.Every)
 	}
-	post(url.Values{"tjek": {checks.Dataset}})
+	post(url.Values{"check": {checks.Dataset}})
 	for i := 0; ran.Load() == 0 && i < 200; i++ {
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -65,7 +65,7 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	body, code := get(t, site, "/indstillinger")
+	body, code := get(t, site, "/settings")
 	if code != http.StatusOK || !strings.Contains(body, `value="maanedligt" checked`) || !strings.Contains(body, "Tjek nu") {
 		t.Errorf("the settings page (%d):\n%s", code, body)
 	}

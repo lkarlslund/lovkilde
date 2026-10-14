@@ -46,7 +46,7 @@ func TestSearchCountsEverythingAndLoadsTheRestOnRequest(t *testing.T) {
 	if !strings.Contains(body, `type="checkbox" name="kind" value="lta" checked`) {
 		t.Errorf("the lta toggle is not shown as on:\n%s", body)
 	}
-	if !strings.Contains(body, `name="kilde" value="xml"`) || !strings.Contains(body, "kan citeres, som den står") {
+	if !strings.Contains(body, `name="source" value="xml"`) || !strings.Contains(body, "kan citeres, som den står") {
 		t.Errorf("the source toggles or their explanation are missing:\n%s", body)
 	}
 	if !strings.Contains(body, `data-more`) || !strings.Contains(body, "offset=20") {

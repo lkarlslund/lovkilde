@@ -14,7 +14,7 @@ import (
 // "Authorization: Bearer <key>"; a browser gives it once on the key page and keeps a cookie that
 // holds the key's hash, not the key.
 const (
-	accessPath   = "/adgang"
+	accessPath   = "/access"
 	accessCookie = "retsin_adgang"
 )
 
@@ -63,7 +63,7 @@ func (h *Handler) access(w http.ResponseWriter, r *http.Request) {
 	}
 	wrong := false
 	if r.Method == http.MethodPost {
-		if h.Key.Match(r.PostFormValue("noegle")) {
+		if h.Key.Match(r.PostFormValue("key")) {
 			h.keepAccess(w, r)
 			http.Redirect(w, r, next, http.StatusSeeOther)
 			return
@@ -86,12 +86,12 @@ func (h *Handler) keyAction(w http.ResponseWriter, r *http.Request, action strin
 	}
 	var err error
 	switch action {
-	case "gem":
-		err = h.Key.Set(r.PostFormValue("ny_noegle"))
-	case "lav":
+	case "set":
+		err = h.Key.Set(r.PostFormValue("new_key"))
+	case "generate":
 		made = apikey.Generate()
 		err = h.Key.Set(made)
-	case "fjern":
+	case "remove":
 		err = h.Key.Clear()
 	}
 	switch {

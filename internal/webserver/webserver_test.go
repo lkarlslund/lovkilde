@@ -191,13 +191,13 @@ func TestMCPEndpointAnswersARealClient(t *testing.T) {
 	if r := call("lookup", lookupArgs); !r.IsError || strings.Contains(text(r), "KANONISK TEKST") {
 		t.Errorf("lookup answered before the terms were accepted:\n%s", text(r))
 	}
-	if r := call("eula", map[string]any{"accepterer": true}); !r.IsError {
+	if r := call("eula", map[string]any{"accept": true}); !r.IsError {
 		t.Errorf("the terms were accepted before they were shown:\n%s", text(r))
 	}
 	if r := call("eula", nil); r.IsError || !strings.Contains(text(r), disclaimer.Terms[0].Text) {
 		t.Errorf("the terms tool did not return the terms:\n%s", text(r))
 	}
-	if r := call("eula", map[string]any{"accepterer": true}); r.IsError {
+	if r := call("eula", map[string]any{"accept": true}); r.IsError {
 		t.Errorf("accepting the shown terms failed:\n%s", text(r))
 	}
 
@@ -244,7 +244,7 @@ func TestEveryInternalLinkResolves(t *testing.T) {
 	site, _ := newTestSite(t, true)
 	visited := map[string]bool{}
 	frontier := []string{"/", "/search?q=kanonisk", "/browse", "/browse?kind=lta&year=1999",
-		"/dok?ref=" + url.QueryEscape(accCanonical), "/status", "/dok?ref=" + url.QueryEscape(accHTML)}
+		"/doc?ref=" + url.QueryEscape(accCanonical), "/status", "/doc?ref=" + url.QueryEscape(accHTML)}
 
 	for depth := 0; len(frontier) > 0 && depth < 4; depth++ {
 		var next []string
@@ -270,7 +270,7 @@ func TestEveryInternalLinkResolves(t *testing.T) {
 				if strings.HasPrefix(href, "/mcp") {
 					continue // the protocol endpoint answers POST, not GET
 				}
-				if !strings.Contains(href, "?") && strings.HasPrefix(href, "/dok") {
+				if !strings.Contains(href, "?") && strings.HasPrefix(href, "/doc") {
 					t.Errorf("%s links to %s without naming a document", path, href)
 				}
 				next = append(next, href)
@@ -306,13 +306,13 @@ func TestSearchResultLinksTheProvisionItQuoted(t *testing.T) {
 	var link string
 	for _, href := range hrefs(body) {
 		href = html.UnescapeString(href)
-		if strings.HasPrefix(href, "/dok") {
+		if strings.HasPrefix(href, "/doc") {
 			link = href
 			break
 		}
 	}
 	if link == "" {
-		t.Fatalf("no /dok link on the search page:\n%s", body)
+		t.Fatalf("no /doc link on the search page:\n%s", body)
 	}
 	parsed, err := url.Parse(link)
 	if err != nil {
@@ -354,7 +354,7 @@ func TestSearchPageEscapesWhatTheReaderTyped(t *testing.T) {
 // legal reader gets silently misled about where a rule is.
 func TestDocumentPageMarksUpWhatItSays(t *testing.T) {
 	site, _ := newTestSite(t, true)
-	body, code := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical))
+	body, code := get(t, site, "/doc?ref="+url.QueryEscape(accCanonical))
 	if code != http.StatusOK {
 		t.Fatalf("document page status = %d", code)
 	}
@@ -384,14 +384,14 @@ func TestDocumentPageMarksUpWhatItSays(t *testing.T) {
 // mirror found: 522 contents links on narrowed pages pointed at parts that were not there.
 func TestNarrowedViewLinksToThePageThatHoldsEachPart(t *testing.T) {
 	site, _ := newTestSite(t, true)
-	body, code := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical)+"&addr="+url.QueryEscape("§ 1, stk. 1"))
+	body, code := get(t, site, "/doc?ref="+url.QueryEscape(accCanonical)+"&addr="+url.QueryEscape("§ 1, stk. 1"))
 	if code != http.StatusOK {
 		t.Fatalf("narrowed page status = %d", code)
 	}
 	offsite := 0
 	for _, href := range hrefs(body) {
 		href = html.UnescapeString(href)
-		if !strings.HasPrefix(href, "/dok") || !strings.Contains(href, "#") {
+		if !strings.HasPrefix(href, "/doc") || !strings.Contains(href, "#") {
 			continue
 		}
 		offsite++
@@ -412,7 +412,7 @@ func TestNarrowedViewLinksToThePageThatHoldsEachPart(t *testing.T) {
 
 func TestDocumentPageKeepsDocumentMarkupInert(t *testing.T) {
 	site, _ := newTestSite(t, true)
-	body, _ := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical))
+	body, _ := get(t, site, "/doc?ref="+url.QueryEscape(accCanonical))
 	if !strings.Contains(body, "KANONISK TEKST") {
 		t.Fatalf("the page lost the document's text:\n%s", body)
 	}
@@ -429,7 +429,7 @@ func TestDocumentPageKeepsDocumentMarkupInert(t *testing.T) {
 // broken promise.
 func TestRelatedRailMarksWhatTheMirrorLacks(t *testing.T) {
 	site, _ := newTestSite(t, true)
-	body, _ := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical))
+	body, _ := get(t, site, "/doc?ref="+url.QueryEscape(accCanonical))
 	if !strings.Contains(body, "Testbekendtgørelse om intet") {
 		t.Fatalf("the amending act the mirror holds is missing from the rail:\n%s", body)
 	}
@@ -451,14 +451,14 @@ func TestRelatedRailMarksWhatTheMirrorLacks(t *testing.T) {
 // different door on the same room.
 func TestDocumentPageAnswersTheSameAsTheTool(t *testing.T) {
 	site, _ := newTestSite(t, true)
-	body, code := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical)+"&addr="+url.QueryEscape("§ 1, stk. 1"))
+	body, code := get(t, site, "/doc?ref="+url.QueryEscape(accCanonical)+"&addr="+url.QueryEscape("§ 1, stk. 1"))
 	if code != http.StatusOK {
 		t.Fatalf("provision page status = %d", code)
 	}
 	if !strings.Contains(body, "KANONISK TEKST") {
 		t.Errorf("provision page did not show the provision:\n%s", body)
 	}
-	_, code = get(t, site, "/dok?ref="+url.QueryEscape(accCanonical)+"&addr="+url.QueryEscape("§ 999"))
+	_, code = get(t, site, "/doc?ref="+url.QueryEscape(accCanonical)+"&addr="+url.QueryEscape("§ 999"))
 	if code != http.StatusNotFound {
 		t.Errorf("a nonexistent address answered %d, want 404", code)
 	}
@@ -496,7 +496,7 @@ func TestUnknownPathIsNotFound(t *testing.T) {
 	if _, code := get(t, site, "/dokument"); code != http.StatusNotFound {
 		t.Errorf("unknown path answered %d, want 404", code)
 	}
-	if _, code := get(t, site, "/dok"); code != http.StatusBadRequest {
+	if _, code := get(t, site, "/doc"); code != http.StatusBadRequest {
 		t.Errorf("a document page with no ref answered %d, want 400", code)
 	}
 }
@@ -505,8 +505,8 @@ func TestUnknownPathIsNotFound(t *testing.T) {
 // everything else on the page; the text as issued does not carry that warning.
 func TestAConsolidatedPageWarnsThatItCanBeWrong(t *testing.T) {
 	site, _ := newTestSite(t, false)
-	issued, _ := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical))
-	consolidated, code := get(t, site, "/dok?ref="+url.QueryEscape(accCanonical)+"&as_of=2026-01-01")
+	issued, _ := get(t, site, "/doc?ref="+url.QueryEscape(accCanonical))
+	consolidated, code := get(t, site, "/doc?ref="+url.QueryEscape(accCanonical)+"&as_of=2026-01-01")
 	if code != http.StatusOK {
 		t.Fatalf("as_of page: %d", code)
 	}

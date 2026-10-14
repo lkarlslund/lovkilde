@@ -41,7 +41,7 @@ func TestAnExposedServerWarnsAndAKeyLocksIt(t *testing.T) {
 		return resp
 	}
 	key := apikey.Generate()
-	resp := do(http.MethodPost, "/indstillinger", url.Values{"noegle": {"gem"}, "ny_noegle": {key}}, nil)
+	resp := do(http.MethodPost, "/settings", url.Values{"key": {"set"}, "new_key": {key}}, nil)
 	if resp.StatusCode != http.StatusSeeOther || len(resp.Cookies()) != 1 || !h.Key.Match(key) {
 		t.Fatalf("setting the key: %s, cookies %v", resp.Status, resp.Cookies())
 	}
@@ -51,16 +51,16 @@ func TestAnExposedServerWarnsAndAKeyLocksIt(t *testing.T) {
 	}
 
 	browser := func(r *http.Request) { r.Header.Set("Accept", "text/html") }
-	if loc := do(http.MethodGet, "/browse", nil, browser).Header.Get("Location"); loc != "/adgang?next=%2Fbrowse" {
+	if loc := do(http.MethodGet, "/browse", nil, browser).Header.Get("Location"); loc != "/access?next=%2Fbrowse" {
 		t.Errorf("a browser without the key went to %q", loc)
 	}
 	if code := do(http.MethodPost, "/mcp", nil, nil).StatusCode; code != http.StatusUnauthorized {
 		t.Errorf("/mcp without the key: %d", code)
 	}
-	if code := do(http.MethodPost, "/adgang", url.Values{"noegle": {"forkert"}}, nil).StatusCode; code != http.StatusUnauthorized {
+	if code := do(http.MethodPost, "/access", url.Values{"key": {"forkert"}}, nil).StatusCode; code != http.StatusUnauthorized {
 		t.Errorf("a wrong key: %d", code)
 	}
-	resp = do(http.MethodPost, "/adgang", url.Values{"noegle": {key}, "next": {"/browse"}}, nil)
+	resp = do(http.MethodPost, "/access", url.Values{"key": {key}, "next": {"/browse"}}, nil)
 	if resp.Header.Get("Location") != "/browse" || len(resp.Cookies()) != 1 {
 		t.Errorf("the right key: %s to %q", resp.Status, resp.Header.Get("Location"))
 	}
@@ -76,7 +76,7 @@ func TestAnExposedServerWarnsAndAKeyLocksIt(t *testing.T) {
 		t.Errorf("a wrong bearer key: %d", code)
 	}
 
-	do(http.MethodPost, "/indstillinger", url.Values{"noegle": {"fjern"}}, func(r *http.Request) { r.AddCookie(setter) })
+	do(http.MethodPost, "/settings", url.Values{"key": {"remove"}}, func(r *http.Request) { r.AddCookie(setter) })
 	if h.Key.Enabled() {
 		t.Error("removing the key left it set")
 	}

@@ -48,7 +48,7 @@ func (h *Handler) requireTerms(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) terms(w http.ResponseWriter, r *http.Request) {
 	next := localPath(r.FormValue("next"))
 	if r.Method == http.MethodPost {
-		if r.PostFormValue("accepterer") != "ja" {
+		if r.PostFormValue("accept") != "yes" {
 			h.renderTerms(w, next, true, false)
 			return
 		}

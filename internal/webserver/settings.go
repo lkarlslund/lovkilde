@@ -7,7 +7,7 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/checks"
 )
 
-const settingsPath = "/indstillinger"
+const settingsPath = "/settings"
 
 // checkView is one scheduled check as the settings and status pages show it.
 type checkView struct {
@@ -38,13 +38,13 @@ func (h *Handler) checkViews() []checkView {
 // request to check now; it also sets, makes or removes the API key.
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 	var made, problem string
-	if action := r.PostFormValue("noegle"); r.Method == http.MethodPost && action != "" {
+	if action := r.PostFormValue("key"); r.Method == http.MethodPost && action != "" {
 		if made, problem = h.keyAction(w, r, action); made == "" && problem == "" {
 			http.Redirect(w, r, settingsPath, http.StatusSeeOther)
 			return
 		}
 	} else if r.Method == http.MethodPost && h.Checks != nil {
-		if name := r.PostFormValue("tjek"); name != "" {
+		if name := r.PostFormValue("check"); name != "" {
 			h.Checks.Now(name)
 		} else {
 			for _, t := range checkTexts {

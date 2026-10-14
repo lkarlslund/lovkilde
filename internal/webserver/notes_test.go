@@ -30,8 +30,8 @@ func TestNotesAreInThePagesLanguage(t *testing.T) {
 	}{
 		// The plain page says the text is as published and points at as_of; the as-of page has
 		// nothing to point at and says instead what it is: a consolidation, and of how many acts.
-		{"/dok?ref=" + url.QueryEscape(accCanonical), "Ifølge dokumentets egne metadata"},
-		{"/dok?ref=" + url.QueryEscape(accCanonical) + "&as_of=2030-01-01", "Teksten er konsolideret"},
+		{"/doc?ref=" + url.QueryEscape(accCanonical), "Ifølge dokumentets egne metadata"},
+		{"/doc?ref=" + url.QueryEscape(accCanonical) + "&as_of=2030-01-01", "Teksten er konsolideret"},
 	} {
 		body, code := get(t, site, want.path)
 		if code != 200 {

@@ -77,7 +77,7 @@ Værktøjerne:
 
 | Værktøj | Gør |
 |---|---|
-| `eula` | Henter vilkårene for brug. Assistenten skal vise dem til dig, og først når du har accepteret, kalder den igen med `accepterer: true`. Indtil da svarer de andre værktøjer ikke. |
+| `eula` | Henter vilkårene for brug. Assistenten skal vise dem til dig, og først når du har accepteret, kalder den igen med `accept: true`. Indtil da svarer de andre værktøjer ikke. |
 | `lookup` | Henter et dokument eller en bestemmelse. `document` er en ELI-sti (`eli/lta/2019/1399`) eller et accessionsnummer (`B20190139905`); `address` er en bestemmelse; `as_of` (ÅÅÅÅ-MM-DD) giver loven som gældende på datoen. |
 | `search` | Søger. Bøjningsformer og sammensatte ord findes. `a AND b` kræver begge, `-ord` udelukker, `'to ord'` kræver begge i samme bestemmelse. Kan afgrænses på type, år, tekstkilde og status. |
 
@@ -88,9 +88,9 @@ Værktøjerne:
 | `/` | Søgefelt og hvad serveren indeholder |
 | `/search` | Søgeresultater, med samme syntaks som ovenfor og filtre for type, år og status |
 | `/browse` | Alle dokumenter efter type, år og forbogstav |
-| `/dok?ref=…` | Et dokument; `&addr=§ 5, stk. 2` viser én bestemmelse |
+| `/doc?ref=…` | Et dokument; `&addr=§ 5, stk. 2` viser én bestemmelse |
 | `/status` | Hvad serveren indeholder, hvor nyt det er, og den fulde ansvarsfraskrivelse |
-| `/indstillinger` | Hvor ofte der tjekkes for nye data og ny version, og API-nøgle |
+| `/settings` | Hvor ofte der tjekkes for nye data og ny version, og API-nøgle |
 | `/eula` | Vilkårene for brug, som accepteres én gang pr. browser |
 | `/mcp` | MCP-serveren |
 
@@ -123,7 +123,7 @@ Der er ingen TLS. Sæt en reverse proxy foran, hvis serveren skal kunne nås fra
 - **Nyt dataformat:** Kræver nye data en nyere version af programmet, fortsætter serveren med de
   data, den har, og skriver på alle sider, at programmet skal opdateres.
 
-Begge tjek kan sættes til dagligt, ugentligt, månedligt eller fra på `/indstillinger`, hvor de
+Begge tjek kan sættes til dagligt, ugentligt, månedligt eller fra på `/settings`, hvor de
 også kan køres med det samme.
 
 ## Kommandoer
