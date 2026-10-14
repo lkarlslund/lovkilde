@@ -93,7 +93,7 @@ unreadable stops it.`,
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(gate.LogWriter(), "serving %s at http://%s/ (MCP endpoint at /mcp)\n", srv.Status(), service.Addr())
+			fmt.Fprintf(gate.LogWriter(), "lovkilde %s serving %s at http://%s/ (MCP endpoint at /mcp)\n", version, srv.Status(), service.Addr())
 			if !noBrowser {
 				if err := openBrowser(browserURL(service.Addr())); err != nil && !errors.Is(err, errNoDisplay) {
 					fmt.Fprintf(gate.LogWriter(), "could not open a browser: %v\n", err)
@@ -121,12 +121,8 @@ unreadable stops it.`,
 	return cmd
 }
 
-// softwareRepo and softwareTag are where the published builds of this program are: the nightly
-// release, whose tag the build workflow moves to each commit it builds.
-const (
-	softwareRepo = "lkarlslund/lovkilde"
-	softwareTag  = "nightly"
-)
+// softwareRepo is where the published builds of this program are: its releases, rNNNNN.
+const softwareRepo = "lkarlslund/lovkilde"
 
 // addSoftwareCheck schedules the check for a newer published build, daily unless the settings
 // page says otherwise, and returns what it asks. A newer build is downloaded into the data
@@ -139,22 +135,23 @@ func addSoftwareCheck(chk *checks.Checks, dataDir string) *softwareupdate.Checke
 		return nil
 	}
 	chk.Add(checks.Software, checks.Daily, time.Time{}, func(ctx context.Context) checks.Outcome {
-		n, err := sw.Behind(ctx)
+		rel, err := sw.Latest(ctx)
 		switch {
 		case err != nil:
 			return checks.Outcome{Err: err.Error()}
-		case n == 0:
-			return checks.Outcome{Summary: "Denne version er den nyeste udgivne."}
+		case rel.Behind == 0:
+			return checks.Outcome{Summary: fmt.Sprintf("Denne version, %s, er den nyeste udgivne.", version)}
 		}
-		newer := fmt.Sprintf("En nyere version er udgivet, %d %s nyere end denne.", n, map[bool]string{true: "ændring", false: "ændringer"}[n == 1])
+		n := rel.Behind
+		newer := fmt.Sprintf("Version %s er udgivet, %d %s nyere end denne (%s).", rel.Tag, n, map[bool]string{true: "ændring", false: "ændringer"}[n == 1], version)
 		dir := programDir(dataDir)
-		path, _, err := sw.Download(ctx, dir)
+		path, _, err := sw.Download(ctx, dir, rel.Tag)
 		if err != nil {
-			return checks.Outcome{Newer: n, Summary: newer + " Den kunne ikke hentes: " + err.Error()}
+			return checks.Outcome{Newer: n, Version: rel.Tag, Summary: newer + " Den kunne ikke hentes: " + err.Error()}
 		}
 		softwareupdate.Prune(dir, path)
-		fmt.Fprintf(gate.LogWriter(), "downloaded the newer published build to %s; it runs when lovkilde is started again\n", path)
-		return checks.Outcome{Newer: n, Downloaded: true, Summary: newer + " Den er hentet og bruges, når Lovkilde startes igen."}
+		fmt.Fprintf(gate.LogWriter(), "downloaded lovkilde %s to %s; it runs when lovkilde is started again\n", rel.Tag, path)
+		return checks.Outcome{Newer: n, Version: rel.Tag, Downloaded: true, Summary: newer + " Den er hentet og bruges, når Lovkilde startes igen."}
 	})
 	return sw
 }

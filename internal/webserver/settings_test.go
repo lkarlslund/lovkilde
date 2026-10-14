@@ -30,7 +30,7 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 	defer cancel()
 	go chk.Run(ctx)
 	h := New(srv)
-	h.Checks, h.Software = chk, &softwareupdate.Checker{Repo: "o/n", Tag: "nightly"}
+	h.Checks, h.Software = chk, &softwareupdate.Checker{Repo: "o/n"}
 	site := httptest.NewServer(h)
 	defer site.Close()
 
@@ -69,7 +69,7 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 	if code != http.StatusOK || !strings.Contains(body, `value="maanedligt" checked`) || !strings.Contains(body, "Tjek nu") {
 		t.Errorf("the settings page (%d):\n%s", code, body)
 	}
-	if !strings.Contains(body, "4 ændringer nyere") || !strings.Contains(body, "https://github.com/o/n/releases/tag/nightly") {
+	if !strings.Contains(body, "4 ændringer nyere") || !strings.Contains(body, "https://github.com/o/n/releases/latest") {
 		t.Errorf("the page does not say a newer build is out:\n%s", body)
 	}
 }

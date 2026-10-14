@@ -61,7 +61,7 @@ func TestDownloadKeepsTheBuildNamedForItsStamp(t *testing.T) {
 	os.WriteFile(older, []byte("old build"), 0o755)
 
 	c := &Checker{DownloadBase: srv.URL}
-	path, _, err := c.Download(context.Background(), dir)
+	path, _, err := c.Download(context.Background(), dir, "r00001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestDownloadRefusesAnArchiveThatDoesNotMatchItsSum(t *testing.T) {
 	}))
 	defer srv.Close()
 	dir := t.TempDir()
-	if _, _, err := (&Checker{DownloadBase: srv.URL}).Download(context.Background(), dir); err == nil || !strings.Contains(err.Error(), "SHA-256") {
+	if _, _, err := (&Checker{DownloadBase: srv.URL}).Download(context.Background(), dir, "r00001"); err == nil || !strings.Contains(err.Error(), "SHA-256") {
 		t.Fatalf("err = %v, want a SHA-256 mismatch", err)
 	}
 	if _, _, ok := Newest(dir); ok {

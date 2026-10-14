@@ -24,8 +24,9 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
-// version is reported by --version and identifies the tool.
-const version = "0.1"
+// version is the release this build is, rNNNNN: the number of commits on main, set by the build
+// (-ldflags "-X main.version=…"). A build that was not given one is "dev".
+var version = "dev"
 
 // gate serializes progress frames and log records, which share stderr (cli.Gate).
 var gate = cli.Gate

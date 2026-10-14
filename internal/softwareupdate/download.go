@@ -71,16 +71,17 @@ func assetName() string {
 	return name + ".tar.gz"
 }
 
-// downloadBase is where the published build's files are, unless DownloadBase says otherwise.
-func (c *Checker) downloadBase() string {
+// downloadBase is where the files of the release tagged tag are, unless DownloadBase says
+// otherwise.
+func (c *Checker) downloadBase(tag string) string {
 	if c.DownloadBase != "" {
 		return strings.TrimRight(c.DownloadBase, "/")
 	}
-	return "https://github.com/" + c.Repo + "/releases/download/" + url.PathEscape(c.Tag)
+	return "https://github.com/" + c.Repo + "/releases/download/" + url.PathEscape(tag)
 }
 
-func (c *Checker) get(ctx context.Context, name string, limit int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.downloadBase()+"/"+name, nil)
+func (c *Checker) get(ctx context.Context, tag, name string, limit int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.downloadBase(tag)+"/"+name, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -102,12 +103,12 @@ func (c *Checker) get(ctx context.Context, name string, limit int64) ([]byte, er
 	return io.ReadAll(io.LimitReader(resp.Body, limit))
 }
 
-// Download fetches the published build for this platform, checks it against the release's
-// SHA256SUMS, and keeps it in dir named for its stamp, where Newest finds it. A build that is
-// already there is not kept twice. It returns the kept program and its stamp.
-func (c *Checker) Download(ctx context.Context, dir string) (string, Stamp, error) {
+// Download fetches the build for this platform from the release tagged tag, checks it against the
+// release's SHA256SUMS, and keeps it in dir named for its stamp, where Newest finds it. A build
+// that is already there is not kept twice. It returns the kept program and its stamp.
+func (c *Checker) Download(ctx context.Context, dir, tag string) (string, Stamp, error) {
 	asset := assetName()
-	sums, err := c.get(ctx, "SHA256SUMS", 1<<20)
+	sums, err := c.get(ctx, tag, "SHA256SUMS", 1<<20)
 	if err != nil {
 		return "", Stamp{}, err
 	}
@@ -121,7 +122,7 @@ func (c *Checker) Download(ctx context.Context, dir string) (string, Stamp, erro
 	if want == "" {
 		return "", Stamp{}, fmt.Errorf("the published build has no %s for this platform", asset)
 	}
-	archive, err := c.get(ctx, asset, 512<<20)
+	archive, err := c.get(ctx, tag, asset, 512<<20)
 	if err != nil {
 		return "", Stamp{}, err
 	}

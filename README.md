@@ -34,7 +34,7 @@ Hjemmesiden og MCP-serveren giver de samme svar fra de samme data.
 ## Kom i gang
 
 1. Hent programmet til dit styresystem fra
-   [den seneste udgivelse](https://github.com/lkarlslund/lovkilde/releases/tag/nightly) og pak det ud.
+   [den seneste udgivelse](https://github.com/lkarlslund/lovkilde/releases/latest) og pak det ud.
 2. Start det: dobbeltklik på det, eller kør det fra en terminal:
 
    ```bash

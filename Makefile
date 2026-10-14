@@ -32,9 +32,12 @@ all: vet test build
 
 # Two programs: lovkilde serves an artifact and reads nothing else; lovkilde-update collects the
 # documents from retsinformation.dk and compiles the artifact.
+# The release number, rNNNNN, is the number of commits on the branch built.
+RELEASE := r$(shell printf %05d $$(git rev-list --count HEAD 2>/dev/null || echo 0))
+
 build:
 	@mkdir -p bin
-	$(GO) build -o $(BIN) $(PKG)
+	$(GO) build -ldflags "-X main.version=$(RELEASE)" -o $(BIN) $(PKG)
 	$(GO) build -o $(UPDATER) $(UPDPKG)
 
 # Deploy is compile, replace, recycle. The artifact check is exact because the artifact is

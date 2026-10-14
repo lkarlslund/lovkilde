@@ -34,9 +34,9 @@ func switchToNewer(dataDir string) {
 		return
 	}
 	log := gate.LogWriter()
-	fmt.Fprintf(log, "this is lovkilde %s from %s; a newer version, %s from %s, is in %s. Starting that instead.\n",
-		current, current.Time.Format("2006-01-02"), stamp.Revision, stamp.Time.Format("2006-01-02"), path)
-	os.Setenv(switchedEnv, current.String())
+	fmt.Fprintf(log, "this is lovkilde %s (%s, %s); a newer version (%s, %s) is in %s. Starting that instead.\n",
+		version, current, current.Time.Format("2006-01-02"), stamp.Revision, stamp.Time.Format("2006-01-02"), path)
+	os.Setenv(switchedEnv, version)
 	if err := runInstead(path); err != nil {
 		fmt.Fprintf(log, "could not start %s (%v); going on with this version\n", path, err)
 		os.Unsetenv(switchedEnv)
@@ -47,8 +47,8 @@ func switchToNewer(dataDir string) {
 func sayStartedBy() {
 	if from := os.Getenv(switchedEnv); from != "" {
 		current, _ := compiled.CurrentBuild()
-		fmt.Fprintf(gate.LogWriter(), "running lovkilde %s from %s, started by the older version %s\n",
-			current, current.Time.Format("2006-01-02"), from)
+		fmt.Fprintf(gate.LogWriter(), "running lovkilde %s (%s, %s), started by the older version %s\n",
+			version, current, current.Time.Format("2006-01-02"), from)
 	}
 }
 
@@ -67,7 +67,7 @@ func publishedChecker() (*softwareupdate.Checker, error) {
 	if !ok {
 		return nil, fmt.Errorf("this build does not know which commit it was built from, so it cannot be compared with the published one")
 	}
-	return &softwareupdate.Checker{Repo: softwareRepo, Tag: softwareTag, Revision: build.Revision, UserAgent: config.DefaultUserAgent}, nil
+	return &softwareupdate.Checker{Repo: softwareRepo, Revision: build.Revision, UserAgent: config.DefaultUserAgent}, nil
 }
 
 func programCheckCmd(resolve configFunc) *cobra.Command {
@@ -82,7 +82,7 @@ func programCheckCmd(resolve configFunc) *cobra.Command {
 			}
 			current, _ := compiled.CurrentBuild()
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "this build is %s\n", current)
+			fmt.Fprintf(out, "this is lovkilde %s (%s)\n", version, current)
 			if path, stamp, ok := softwareupdate.Newest(programDir(cfg.DataDir)); ok {
 				fmt.Fprintf(out, "downloaded: %s, from %s\n", path, stamp.Time.Format("2006-01-02"))
 			}
@@ -90,15 +90,15 @@ func programCheckCmd(resolve configFunc) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			n, err := sw.Behind(cmd.Context())
+			rel, err := sw.Latest(cmd.Context())
 			if err != nil {
 				return err
 			}
-			if n == 0 {
-				fmt.Fprintln(out, "the published build is not newer")
+			if rel.Behind == 0 {
+				fmt.Fprintf(out, "the published release, %s, is not newer\n", rel.Tag)
 				return nil
 			}
-			fmt.Fprintf(out, "the published build is %d commits newer: lovkilde program download\n", n)
+			fmt.Fprintf(out, "%s is published, %d commits newer: lovkilde program download\n", rel.Tag, rel.Behind)
 			return nil
 		},
 	}
@@ -122,17 +122,21 @@ restarted.`,
 			if err != nil {
 				return err
 			}
-			if n, err := sw.Behind(cmd.Context()); err == nil && n == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "the published build is not newer than this one")
+			rel, err := sw.Latest(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if rel.Behind == 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "the published release, %s, is not newer than this one\n", rel.Tag)
 				return nil
 			}
 			dir := programDir(cfg.DataDir)
-			path, stamp, err := sw.Download(cmd.Context(), dir)
+			path, _, err := sw.Download(cmd.Context(), dir, rel.Tag)
 			if err != nil {
 				return err
 			}
 			softwareupdate.Prune(dir, path)
-			fmt.Fprintf(cmd.OutOrStdout(), "downloaded %s (%s); it runs from the next start\n", path, stamp.Time.Format("2006-01-02"))
+			fmt.Fprintf(cmd.OutOrStdout(), "downloaded %s to %s; it runs from the next start\n", rel.Tag, path)
 			return nil
 		},
 	}

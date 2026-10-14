@@ -83,7 +83,7 @@ func (h *Handler) softwareUpdate() *softwareNotice {
 		n.Data = true
 	}
 	if st, ok := h.Checks.State(checks.Software); ok && h.Software != nil {
-		n.Behind, n.Downloaded = st.Last.Newer, st.Last.Downloaded
+		n.Behind, n.Version, n.Downloaded = st.Last.Newer, st.Last.Version, st.Last.Downloaded
 	}
 	if !n.Data && n.Behind == 0 {
 		return nil
@@ -93,8 +93,9 @@ func (h *Handler) softwareUpdate() *softwareNotice {
 
 type softwareNotice struct {
 	Behind     int
-	Downloaded bool // the newer program is downloaded and runs from the next start
-	Data       bool // the published data needs a newer program
+	Version    string // the newer version's name, rNNNNN
+	Downloaded bool   // the newer program is downloaded and runs from the next start
+	Data       bool   // the published data needs a newer program
 	URL        string
 }
 

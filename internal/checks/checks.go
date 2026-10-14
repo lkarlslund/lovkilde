@@ -87,6 +87,8 @@ type Outcome struct {
 	// Newer is how many changes a newer published version holds that this one does not, for a
 	// check that does not put it to use by itself.
 	Newer int `json:"newer,omitempty"`
+	// Version is the newer published version's name.
+	Version string `json:"version,omitempty"`
 	// Downloaded says the newer version is downloaded and is used from the next start.
 	Downloaded bool `json:"downloaded,omitempty"`
 	// Upgrade says the check found published data that needs a newer program than this one.

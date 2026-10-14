@@ -2,9 +2,9 @@
 // one running, and downloads it when asked to. It never replaces the running program: a downloaded
 // build is kept in the data directory, and the program started next runs the newest one there.
 //
-// A build is named by the commit it was built from, and the published build is the release tag
-// the nightly workflow moves to each commit it builds. GitHub's compare API says how many commits
-// the tag is ahead of the running commit, which is the answer and its size in one request.
+// The published builds are GitHub releases numbered rNNNNN, the number of commits on main; the
+// newest is the repository's latest release. GitHub's compare API says how many commits it is
+// ahead of the running commit.
 package softwareupdate
 
 import (
@@ -20,34 +20,39 @@ import (
 
 // Checker compares the running build with the published one.
 type Checker struct {
-	Repo     string // owner/name on GitHub
-	Tag      string // the published build's release tag
-	Revision string // the commit the running binary was built from
-	APIBase  string // https://api.github.com when empty
+	Repo      string // owner/name on GitHub
+	Tag       string // the published build's release tag; the latest release when empty
+	Revision  string // the commit the running binary was built from
+	APIBase   string // https://api.github.com when empty
+	UserAgent string
+	Client    *http.Client
 	// DownloadBase is where the published build's files are; the release's download URL when
 	// empty.
 	DownloadBase string
-	UserAgent    string
-	Client       *http.Client
+}
+
+// Release is the published build as compared with the running one.
+type Release struct {
+	Tag    string // its release tag, rNNNNN
+	Behind int    // how many commits it holds that the running build does not; 0 when not newer
 }
 
 // URL is the page the published build is downloaded from.
 func (c *Checker) URL() string {
+	if c.Tag == "" {
+		return "https://github.com/" + c.Repo + "/releases/latest"
+	}
 	return "https://github.com/" + c.Repo + "/releases/tag/" + url.PathEscape(c.Tag)
 }
 
-// Behind says how many commits the published build is ahead of the running one: 0 when the
-// running build is the published one or newer.
-func (c *Checker) Behind(ctx context.Context) (int, error) {
+func (c *Checker) api(ctx context.Context, path string, out any) error {
 	base := c.APIBase
 	if base == "" {
 		base = "https://api.github.com"
 	}
-	u := fmt.Sprintf("%s/repos/%s/compare/%s...%s?per_page=1", strings.TrimRight(base, "/"), c.Repo,
-		url.PathEscape(c.Revision), url.PathEscape(c.Tag))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(base, "/")+path, nil)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if c.UserAgent != "" {
@@ -59,27 +64,52 @@ func (c *Checker) Behind(ctx context.Context) (int, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return 0, fmt.Errorf("GitHub does not know commit %s, which this build was made from", short(c.Revision))
+		return errNotFound
 	case resp.StatusCode != http.StatusOK:
-		return 0, fmt.Errorf("GitHub answered %s", resp.Status)
+		return fmt.Errorf("GitHub answered %s", resp.Status)
+	}
+	return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(out)
+}
+
+var errNotFound = fmt.Errorf("not found")
+
+// Latest finds the published build and how far it is ahead of the running one.
+func (c *Checker) Latest(ctx context.Context) (Release, error) {
+	tag := c.Tag
+	if tag == "" {
+		var rel struct {
+			TagName string `json:"tag_name"`
+		}
+		if err := c.api(ctx, "/repos/"+c.Repo+"/releases/latest", &rel); err != nil {
+			if err == errNotFound {
+				return Release{}, fmt.Errorf("%s has no published release", c.Repo)
+			}
+			return Release{}, err
+		}
+		tag = rel.TagName
 	}
 	var cmp struct {
 		Status  string `json:"status"`
 		AheadBy int    `json:"ahead_by"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&cmp); err != nil {
-		return 0, err
+	err := c.api(ctx, fmt.Sprintf("/repos/%s/compare/%s...%s?per_page=1", c.Repo, url.PathEscape(c.Revision), url.PathEscape(tag)), &cmp)
+	if err == errNotFound {
+		return Release{}, fmt.Errorf("GitHub does not know commit %s, which this build was made from", short(c.Revision))
 	}
+	if err != nil {
+		return Release{}, err
+	}
+	r := Release{Tag: tag}
 	// "ahead" and "diverged" both mean the published build holds commits this one does not.
 	if cmp.Status == "ahead" || cmp.Status == "diverged" {
-		return cmp.AheadBy, nil
+		r.Behind = cmp.AheadBy
 	}
-	return 0, nil
+	return r, nil
 }
 
 func short(rev string) string {
