@@ -15,15 +15,15 @@ import (
 )
 
 // The build command is the only way the artifact gets made in production, so the wiring between
-// "retsin-update artifact build" and a file that opens and answers is tested end to end rather than by
+// "lovkilde-update artifact build" and a file that opens and answers is tested end to end rather than by
 // trusting that a scan, a writer and a rename agree. The two pinned documents are real: one a short
 // law with provisions, one a gazette item with none, because a build that only works on the
 // documents it likes is a build that will quietly produce a smaller mirror.
 func TestArtifactBuildCommand(t *testing.T) {
 	dir := t.TempDir()
 	mirror := map[string]string{
-		"xml/lta/1942/542.xml": "../retsin/testdata/lta-1942-542.xml",
-		"xml/fob/1989/104.xml": "../retsin/testdata/fob-1989-104.xml",
+		"xml/lta/1942/542.xml": "../lovkilde/testdata/lta-1942-542.xml",
+		"xml/fob/1989/104.xml": "../lovkilde/testdata/fob-1989-104.xml",
 	}
 	for into, from := range mirror {
 		raw, err := os.ReadFile(from)
@@ -105,7 +105,7 @@ func TestArtifactBuildRefusesEmptyMirror(t *testing.T) {
 // nothing but the artifact, can say how current its text is.
 func TestArtifactBuildRecordsTheCollectionPass(t *testing.T) {
 	dir := t.TempDir()
-	raw, err := os.ReadFile("../retsin/testdata/lta-1942-542.xml")
+	raw, err := os.ReadFile("../lovkilde/testdata/lta-1942-542.xml")
 	if err != nil {
 		t.Fatal(err)
 	}

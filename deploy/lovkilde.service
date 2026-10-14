@@ -1,15 +1,15 @@
-# Retsin mirror as a user service: the HTML reading UI and the MCP endpoint on one
+# Lovkilde mirror as a user service: the HTML reading UI and the MCP endpoint on one
 # port, on every interface. It runs the repository's own build output, the way the
 # llama.cpp and ninfer units run theirs, so there is no second copy of the binary that
 # can be older than the one just compiled — which is how a deploy once installed a binary
 # two weeks stale and reported success. Link this file into place once:
 #
-#   ln -s ~/github-repos/retsinformation/deploy/retsin.service ~/.config/systemd/user/
+#   ln -s ~/github-repos/retsinformation/deploy/lovkilde.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
-#   systemctl --user enable --now retsin.service
+#   systemctl --user enable --now lovkilde.service
 #
 # After that, deploying is `make deploy`: compile into bin/, rebuild the artifact with
-# retsin-update when this build cannot read the one on disk, daemon-reload, restart.
+# lovkilde-update when this build cannot read the one on disk, daemon-reload, restart.
 # The unit is a symlink, so an edit to this file needs no copy either.
 #
 # The server reads the artifact and nothing else: no XML, no state store, no network. The
@@ -29,11 +29,11 @@
 #
 # RestartSec is deliberately slow. Without a readable artifact the unit fails at startup;
 # a 30 second gap means the journal keeps one readable reason per attempt instead of a
-# hot loop. Build one with `retsin-update artifact build` (it becomes current, and a
+# hot loop. Build one with `lovkilde-update artifact build` (it becomes current, and a
 # running server picks a new one up by itself) and the unit comes back.
 
 [Unit]
-Description=Retsin mirror: HTML reading UI and MCP endpoint
+Description=Lovkilde mirror: HTML reading UI and MCP endpoint
 Documentation=https://github.com/lkarlslund/retsinformation
 After=network-online.target
 Wants=network-online.target
@@ -41,7 +41,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/github-repos/retsinformation
-ExecStart=%h/github-repos/retsinformation/bin/retsin serve --addr 0.0.0.0:8787 --data-dir %h/github-repos/retsinformation/data
+ExecStart=%h/github-repos/retsinformation/bin/lovkilde serve --addr 0.0.0.0:8787 --data-dir %h/github-repos/retsinformation/data
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=15

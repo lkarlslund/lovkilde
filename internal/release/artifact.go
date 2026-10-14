@@ -40,11 +40,11 @@ type Installed struct {
 
 // ErrProgramTooOld is published data that needs a newer program, with none of this program's
 // model published beside it.
-var ErrProgramTooOld = errors.New("the published data needs a newer version of retsin")
+var ErrProgramTooOld = errors.New("the published data needs a newer version of lovkilde")
 
 // ErrDataTooOld is a program newer than every published artifact: the release with its model is
 // not out yet.
-var ErrDataTooOld = errors.New("no published artifact is of the document model this version of retsin reads yet")
+var ErrDataTooOld = errors.New("no published artifact is of the document model this version of lovkilde reads yet")
 
 // Transfer says how the downloaded files came to be on disk.
 type Transfer struct {
@@ -79,10 +79,10 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 	out.Newer = newer
 	switch {
 	case !ok && newer > 0:
-		return out, fmt.Errorf("the published artifact %s holds document model %d and this version of retsin reads model %d: upgrade retsin: %w", m.File, m.Model, compiled.ModelVersion, ErrProgramTooOld)
+		return out, fmt.Errorf("the published artifact %s holds document model %d and this version of lovkilde reads model %d: upgrade lovkilde: %w", m.File, m.Model, compiled.ModelVersion, ErrProgramTooOld)
 	case !ok:
-		return out, fmt.Errorf("the published artifact %s holds document model %d and this version of retsin reads model %d, which is not published yet: %w", m.File, m.Model, compiled.ModelVersion, ErrDataTooOld)
-	case !strings.HasSuffix(ref.Path, artifactdir.Ext) || strings.Contains(ref.Path, "/"):
+		return out, fmt.Errorf("the published artifact %s holds document model %d and this version of lovkilde reads model %d, which is not published yet: %w", m.File, m.Model, compiled.ModelVersion, ErrDataTooOld)
+	case !artifactdir.IsArtifactName(ref.Path):
 		return out, fmt.Errorf("the release in %s names %q, which is not an artifact file name", r, ref.Path)
 	}
 	if cur, err := artifactdir.Current(dataDir); err == nil && filepath.Base(cur) == ref.Path {

@@ -158,24 +158,24 @@ By default resources are visited in URL order, so --kind is how a single series 
 or repaired without crawling everything that sorts before it, and --order picks the other
 end of the keyspace instead:
 
-  retsin-update fetch --kind retsinfo --limit 50
+  lovkilde-update fetch --kind retsinfo --limit 50
 
 --state selects rows by what happened to them last, which is how failures get a
 second chance. A default run takes pending rows plus failures still under the retry
 limit; naming a state lifts that limit, so exhausted failures and 404s can be
 retried on purpose:
 
-  retsin-update fetch --state failed              retry everything that failed
-  retsin-update fetch --state gone --kind retsinfo  re-test 404s in one series
-  retsin-update fetch --state fetched             re-check rows that claim to be on disk
+  lovkilde-update fetch --state failed              retry everything that failed
+  lovkilde-update fetch --state gone --kind retsinfo  re-test 404s in one series
+  lovkilde-update fetch --state fetched             re-check rows that claim to be on disk
 
 --order changes which end of the catalogue is reached first. The newest law is at the
 top of the keyspace, so desc gets current legislation quickly where asc would spend
 days on 1873 first; random samples the catalogue evenly, which is the honest order
 for a trial run that should not be biased toward the old end:
 
-  retsin-update fetch --order desc --limit 20     the twenty most recent documents
-  retsin-update fetch --order random --limit 200  an unbiased sample
+  lovkilde-update fetch --order desc --limit 20     the twenty most recent documents
+  lovkilde-update fetch --order random --limit 200  an unbiased sample
 
 --bodies works on the other half of the corpus: documents whose canonical XML carries
 metadata but no text at all. It scans the archive for those, queues the ones with no
@@ -183,9 +183,9 @@ metadata but no text at all. It scans the archive for those, queues the ones wit
 it beside the XML. Same pacing and same narrowing flags, but a separate queue, so an
 XML row that says "fetched" keeps meaning "we hold the canonical XML":
 
-  retsin-update fetch --bodies-scan                    the census, zero requests
-  retsin-update fetch --bodies --kind lta --limit 50   fifty sidecars, lta only
-  retsin-update fetch --bodies --state empty           re-test documents whose payload had no text`,
+  lovkilde-update fetch --bodies-scan                    the census, zero requests
+  lovkilde-update fetch --bodies --kind lta --limit 50   fifty sidecars, lta only
+  lovkilde-update fetch --bodies --state empty           re-test documents whose payload had no text`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			a, lim, err := open(cmd)
@@ -447,7 +447,7 @@ decision is read off measurements rather than memory.`,
 				return err
 			}
 			if len(changes) == 0 {
-				fmt.Printf("no harvested changes recorded since %s. Run: retsin-update harvest\n", since)
+				fmt.Printf("no harvested changes recorded since %s. Run: lovkilde-update harvest\n", since)
 				return nil
 			}
 

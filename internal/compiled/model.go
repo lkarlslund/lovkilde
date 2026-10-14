@@ -17,7 +17,7 @@ var ErrOtherModel = errors.New("the artifact holds another document model")
 // Bump it whenever a document compiles differently: a reader or normalisation change, a field
 // added to or removed from internal/lexdoc's types, a change in what a field means.
 // TestModelVersionCoversTheStoredModel compiles a committed sample of real documents through the
-// same path `retsin-update artifact build` uses and fails, naming this constant, when their stored form
+// same path `lovkilde-update artifact build` uses and fails, naming this constant, when their stored form
 // changed and the version did not.
 const ModelVersion = 2
 
@@ -36,7 +36,7 @@ func (a *Artifact) checkModel(reads int) error {
 		return nil
 	}
 	if a.Header.Model < reads {
-		return fmt.Errorf("%s holds document model %d, and this server reads model %d: the way documents compile has changed since it was built. Rebuild it with `retsin-update artifact build`: %w",
+		return fmt.Errorf("%s holds document model %d, and this server reads model %d: the way documents compile has changed since it was built. Rebuild it with `lovkilde-update artifact build`: %w",
 			a.path, a.Header.Model, reads, ErrOtherModel)
 	}
 	return fmt.Errorf("%s holds document model %d, newer than the model %d this server reads. Rebuild and restart the server, since it would decode the artifact's documents as a model it does not have: %w",

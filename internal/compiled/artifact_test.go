@@ -258,7 +258,7 @@ func TestArtifactRefusesWhatItCannotRead(t *testing.T) {
 	if err := os.WriteFile(plain, buf.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := OpenArtifact(plain); err == nil || !strings.Contains(err.Error(), "not a retsin artifact") {
+	if _, err := OpenArtifact(plain); err == nil || !strings.Contains(err.Error(), "not a lovkilde artifact") {
 		t.Errorf("a plain zstd stream was not recognised as the wrong file: %v", err)
 	}
 
@@ -345,7 +345,7 @@ func fixtureDocument() *lexdoc.Document {
 			Validity:  []lexdoc.Period{{From: eff}},
 			Status:    lexdoc.StatusValid,
 		},
-		Provenance: lexdoc.Provenance{Source: "xml", Schema: "retsin.xsd"},
+		Provenance: lexdoc.Provenance{Source: "xml", Schema: "lovkilde.xsd"},
 		Diagnostics: lexdoc.Diagnostics{
 			Warnings: []string{"a warning the reader raised"},
 		},

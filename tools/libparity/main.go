@@ -2,7 +2,7 @@
 // a date exactly as the XML archive does: the same consolidated text, the same changes applied and
 // refused, the same chain. It is the gate for serving from the artifact.
 //
-//	go run ./tools/libparity -artifact data/artifacts/<file>.retsin -n 2000
+//	go run ./tools/libparity -artifact data/artifacts/<file>.lkz -n 2000
 package main
 
 import (

@@ -34,8 +34,8 @@ with the last, and a server downloads only those.
 what a machine needs to build an artifact in full without crawling. Only the packs whose
 files changed since the last release are packed and sent.
 
-  retsin-update publish --release /srv/retsin-releases
-  retsin-update publish --release hf://owner/name
+  lovkilde-update publish --release /srv/lovkilde-releases
+  lovkilde-update publish --release hf://owner/name
 
 A directory works completely, and is how publishing is tried out and how a snapshot is kept to
 start from again (see "restore"); the artifact is hard-linked into it where it can be, so a
@@ -100,8 +100,8 @@ func restoreCmd(resolve configFunc) *cobra.Command {
 continues from it: a fresh machine needs this and nothing else to run "update". Every file is
 checked against the manifest, and none is put in place until all of them arrived whole.
 
-  retsin-update --data-dir /tmp/try restore --release /srv/retsin-releases
-  retsin-update --data-dir /tmp/try update
+  lovkilde-update --data-dir /tmp/try restore --release /srv/lovkilde-releases
+  lovkilde-update --data-dir /tmp/try update
 
 The data directory must not hold state already. --with-artifact also installs the published
 artifact: what "artifact build --mode patch" continues from, so the XML archive is not needed

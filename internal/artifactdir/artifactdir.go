@@ -4,22 +4,24 @@
 // An artifact is named for when it was built and for its stamp (compiled.ArtifactHeader.Stamp),
 // and its search index for the stamp alone:
 //
-//	data/artifacts/artifact-20261006T1520Z-8f3a2c1d.retsin   the artifact
-//	data/artifacts/search-8f3a2c1d.idx                       the index cut from it
-//	data/artifacts/artifact-20261007T0310Z-c41e9b07.retsin.part   one being written or downloaded
-//	data/artifacts/artifact-20261006T1520Z-8f3a2c1d.retsin.xet    its Xet hash, when downloaded
-//	data/artifact.current                                    the current artifact's file name
+//	data/artifacts/artifact-20261006T1520Z-8f3a2c1d.lkz        the artifact
+//	data/artifacts/search-8f3a2c1d.lkiz                        the index cut from it
+//	data/artifacts/artifact-20261007T0310Z-c41e9b07.lkz.part   one being written or downloaded
+//	data/artifacts/artifact-20261006T1520Z-8f3a2c1d.lkz.xet    its Xet hash, when downloaded
+//	data/artifact.current                                      the current artifact's file name
 //
 // Two artifacts are kept: the current one and the one before it. The new one is written beside the
-// old under a .part name, becomes a .retsin only once it is complete and verified, and becomes
+// old under a .part name, becomes a .lkz only once it is complete and verified, and becomes
 // current when the pointer is replaced — a rename, so a reader sees the old name or the new one
 // and never half of either. A serving process notices the new pointer, builds the new index while
 // it still answers from the old pair, and swaps both at once. The old pair stays on disk as the
 // fallback until the next one replaces it.
 //
-// The extension is .retsin rather than .zst: the file is a zstd stream, but its documents are
-// compressed against the dictionary in its second frame, and a name that invited `zstd -d` would
-// fail on every document.
+// The extension is .lkz (Lovkilde, zstd) rather than .zst: the file is a zstd stream, but its
+// documents are compressed against the dictionary in its second frame, and a name that invited
+// `zstd -d` would fail on every document. The index is .lkiz. Artifacts named .retsin, from before
+// the program was called Lovkilde, are read and pruned like any other; indexes named .idx are only
+// pruned, since the server cuts a new one.
 package artifactdir
 
 import (
@@ -41,8 +43,13 @@ const (
 	// PointerFile names the current artifact, inside the data directory.
 	PointerFile = "artifact.current"
 	// Ext is an artifact's extension; PartExt is appended while it is being written.
-	Ext     = ".retsin"
+	Ext     = ".lkz"
 	PartExt = ".part"
+	// IndexExt is a search index's extension.
+	IndexExt = ".lkiz"
+	// legacyExt and legacyIndexExt are the extensions from before the program was called Lovkilde.
+	legacyExt      = ".retsin"
+	legacyIndexExt = ".idx"
 	// XetExt is appended for the file holding an artifact's Xet hash: what Hugging Face stores
 	// it under, so that a later download reads the chunks the two share from it.
 	XetExt = ".xet"
@@ -79,7 +86,14 @@ func Name(h compiled.ArtifactHeader) string {
 }
 
 // IndexName is the file name of the search index cut from the artifact with this stamp.
-func IndexName(stamp string) string { return "search-" + shortStamp(stamp) + ".idx" }
+func IndexName(stamp string) string { return "search-" + shortStamp(stamp) + IndexExt }
+
+// IsArtifactName reports a file name an artifact is kept or published under: artifact-*.lkz, or
+// the .retsin of an artifact named before the program was called Lovkilde.
+func IsArtifactName(name string) bool {
+	return !strings.ContainsAny(name, `/\`) && strings.HasPrefix(name, "artifact-") &&
+		(strings.HasSuffix(name, Ext) || strings.HasSuffix(name, legacyExt))
+}
 
 // IndexPath is where the index for an artifact file is kept: beside it, named for its stamp.
 func IndexPath(artifactPath, stamp string) string {
@@ -98,7 +112,7 @@ func Current(dataDir string) (string, error) {
 		return "", err
 	}
 	name := strings.TrimSpace(string(raw))
-	if name == "" || strings.ContainsAny(name, `/\`) || !strings.HasSuffix(name, Ext) {
+	if !IsArtifactName(name) {
 		return "", fmt.Errorf("%s names %q, which is not an artifact file name", filepath.Join(dataDir, PointerFile), name)
 	}
 	path := filepath.Join(Dir(dataDir), name)
@@ -180,7 +194,7 @@ func Prune(dataDir string) ([]string, error) {
 	}
 	var artifacts []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasPrefix(e.Name(), "artifact-") && strings.HasSuffix(e.Name(), Ext) {
+		if !e.IsDir() && IsArtifactName(e.Name()) {
 			artifacts = append(artifacts, e.Name())
 		}
 	}
@@ -211,18 +225,20 @@ func Prune(dataDir string) ([]string, error) {
 			if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > abandonedAfter {
 				remove(n)
 			}
-		case strings.HasPrefix(n, "artifact-") && strings.HasSuffix(n, Ext):
+		case IsArtifactName(n):
 			if !keep[n] {
 				remove(n)
 			}
-		case strings.HasPrefix(n, "artifact-") && strings.HasSuffix(n, Ext+XetExt):
+		case IsArtifactName(strings.TrimSuffix(n, XetExt)) && strings.HasSuffix(n, XetExt):
 			if !keep[strings.TrimSuffix(n, XetExt)] {
 				remove(n)
 			}
-		case strings.HasPrefix(n, "search-") && strings.HasSuffix(n, ".idx"):
-			if !keptStamps[strings.TrimSuffix(strings.TrimPrefix(n, "search-"), ".idx")] {
+		case strings.HasPrefix(n, "search-") && strings.HasSuffix(n, IndexExt):
+			if !keptStamps[strings.TrimSuffix(strings.TrimPrefix(n, "search-"), IndexExt)] {
 				remove(n)
 			}
+		case strings.HasPrefix(n, "search-") && strings.HasSuffix(n, legacyIndexExt):
+			remove(n) // cut under the old name; the server cuts its index as .lkiz
 		}
 	}
 	return removed, nil
@@ -230,7 +246,7 @@ func Prune(dataDir string) ([]string, error) {
 
 // stampOf is the short stamp an artifact file name carries.
 func stampOf(name string) string {
-	base := strings.TrimSuffix(name, Ext)
+	base := strings.TrimSuffix(strings.TrimSuffix(name, Ext), legacyExt)
 	if i := strings.LastIndex(base, "-"); i >= 0 {
 		return base[i+1:]
 	}

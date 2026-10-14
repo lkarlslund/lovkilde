@@ -38,7 +38,7 @@ func TestTheArtifactAloneConsolidatesAsTheArchiveDoes(t *testing.T) {
 	}
 
 	// The artifact, as the build writes it.
-	artPath := filepath.Join(t.TempDir(), "a.retsin")
+	artPath := filepath.Join(t.TempDir(), "a.lkz")
 	f, err := os.Create(artPath)
 	if err != nil {
 		t.Fatal(err)

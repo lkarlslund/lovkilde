@@ -9,7 +9,7 @@ import (
 	"github.com/lkarlslund/retsinformation/internal/compiled"
 )
 
-// "retsin artifact check" is what a deploy consults before restarting a service, so its answer has
+// "lovkilde artifact check" is what a deploy consults before restarting a service, so its answer has
 // to be real. The refusals by model are pinned in internal/compiled. A check that always exited 0 would skip every artifact rebuild and the
 // unit would then fail at startup — the failure the check exists to predict — and nothing would say
 // which of the two lied. So the matching case is pinned as well as the refusal, and the refusal has

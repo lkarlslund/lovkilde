@@ -179,7 +179,7 @@ func (c *Crawler) Harvest(ctx context.Context) error {
 	}
 	slog.Info("harvest complete", "days", stored, "changes_seen", seen)
 	if gapDays > 0 {
-		return fmt.Errorf("%w: last harvested %s, %d days ago; only the newest %d days were collected, and the remaining %d are gone from the service. Run a sitemap inventory pass (retsin-update inventory) to find the changes by lastmod",
+		return fmt.Errorf("%w: last harvested %s, %d days ago; only the newest %d days were collected, and the remaining %d are gone from the service. Run a sitemap inventory pass (lovkilde-update inventory) to find the changes by lastmod",
 			ErrFeedGap, last.Format(time.DateOnly), gapDays, stored, gapDays-stored)
 	}
 	return nil
@@ -604,10 +604,10 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 	}
 	if !opt.Full && !opt.Force {
 		if !found {
-			return fmt.Errorf("%w: this mirror has never completed a collection pass, so there is nothing to refill incrementally. Run the full pass once: retsin-update update --full", ErrStaleSweep)
+			return fmt.Errorf("%w: this mirror has never completed a collection pass, so there is nothing to refill incrementally. Run the full pass once: lovkilde-update update --full", ErrStaleSweep)
 		}
 		if age := time.Since(last); age > MaxSweepAge {
-			return fmt.Errorf("%w: the last completed pass was %s (%.1f days ago), older than the %d-day change feed. The changes in between are no longer listed by the service, so a refill would only collect part of them and leave the mirror looking current. Run retsin-update update --full, which finds every change by sitemap lastmod",
+			return fmt.Errorf("%w: the last completed pass was %s (%.1f days ago), older than the %d-day change feed. The changes in between are no longer listed by the service, so a refill would only collect part of them and leave the mirror looking current. Run lovkilde-update update --full, which finds every change by sitemap lastmod",
 				ErrStaleSweep, last.Format(time.RFC3339), age.Hours()/24, harvest.MaxWindowDays)
 		}
 	}
@@ -659,7 +659,7 @@ func (c *Crawler) Update(ctx context.Context, opt UpdateOptions) error {
 		slog.Warn("collection pass recorded with unresolved work",
 			"at", now.Format(time.RFC3339),
 			"owed", issues.Owed, "failed", issues.Failed, "issues", issues.Digest,
-			"remedy", "owed rows are fetched by the next update; failed ones are retried weekly, or now with retsin-update fetch --state failed (and --bodies --state failed)")
+			"remedy", "owed rows are fetched by the next update; failed ones are retried weekly, or now with lovkilde-update fetch --state failed (and --bodies --state failed)")
 	} else {
 		slog.Info("collection pass recorded", "at", now.Format(time.RFC3339))
 	}

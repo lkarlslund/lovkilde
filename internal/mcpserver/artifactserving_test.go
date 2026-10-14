@@ -98,7 +98,7 @@ func TestServingNamesTheRemedyForADocumentTheArtifactLacks(t *testing.T) {
 	if err == nil {
 		t.Fatal("a document missing from the artifact answered without an error")
 	}
-	for _, want := range []string{accCanon, "artifact", "retsin-update artifact build"} {
+	for _, want := range []string{accCanon, "artifact", "lovkilde-update artifact build"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the error does not name %q: %v", want, err)
 		}

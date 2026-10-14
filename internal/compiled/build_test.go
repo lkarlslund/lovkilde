@@ -59,7 +59,7 @@ func TestArtifactNamesTheStaleSide(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "is stale") {
 		t.Fatalf("an older artifact did not name itself as stale: %v", err)
 	}
-	if !strings.Contains(err.Error(), "retsin-update artifact build") {
+	if !strings.Contains(err.Error(), "lovkilde-update artifact build") {
 		t.Errorf("the refusal does not say what to rebuild: %v", err)
 	}
 

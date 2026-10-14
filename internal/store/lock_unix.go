@@ -19,7 +19,7 @@ func lockDir(path string) (func(), error) {
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, errors.New("another retsin-update is using it")
+			return nil, errors.New("another lovkilde-update is using it")
 		}
 		return nil, err
 	}

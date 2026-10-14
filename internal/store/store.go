@@ -4,7 +4,7 @@
 // Deliberate boundary: this is STATE, not the ARCHIVE. Legal document bytes live as plain
 // XML files under data/xml (see internal/archive), because those files are the product and
 // must stay greppable, diffable and portable. The state is a derived index: if it is lost,
-// `retsin-update rebuild` reconstructs it offline by re-scanning the XML, costing zero
+// `lovkilde-update rebuild` reconstructs it offline by re-scanning the XML, costing zero
 // requests.
 //
 // The whole state is a few hundred thousand small rows, so it is held in memory and kept on

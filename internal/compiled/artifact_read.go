@@ -65,7 +65,7 @@ func OpenArtifact(path string) (*Artifact, error) {
 	}
 	if got := binary.LittleEndian.Uint32(tail[5:9]); got != seekableMagic {
 		a.Close()
-		return nil, fmt.Errorf("%s: no seek table in the last bytes (magic %#x): not a retsin artifact", path, got)
+		return nil, fmt.Errorf("%s: no seek table in the last bytes (magic %#x): not a lovkilde artifact", path, got)
 	}
 	frames := int(binary.LittleEndian.Uint32(tail[:4]))
 	descriptor := tail[4]
@@ -88,7 +88,7 @@ func OpenArtifact(path string) (*Artifact, error) {
 	}
 	if got := binary.LittleEndian.Uint32(head[:4]); got != skippableFrameMagic {
 		a.Close()
-		return nil, fmt.Errorf("%s: expected a skippable frame holding the seek table, found %#x: not a retsin artifact", path, got)
+		return nil, fmt.Errorf("%s: expected a skippable frame holding the seek table, found %#x: not a lovkilde artifact", path, got)
 	}
 	if got := int(binary.LittleEndian.Uint32(head[4:8])); got != content {
 		a.Close()

@@ -44,7 +44,7 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 	m := Manifest{File: prev.File, Size: prev.Size, SHA256: prev.SHA256, Model: prev.Model, Documents: prev.Documents, XML: prev.XML, Older: prev.Older, Published: time.Now().UTC()}
 	var c Commit
 	if rel.XMLDir != "" {
-		tmp, err := os.MkdirTemp("", "retsin-packs-*")
+		tmp, err := os.MkdirTemp("", "lovkilde-packs-*")
 		if err != nil {
 			return Manifest{}, err
 		}

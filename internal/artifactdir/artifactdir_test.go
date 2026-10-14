@@ -102,7 +102,7 @@ func TestArtifactsAreNamedInstalledAndPruned(t *testing.T) {
 	}
 	indexes := 0
 	for n := range have {
-		if strings.HasSuffix(n, ".idx") {
+		if strings.HasSuffix(n, IndexExt) {
 			indexes++
 		}
 	}
@@ -139,5 +139,38 @@ func TestTheSingleFileLayoutMigrates(t *testing.T) {
 	}
 	if b, err := os.ReadFile(IndexPath(cur, h.Stamp)); err != nil || string(b) != "index" {
 		t.Errorf("the index did not move with its artifact: %v", err)
+	}
+}
+
+// A data directory from before the program was called Lovkilde keeps working: its .retsin
+// artifact is still current, and its .idx index is pruned, since the server cuts a .lkiz one.
+func TestArtifactsNamedBeforeTheRenameAreStillRead(t *testing.T) {
+	data := t.TempDir()
+	if err := os.MkdirAll(Dir(data), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := "artifact-20261001T0000Z-abcdef12.retsin"
+	for _, n := range []string{old, "search-abcdef12.idx"} {
+		if err := os.WriteFile(filepath.Join(Dir(data), n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SetCurrent(data, old); err != nil {
+		t.Fatal(err)
+	}
+	if cur, err := Current(data); err != nil || filepath.Base(cur) != old {
+		t.Fatalf("current %q, %v", cur, err)
+	}
+	if _, err := Prune(data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(Dir(data), old)); err != nil {
+		t.Errorf("the current .retsin artifact was pruned: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(Dir(data), "search-abcdef12.idx")); err == nil {
+		t.Error("the .idx index was kept")
+	}
+	if IsArtifactName("artifact-x.idx") || !IsArtifactName("artifact-x.lkz") || IsArtifactName("../artifact-x.lkz") {
+		t.Error("IsArtifactName accepts the wrong names")
 	}
 }

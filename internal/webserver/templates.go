@@ -224,7 +224,7 @@ const layoutTmpl = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.PageTitle}} · Retsinformation-MCP</title>
+<title>{{.PageTitle}} · Lovkilde</title>
 {{block "extrahead" .}}{{end}}
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%2032%2032%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2215.5%22%20fill%3D%22%2314532d%22/%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2212.6%22%20fill%3D%22none%22%20stroke%3D%22%23f6f5f2%22%20stroke-width%3D%22.9%22%20stroke-dasharray%3D%221.6%201.1%22/%3E%3Ctext%20x%3D%2216%22%20y%3D%2222.6%22%20text-anchor%3D%22middle%22%20font-family%3D%22Georgia%2CTimes%20New%20Roman%2Cserif%22%20font-size%3D%2219%22%20font-weight%3D%22700%22%20fill%3D%22%23f6f5f2%22%3E%C2%A7%3C/text%3E%3C/svg%3E">
 <style>
@@ -253,7 +253,6 @@ header.site .wrap { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; align-ite
 /* The mark: a paragraph sign in a seal, the way a law is stamped. */
 .brand { display: inline-flex; align-items: center; gap: .5rem; font: 700 1.1rem var(--text); text-decoration: none; color: var(--ink); white-space: nowrap; }
 .brand .seal { width: 1.9rem; height: 1.9rem; flex: none; }
-.brand .mcp { color: var(--accent); }
 header.site form { flex: 1 1 14rem; display: flex; max-width: 30rem; }
 header.site form input { flex: 1; }
 nav.site { display: flex; gap: 1rem; margin-left: auto; font-size: .9rem; }
@@ -429,12 +428,12 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 </head>
 <body>
 <header class="site"><div class="wrap">
-<a class="brand" href="/"><svg class="seal" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="15.5" fill="var(--accent)"/><circle cx="16" cy="16" r="12.6" fill="none" stroke="var(--wash)" stroke-width=".9" stroke-dasharray="1.6 1.1"/><text x="16" y="22.6" text-anchor="middle" font-family="Georgia,Times New Roman,serif" font-size="19" font-weight="700" fill="var(--wash)">§</text></svg><span>Retsinformation<span class="mcp">-MCP</span></span></a>
+<a class="brand" href="/"><svg class="seal" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="15.5" fill="var(--accent)"/><circle cx="16" cy="16" r="12.6" fill="none" stroke="var(--wash)" stroke-width=".9" stroke-dasharray="1.6 1.1"/><text x="16" y="22.6" text-anchor="middle" font-family="Georgia,Times New Roman,serif" font-size="19" font-weight="700" fill="var(--wash)">§</text></svg><span>Lovkilde</span></a>
 {{block "headsearch" .}}<form class="joined" method="get" action="/search" role="search"><input type="search" name="q" placeholder="Søg i lovgivningen" aria-label="Søg" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
 <nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/indstillinger">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a></nav>
 </div></header>
-<main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér retsin for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
-{{else}}<b>Ny version af retsin:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
+<main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér lovkilde for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
+{{else}}<b>Ny version af lovkilde:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
 {{end}}{{with .URL}}<a href="{{.}}">Se og hent den på GitHub</a>. {{end}}Serveren opdaterer ikke sig selv; det er op til den, der driver den, at installere den nye version.</p>{{end}}
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
@@ -497,7 +496,7 @@ const indexBody = `{{define "headsearch"}}{{/* the page has its own, larger box 
 {{if .SearchPending}}<p class="note">Søgeindekset bygges fra den kompilerede fil og er klar om et minut
 eller to. Dokumenter kan allerede læses og gennemses.</p>{{else if not .Search}}<p class="warn">Søgeindeks mangler — siden
 kan vise dokumenter og læse bestemmelser, men ikke søge i dem. Serveren bygger selv indekset fra den
-kompilerede fil: byg den med <b>retsin-update artifact build</b>, og genstart.</p>{{end}}
+kompilerede fil: byg den med <b>lovkilde-update artifact build</b>, og genstart.</p>{{end}}
 <h2>Gennemse efter type</h2>
 <ul class="cards">{{range .Kinds}}<li><a href="{{kindLink .Value}}"><b>{{.Label}}</b><small>{{if .Hint}}{{.Hint}} · {{end}}{{num .Count}} dokumenter</small></a></li>{{end}}</ul>
 <p class="hint">{{num .Total}} dokumenter i alt. <a href="/browse">Alle dokumenter</a> kan filtreres på titel, år og status.</p>
@@ -633,7 +632,7 @@ const statusBody = `{{define "content"}}
 {{range .Kinds}}<dt>{{.Label}}</dt><dd><a href="{{kindLink .Value}}">{{num .Count}}</a></dd>
 {{end}}</dl></section>{{end}}
 {{with .Info}}<section class="panel"><h2>Programmet</h2><dl class="facts">
-<dt>Version</dt><dd>retsin {{.Version}}{{if .Revision}}, bygget fra {{short .Revision}}{{if .Modified}} med lokale ændringer{{end}}{{end}}</dd>
+<dt>Version</dt><dd>lovkilde {{.Version}}{{if .Revision}}, bygget fra {{short .Revision}}{{if .Modified}} med lokale ændringer{{end}}{{end}}</dd>
 <dt>Startet</dt><dd>{{when .Started}}</dd>
 </dl></section>{{end}}
 {{if .Checks}}<section class="panel"><h2>Automatiske tjek</h2><dl class="facts">

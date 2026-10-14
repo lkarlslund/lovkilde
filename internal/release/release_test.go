@@ -137,7 +137,7 @@ func TestADownloadThatIsNotWhatTheManifestSaysIsRefused(t *testing.T) {
 			b, _ := os.ReadFile(file)
 			os.WriteFile(file, b[:len(b)/2], 0o644)
 		}, "bytes"},
-		"other model": {func(_, _ string, m *Manifest) { m.Model++ }, "upgrade retsin"},
+		"other model": {func(_, _ string, m *Manifest) { m.Model++ }, "upgrade lovkilde"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			repo := &Local{Dir: t.TempDir()}
@@ -215,14 +215,14 @@ func TestHuggingFaceDownloads(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/datasets/owner/name/resolve/main/latest.json" {
-			io.WriteString(w, `{"file":"x.retsin"}`)
+			io.WriteString(w, `{"file":"x.lkz"}`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 	defer srv.Close()
 	hf := &HuggingFace{Repo: "owner/name", BaseURL: srv.URL}
-	if m, err := Latest(context.Background(), hf); err != nil || m.File != "x.retsin" {
+	if m, err := Latest(context.Background(), hf); err != nil || m.File != "x.lkz" {
 		t.Errorf("manifest: %+v, %v", m, err)
 	}
 	if _, err := hf.Open(context.Background(), "state/meta.json"); !errors.Is(err, fs.ErrNotExist) {
@@ -276,7 +276,7 @@ func TestAHuggingFaceCommitIsOneUpload(t *testing.T) {
 		t.Fatal(err)
 	}
 	hf := &HuggingFace{Repo: "owner/name", Revision: "weekly", CLI: fake}
-	err := hf.Commit(context.Background(), Commit{Message: "Release", Add: []Upload{{Path: "state/meta.json", From: from}}, Delete: []string{"old.retsin"}})
+	err := hf.Commit(context.Background(), Commit{Message: "Release", Add: []Upload{{Path: "state/meta.json", From: from}}, Delete: []string{"old.lkz"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,11 +284,11 @@ func TestAHuggingFaceCommitIsOneUpload(t *testing.T) {
 		t.Errorf("staged state/meta.json: %q, %v", body, err)
 	}
 	args, _ := os.ReadFile(got + ".args")
-	want := "upload\nowner/name\n.*\n.\n--repo-type\ndataset\n--commit-message\nRelease\n--revision\nweekly\n--delete\nold.retsin\n"
+	want := "upload\nowner/name\n.*\n.\n--repo-type\ndataset\n--commit-message\nRelease\n--revision\nweekly\n--delete\nold.lkz\n"
 	if ok, _ := regexp.MatchString("^"+want+"$", string(args)); !ok {
 		t.Errorf("hf was run with\n%s", args)
 	}
-	if err := hf.Commit(context.Background(), Commit{Delete: []string{"*.retsin"}}); err == nil {
+	if err := hf.Commit(context.Background(), Commit{Delete: []string{"*.lkz"}}); err == nil {
 		t.Errorf("a deletion that is a pattern was handed to hf")
 	}
 }

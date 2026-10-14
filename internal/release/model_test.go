@@ -59,7 +59,7 @@ func TestAServerInstallsOnlyWhatItsProgramReads(t *testing.T) {
 		}
 	}
 	mine := ModelArtifact{Model: compiled.ModelVersion, FileRef: FileRef{Path: m.File, Size: m.Size, SHA256: m.SHA256}}
-	newer := Manifest{File: "artifact-29990101T0000Z-ffffffff.retsin", Model: compiled.ModelVersion + 1}
+	newer := Manifest{File: "artifact-29990101T0000Z-ffffffff.lkz", Model: compiled.ModelVersion + 1}
 
 	withOlder := newer
 	withOlder.Older = []ModelArtifact{mine}

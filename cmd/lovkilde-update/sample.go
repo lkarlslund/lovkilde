@@ -46,9 +46,9 @@ Two phases, because reading the archive costs CPU and the second phase costs
 requests. Plan reads the archive and writes a manifest of what it would fetch;
 fetch works off that manifest and can be interrupted at any point:
 
-  retsin-update sample --plan --quota centreret=300 --quota random=500 \
+  lovkilde-update sample --plan --quota centreret=300 --quota random=500 \
                 --seed 7 --out data/paired-truth/manifest.tsv
-  retsin-update sample --fetch --manifest data/paired-truth/manifest.tsv --limit 30
+  lovkilde-update sample --fetch --manifest data/paired-truth/manifest.tsv --limit 30
 
 The payload of each sampled document is written beside nothing: it goes to
 --dir in the archive's own layout (data/paired-truth/lta/1942/542.json), never

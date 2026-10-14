@@ -95,7 +95,7 @@ func TestDataNeedingANewerProgramIsNoticedOnEveryPage(t *testing.T) {
 	h.Checks = chk
 	site := httptest.NewServer(h)
 	defer site.Close()
-	if body, _ := get(t, site, "/browse"); !strings.Contains(body, "Opdatér retsin for at få nye lovtekster") {
+	if body, _ := get(t, site, "/browse"); !strings.Contains(body, "Opdatér lovkilde for at få nye lovtekster") {
 		t.Errorf("no upgrade notice:\n%s", body)
 	}
 }

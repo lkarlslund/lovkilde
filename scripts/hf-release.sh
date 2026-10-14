@@ -21,8 +21,8 @@
 #
 # The first release is published from a machine holding the whole archive, once:
 #   hf repo create owner/name --repo-type dataset
-#   bin/retsin-update artifact build
-#   bin/retsin-update publish --release hf://owner/name --with-xml
+#   bin/lovkilde-update artifact build
+#   bin/lovkilde-update publish --release hf://owner/name --with-xml
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -38,8 +38,8 @@ case "$mode" in patch | full) ;; *) echo "MODE is patch or full, not $mode" >&2;
 
 data=data
 mkdir -p bin
-go build -o bin/retsin-update ./cmd/retsin-update
-u() { bin/retsin-update --data-dir "$data" --progress never "$@"; }
+go build -o bin/lovkilde-update ./cmd/lovkilde-update
+u() { bin/lovkilde-update --data-dir "$data" --progress never "$@"; }
 
 echo "== restore from $HF_REPO"
 if ! u restore --release "$HF_REPO" --with-artifact; then

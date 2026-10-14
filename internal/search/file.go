@@ -101,13 +101,13 @@ func Load(path string) (*Index, error) {
 	}
 	r := &reader{buf: raw}
 	if got := string(r.bytes(len(magic))); got != magic {
-		return nil, fmt.Errorf("%s: not a retsin search index (magic %q)", path, got)
+		return nil, fmt.Errorf("%s: not a lovkilde search index (magic %q)", path, got)
 	}
 	if v := r.byte(); v != formatVersion {
 		// Refusing is the only honest option. An older file is not a different layout
 		// so much as the same layout shifted by eight bytes, and a shifted read of a
 		// self-describing table can produce counts that look entirely plausible.
-		return nil, fmt.Errorf("%s: index format version %d, this build writes %d — rebuild with `retsin index build`", path, v, formatVersion)
+		return nil, fmt.Errorf("%s: index format version %d, this build writes %d — rebuild with `lovkilde index build`", path, v, formatVersion)
 	}
 	idx := &Index{}
 	idx.Flags = r.uint64()

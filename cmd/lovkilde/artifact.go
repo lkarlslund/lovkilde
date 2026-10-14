@@ -1,5 +1,5 @@
 // The artifact commands a server has: whether it can serve the artifact on disk, and downloading
-// the published one. Building one is retsin-update's.
+// the published one. Building one is lovkilde-update's.
 package main
 
 import (
@@ -81,7 +81,7 @@ repository), download the artifact it names unless it is already current, check 
 current. A running server moves to it by itself.
 
 An artifact of another document model than this binary reads is not downloaded: the answer to
-that is a newer retsin.`,
+that is a newer lovkilde.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := resolve()

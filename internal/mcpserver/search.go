@@ -171,9 +171,9 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 			return nil, fmt.Errorf("the search index is being built from the compiled artifact and is ready in a minute or two; lookup already works")
 		}
 		if strings.EqualFold(req.Language, "da") {
-			return nil, fmt.Errorf("der er intet søgeindeks: serveren bygger det selv fra den kompilerede fil, så byg den med `retsin-update artifact build` og genstart")
+			return nil, fmt.Errorf("der er intet søgeindeks: serveren bygger det selv fra den kompilerede fil, så byg den med `lovkilde-update artifact build` og genstart")
 		}
-		return nil, fmt.Errorf("no search index: the server builds it from the compiled artifact, so build one with `retsin-update artifact build` and restart")
+		return nil, fmt.Errorf("no search index: the server builds it from the compiled artifact, so build one with `lovkilde-update artifact build` and restart")
 	}
 	if strings.TrimSpace(req.Query) == "" {
 		if strings.EqualFold(req.Language, "da") {
@@ -288,7 +288,7 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 		}
 		if h.IndexDocs != h.MirrorDocs {
 			res.Warnings = append(res.Warnings, fmt.Sprintf(
-				"indekset dækker %d af spejlets %d dokumenter: et resultat her viser, at dokumentet findes, men intet resultat viser ikke, at det mangler (`retsin index build` lukker hullet)",
+				"indekset dækker %d af spejlets %d dokumenter: et resultat her viser, at dokumentet findes, men intet resultat viser ikke, at det mangler (`lovkilde index build` lukker hullet)",
 				h.IndexDocs, h.MirrorDocs))
 		}
 		return res, nil
@@ -317,7 +317,7 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 		// pair is a rule, not a guess: a hit here proves the document is in the mirror,
 		// and a miss proves only that it is not in the index.
 		res.Warnings = append(res.Warnings, fmt.Sprintf(
-			"the index covers %d of the mirror's %d documents: a hit here proves presence, a miss does not prove absence from the mirror (`retsin index build` closes the gap)",
+			"the index covers %d of the mirror's %d documents: a hit here proves presence, a miss does not prove absence from the mirror (`lovkilde index build` closes the gap)",
 			h.IndexDocs, h.MirrorDocs))
 	}
 	return res, nil

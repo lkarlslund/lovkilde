@@ -559,7 +559,7 @@ func (s *Server) model(entry chain.Entry) (*lexdoc.Document, string, error) {
 	if s.cache() != nil {
 		m, err := s.cache().Document(entry.Accession)
 		if err != nil {
-			return nil, "", fmt.Errorf("%s is indexed but not in the compiled artifact (%s): %w. Rebuild it with `retsin-update artifact build`",
+			return nil, "", fmt.Errorf("%s is indexed but not in the compiled artifact (%s): %w. Rebuild it with `lovkilde-update artifact build`",
 				entry.Accession, s.cache().Artifact().Path(), err)
 		}
 		return m, s.cache().Artifact().Path(), nil

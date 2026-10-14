@@ -17,7 +17,7 @@ import (
 // put writes an XML file into the mirror under data, from a fixture with replacements applied.
 func put(t *testing.T, data, rel, fixture string, replace ...string) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "cmd", "retsin", "testdata", fixture))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "cmd", "lovkilde", "testdata", fixture))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,9 +84,9 @@ func TestIncrementalBuildsMakeWhatAFullBuildMakes(t *testing.T) {
 	put(t, data, "fob/1989/104.xml", "fob-1989-104.xml", "<DocumentTitle>", "<DocumentTitle>Rettet: ")
 	put(t, data, "lta/2099/1.xml", "lta-1942-542.xml",
 		"<AccessionNumber>A19420054230", "<AccessionNumber>A20990000010", "<Year>1942", "<Year>2099", "<Number>542", "<Number>1")
-	full := build(t, data, Full, filepath.Join(t.TempDir(), "full.retsin"))
+	full := build(t, data, Full, filepath.Join(t.TempDir(), "full.lkz"))
 
-	patch := build(t, data, Patch, filepath.Join(t.TempDir(), "patch.retsin"))
+	patch := build(t, data, Patch, filepath.Join(t.TempDir(), "patch.lkz"))
 	sameContent(t, "the patch", full, patch)
 	p, err := compiled.OpenArtifact(patch)
 	if err != nil {
@@ -104,10 +104,10 @@ func TestIncrementalBuildsMakeWhatAFullBuildMakes(t *testing.T) {
 	if err := os.Remove(filepath.Join(data, "xml", "lta", "1942", "542.xml")); err != nil {
 		t.Fatal(err)
 	}
-	sameContent(t, "a patch with only the changed files", full, build(t, data, Patch, filepath.Join(t.TempDir(), "runner.retsin")))
+	sameContent(t, "a patch with only the changed files", full, build(t, data, Patch, filepath.Join(t.TempDir(), "runner.lkz")))
 
 	// A day on which nothing changed writes nothing: the earlier artifact is still the answer.
-	out := filepath.Join(t.TempDir(), "unchanged.retsin")
+	out := filepath.Join(t.TempDir(), "unchanged.lkz")
 	_, err = Artifact(context.Background(), Options{XMLDir: filepath.Join(data, "xml"), DataDir: data, Out: out, Mode: Patch, From: full})
 	if _, statErr := os.Stat(out); !errors.Is(err, ErrUnchanged) || statErr == nil {
 		t.Errorf("a patch with nothing to compile: %v, and it wrote a file: %v", err, statErr == nil)
@@ -121,7 +121,7 @@ func TestAnIncrementalBuildRefusesAnotherArchiveRoot(t *testing.T) {
 	base := build(t, data, Full, "")
 	other := t.TempDir()
 	put(t, other, "lta/1942/542.xml", "lta-1942-542.xml")
-	_, err := Artifact(context.Background(), Options{XMLDir: filepath.Join(other, "xml"), DataDir: other, Out: filepath.Join(other, "x.retsin"), Mode: Patch, From: base})
+	_, err := Artifact(context.Background(), Options{XMLDir: filepath.Join(other, "xml"), DataDir: other, Out: filepath.Join(other, "x.lkz"), Mode: Patch, From: base})
 	if err == nil || !strings.Contains(err.Error(), "build in full") {
 		t.Errorf("a patch over an artifact built from another root: %v", err)
 	}

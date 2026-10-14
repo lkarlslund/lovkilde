@@ -33,7 +33,7 @@ func artifactBuildCmd(resolve configFunc) *cobra.Command {
 		Short: "Write the compiled document artifact from the mirror on disk",
 		Long: `Compile every document in the mirror into the artifact the server reads.
 
-  retsin-update artifact build
+  lovkilde-update artifact build
 
 No network traffic: the artifact is derived data, rebuilt from the files. Each document
 becomes its own independently decodable zstd frame in the Zstandard Seekable Format, so a

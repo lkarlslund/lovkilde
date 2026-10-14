@@ -226,7 +226,7 @@ func TestMeasureIndex(t *testing.T) {
 			unaddressed++
 		}
 	}
-	fmt.Fprintf(&out, "# retsin search index measurement\n")
+	fmt.Fprintf(&out, "# lovkilde search index measurement\n")
 	fmt.Fprintf(&out, "# generated: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 	// The unit mode belongs in the reproduce line: the two reports differ only in it, and a
 	// reader who does not set it regenerates the wrong side of the comparison.

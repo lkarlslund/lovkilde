@@ -50,7 +50,7 @@ func serveCmd(resolve configFunc) *cobra.Command {
 		Long: `Serve the local mirror over HTTP: a search box, readable documents, and the MCP
 endpoint at /mcp.
 
-  retsin serve
+  lovkilde serve
   curl 'http://127.0.0.1:8787/search?q=for%C3%A6ldrepension'
   curl 'http://127.0.0.1:8787/dok?ref=B20190139905&addr=%C2%A7+5,+stk.+2'
 

@@ -1,4 +1,4 @@
-# retsin — Danish legislation mirror
+# Lovkilde — Danish legislation as a website and an MCP server
 
 > [!CAUTION]
 > **Unofficial copy — not the official Retsinformation, and not legal advice.** The texts are
@@ -22,12 +22,12 @@ without getting rate-limited or blocked.
 
 Two programs, which can run on different machines:
 
-- **`retsin-update`** collects: it walks the sitemap, follows the change feed, downloads the
+- **`lovkilde-update`** collects: it walks the sitemap, follows the change feed, downloads the
   XML and the site's HTML bodies, and compiles the archive into one **artifact** file
-  (`retsin-update artifact build`). It is the only program that talks to the site or reads
+  (`lovkilde-update artifact build`). It is the only program that talks to the site or reads
   the publisher's XML.
-- **`retsin`** serves the artifact: an MCP endpoint, reading pages, full-text search and laws
-  as of a date (`retsin serve`, `retsin mcp`). The artifact is everything it reads — no XML,
+- **`lovkilde`** serves the artifact: an MCP endpoint, reading pages, full-text search and laws
+  as of a date (`lovkilde serve`, `lovkilde mcp`). The artifact is everything it reads — no XML,
   no state store, no network — and it cuts its own search index from it. A test
   (`TestTheServerLinksNoCollectionOrXML`) fails if the binary ever links the collecting or
   XML-reading packages again.
@@ -221,13 +221,13 @@ treat the second number as an upper bound until a `--bodies-scan` says otherwise
 therefore looks like:
 
 ```
-retsin-update fetch --bodies-scan                          # the census, zero requests
-retsin-update fetch --bodies --kind lta --limit 50         # fifty sidecars, one series
-retsin-update fetch --bodies --kind lta,ltb                # the laws, ~10 h at 1.2 s spacing
-retsin-update fetch --bodies --state empty                 # re-test the table documents
+lovkilde-update fetch --bodies-scan                          # the census, zero requests
+lovkilde-update fetch --bodies --kind lta --limit 50         # fifty sidecars, one series
+lovkilde-update fetch --bodies --kind lta,ltb                # the laws, ~10 h at 1.2 s spacing
+lovkilde-update fetch --bodies --state empty                 # re-test the table documents
 ```
 
-`retsin-update status` reports the two representations apart — `canonical xml: N, SIZE` and
+`lovkilde-update status` reports the two representations apart — `canonical xml: N, SIZE` and
 `body payloads: N, SIZE` — plus the body queue's state counts, so "how much of the corpus has
 text now" is one command. A sidecar already on disk closes its row **without a request**, which
 is the resume path after an interrupted run, and a second pass over a completed one issues zero.
@@ -732,7 +732,7 @@ reason, and `Trustworthy()` reports `false`.
 
 ```mermaid
 flowchart LR
-  subgraph CLI["retsin"]
+  subgraph CLI["lovkilde"]
     C1["inventory"] --> C2["harvest"] --> C3["fetch"]
     U["update = inventory+harvest+fetch"]
     S["status / rebuild"]
@@ -755,7 +755,7 @@ document bytes live as ordinary files.**
 
 The XML files *are* the product — they must stay greppable, diffable, rsync-able and
 readable without this program. So `data/state` is a *derived* index: if it is lost,
-`retsin-update rebuild` reconstructs it from the XML on disk at **zero HTTP cost**. Verified:
+`lovkilde-update rebuild` reconstructs it from the XML on disk at **zero HTTP cost**. Verified:
 deleting the store and running `rebuild` recovered every stored document, and the next
 `fetch` issued no requests for them.
 
@@ -807,7 +807,7 @@ Loading it takes under a second. The first JSON layout — one object, a separat
 table, full hashes — was 103 MB and 21.7 MB compressed. Each move was checked row by row:
 from Badger, every field of every row identical except the attempt counts of fetched rows,
 which nothing read; from the first layout, every row, body, accession, change and marker
-identical with hashes cut to 16 hex digits. `retsin-update status` printed the same report
+identical with hashes cut to 16 hex digits. `lovkilde-update status` printed the same report
 throughout, pull-record fingerprint `eb14429b` included.
 
 Considered and rejected: SQLite (`modernc.org` drags ~40 MB of generated `libc` and the
@@ -905,7 +905,7 @@ interval — the learner finds the safe pace by being corrected, not by probing 
 ## Configuration
 
 Flags only — no config file and no environment overrides, so `ps` and a cron line show
-exactly what a run will do. Run `retsin-update --help` (or `retsin --help` for the server) for the full list. The important ones:
+exactly what a run will do. Run `lovkilde-update --help` (or `lovkilde --help` for the server) for the full list. The important ones:
 
 ```
 --data-dir DIR           archive + state location (default ./data)
@@ -968,19 +968,19 @@ Subcommands: `inventory`, `harvest`, `fetch`, `update`, `status`, `rebuild`.
 ## Running it
 
 ```bash
-make build    # bin/retsin-update and bin/retsin
+make build    # bin/lovkilde-update and bin/lovkilde
 
 # 1. Full catalogue — ~22 requests, ~203k resources
-retsin-update --data-dir /storage/retsinformation inventory
+lovkilde-update --data-dir /storage/retsinformation inventory
 
 # 2. Official change feed — the last 10 days
-retsin-update --data-dir /storage/retsinformation harvest
+lovkilde-update --data-dir /storage/retsinformation harvest
 
 # 3. Documents — 1 request per document
-retsin-update --data-dir /storage/retsinformation fetch
+lovkilde-update --data-dir /storage/retsinformation fetch
 
 # Daily thereafter (cron):
-retsin-update --data-dir /storage/retsinformation update
+lovkilde-update --data-dir /storage/retsinformation update
 ```
 
 Flags go before or after the subcommand, either form works.
@@ -1021,7 +1021,7 @@ three stamps, and each authorises something different.
 **The 10-day rule.** The harvesting service answers for a rolling ten days
 (`harvest.MaxWindowDays`), so a mirror whose last recorded pull is older than that
 cannot be refilled honestly: the changes in between are listed nowhere any more.
-`retsin-update update` therefore **fails** rather than collecting a partial set and leaving
+`lovkilde-update update` therefore **fails** rather than collecting a partial set and leaving
 the mirror looking current — it fails *before the first request*, and says to run
 `update --full`, which re-reads the sitemap and finds every change by `lastmod` for
 about 22 requests. `--force` exists for deliberate repair and is the only other way
@@ -1042,14 +1042,14 @@ The fingerprint does what the counts cannot. `owed=0 failed=14` on two consecuti
 nights says nothing about whether anything changed; the same digest says it is the same
 fourteen documents the site refuses, and a moving digest says something new broke. The
 counts and digest travel in the state store row, in `data/sweep.stamp` for readers that
-cannot open the locked store, in `retsin-update status`, into the header of the next artifact built
+cannot open the locked store, in `lovkilde-update status`, into the header of the next artifact built
 (`compiled.ArtifactHeader.Collection`), and from there into the dataset line of every answer
 served from it.
 
 `owed` counts rows still `pending` or `stale` — work the pass did not get to. `failed`
 counts rows the site refused; each carries when it was last tried and the error, which
-`retsin-update status` lists, and each is asked for again a week after its last try, or at
-once with `retsin-update fetch --state failed`. Records written before failures were dated
+`lovkilde-update status` lists, and each is asked for again a week after its last try, or at
+once with `lovkilde-update fetch --state failed`. Records written before failures were dated
 said `stalled`, and still read as failed.
 
 **An inventory pass merges; it does not overwrite.** The sitemap reports every
@@ -1065,11 +1065,11 @@ re-running an inventory pass affordable. It also means an amended law, once
 downloaded, can never be updated: the row gets re-pended, the file is found, the row
 is closed, and the mirror keeps serving the superseded text while reporting itself
 current. So a moved `lastmod` on a row whose bytes we hold marks it `stale`, the one
-state the on-disk shortcut does not apply to. `retsin-update rebuild` deliberately does not
+state the on-disk shortcut does not apply to. `lovkilde-update rebuild` deliberately does not
 downgrade those rows, because re-deriving state from disk re-derives exactly the
 older copy.
 
-**The feed is read back, not just written.** `retsin-update changes` resolves each harvested
+**The feed is read back, not just written.** `lovkilde-update changes` resolves each harvested
 accession against the archive and reports how many are queued, how many were collected
 with new bytes, and how many are unknown to the mirror. It exists because the feed is a
 dead end as a *mechanism*: it names documents by accession and `href`, never by ELI
@@ -1117,7 +1117,7 @@ every harvested day is the only evidence that leaves the feed as annotation and 
 Measured so far, over the eight feed days the store holds (2026-09-09 to 2026-09-18, 424 distinct
 changes): 424 resolved to held resources, **0** named an unseen document, 0 were left queued or
 behind. The collection cycle harvests the rolling window on every run, so the days keep
-accumulating; `retsin-update changes --report` writes each reconciliation to a dated file under
+accumulating; `lovkilde-update changes --report` writes each reconciliation to a dated file under
 `data/reports/` that is never overwritten, so the decision is read off files rather than off
 whatever the last person to run the command remembers.
 
@@ -1129,8 +1129,8 @@ for `--order`. `--kind` selects by ELI kind, which is the axis the sitemap itsel
 on:
 
 ```
-retsin-update fetch --kind retsinfo --limit 50    # sample one series
-retsin-update fetch --kind lta,ltb --kind ltc     # several at once: comma-separated or repeated
+lovkilde-update fetch --kind retsinfo --limit 50    # sample one series
+lovkilde-update fetch --kind lta,ltb --kind ltc     # several at once: comma-separated or repeated
 ```
 
 `--limit N` caps the run; `--batch N` sizes the pending window. The bar's total honours
@@ -1142,8 +1142,8 @@ The catalogue is stored in ELI URL order, which is chronological within a kind, 
 default walk meets 1873 before last month's law. `--order` chooses the other end:
 
 ```
-retsin-update fetch --order desc --limit 20     # the twenty most recent documents
-retsin-update fetch --order random --limit 200  # an unbiased sample of the catalogue
+lovkilde-update fetch --order desc --limit 20     # the twenty most recent documents
+lovkilde-update fetch --order random --limit 200  # an unbiased sample of the catalogue
 ```
 
 `desc` walks the same keyspace backwards and pages by cursor exactly like `asc`, so it costs
@@ -1169,9 +1169,9 @@ silent fallback to another one.
 without re-crawling anything:
 
 ```
-retsin-update fetch --state failed                 # retry every failure
-retsin-update fetch --state gone --kind retsinfo   # re-test 404s in one series
-retsin-update fetch --state fetched                # re-check rows that claim to be on disk
+lovkilde-update fetch --state failed                 # retry every failure
+lovkilde-update fetch --state gone --kind retsinfo   # re-test 404s in one series
+lovkilde-update fetch --state fetched                # re-check rows that claim to be on disk
 ```
 
 A default run takes `pending` plus `failed` rows still under the retry limit, so a
@@ -1201,10 +1201,10 @@ the XML — `data/xml/lta/1995/498.json` next to `498.xml`. See
 established this works and what the payloads contain.
 
 ```
-retsin-update fetch --bodies-scan                     # census only: 0 requests
-retsin-update fetch --bodies --kind lta --limit 50    # 50 requests, one series
-retsin-update fetch --bodies --kind lta,ltb           # the laws, ~10 h at 1.2 s
-retsin-update fetch --bodies --state empty            # re-test the table-only documents
+lovkilde-update fetch --bodies-scan                     # census only: 0 requests
+lovkilde-update fetch --bodies --kind lta --limit 50    # 50 requests, one series
+lovkilde-update fetch --bodies --kind lta,ltb           # the laws, ~10 h at 1.2 s
+lovkilde-update fetch --bodies --state empty            # re-test the table-only documents
 ```
 
 The scan and the fetch are separate on purpose: `--bodies-scan` prints what the archive holds
@@ -1224,7 +1224,7 @@ Three properties are what make a 10-hour run safe to interrupt:
 - nothing here can overwrite canonical bytes: writing a sidecar under the `.xml` extension is
   refused by `internal/archive` rather than honoured.
 
-`retsin-update status` then reports `canonical xml` and `body payloads` separately, plus the body
+`lovkilde-update status` then reports `canonical xml` and `body payloads` separately, plus the body
 queue per state, which is the census: `fetched` rows have text, `empty` rows are documents the
 site has no text for either.
 
@@ -1233,9 +1233,9 @@ site has no text for either.
 `--state` means the same thing for bodies as for XML, over the body queue's own states:
 
 ```
-retsin-update fetch --bodies --state failed   # transient faults: timeouts, challenge pages
-retsin-update fetch --bodies --state gone     # documents the site answered 404 for
-retsin-update fetch --bodies --state empty    # table documents, to check they still have no prose
+lovkilde-update fetch --bodies --state failed   # transient faults: timeouts, challenge pages
+lovkilde-update fetch --bodies --state gone     # documents the site answered 404 for
+lovkilde-update fetch --bodies --state empty    # table documents, to check they still have no prose
 ```
 
 Naming a state lifts the weekly retry wait, exactly as in the XML path, and an unknown state name
@@ -1259,10 +1259,10 @@ opposite of `fetch --bodies`. Sampling is two phases, because phase one costs CP
 politeness:
 
 ```
-retsin-update sample --strata                      # what each stratum exists to measure
-retsin-update sample --plan --quota centreret=250 --quota random=400 --seed 20260917
-retsin-update sample --fetch --limit 30            # trial: does the site even serve HTML for these?
-retsin-update sample --fetch                       # the rest, resumable
+lovkilde-update sample --strata                      # what each stratum exists to measure
+lovkilde-update sample --plan --quota centreret=250 --quota random=400 --seed 20260917
+lovkilde-update sample --fetch --limit 30            # trial: does the site even serve HTML for these?
+lovkilde-update sample --fetch                       # the rest, resumable
 ```
 
 `--plan` reads the archive and writes a manifest; nothing is requested until it is reviewed. Strata are
@@ -1290,10 +1290,10 @@ Run `--fetch --limit 30` before the full manifest: if the site serves little `do
 that already have XML, the premise needs restating, and that is a 30-request discovery rather than a
 2,500-request one.
 
-### Serving the mirror to agents: `retsin mcp`
+### Serving the mirror to agents: `lovkilde mcp`
 
 ```bash
-retsin mcp                     # Model Context Protocol over stdin/stdout
+lovkilde mcp                     # Model Context Protocol over stdin/stdout
 ```
 
 **Nothing answers before the user has accepted the terms of use.** A session starts with the tool
@@ -1323,7 +1323,7 @@ Three properties are deliberate:
 - **Read-only, and not by convention.** The command never opens the state store, which
   is locked to the collecting process; serving needs the artifact, so that is all it
   opens — and a process that cannot write is easier to trust in front of a legal corpus.
-- **Text comes from the compiled artifact when one exists.** `retsin mcp` reads
+- **Text comes from the compiled artifact when one exists.** `lovkilde mcp` reads
   the current artifact (`<data-dir>/artifact.current` names it; `--artifact` pins one file instead,
   `--artifact-cache-mb` sizes its cache) — so a lookup is a
   seek and a decode rather than an XML parse, and the status line says which of the two a client
@@ -1354,7 +1354,7 @@ behaviour for a client that spawns it and costs a confusing empty run otherwise:
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  ; sleep 5 ) | ./bin/retsin mcp
+  ; sleep 5 ) | ./bin/lovkilde mcp
 ```
 
 The protocol is the official Go SDK (`github.com/modelcontextprotocol/go-sdk`). It is
@@ -1363,15 +1363,15 @@ still moving and getting it subtly wrong produces a server that "works with my c
 The sandbox cannot reach the module checksum database, so the recorded `go.sum` hashes
 were compared against the public `sum.golang.org` lookup for `v1.8.0` and match.
 
-### Reading the mirror in a browser: `retsin serve`
+### Reading the mirror in a browser: `lovkilde serve`
 
 ```bash
-retsin serve                        # http://127.0.0.1:8787 — pages and MCP on one port
-retsin serve --addr 0.0.0.0:8787    # on the network: there is no auth, and reading is all there is
-retsin serve --addr 127.0.0.1:9000 --verbose-requests
+lovkilde serve                        # http://127.0.0.1:8787 — pages and MCP on one port
+lovkilde serve --addr 0.0.0.0:8787    # on the network: there is no auth, and reading is all there is
+lovkilde serve --addr 127.0.0.1:9000 --verbose-requests
 ```
 
-`retsin mcp` serves one agent that spawned it. This command is for the people who read the
+`lovkilde mcp` serves one agent that spawned it. This command is for the people who read the
 same documents: the same serving core, the same rules (the file archive is all it opens, so
 a nightly crawl is never locked out of the state store), one port, pages at `/` and the MCP
 endpoint at `/mcp`. No JavaScript, no cookies, nothing that remembers a visitor — which also
@@ -1380,7 +1380,7 @@ means a document cannot run anything in the browser that reads it, only say thin
 | Path | |
 |---|---|
 | `/` | one search box, four queries to start from, and when the mirror was last checked |
-| `/search?q=` | hits and gaps, in the syntax `retsin search` takes: `AND`, `-word`, `"two words"`, `art:lov`, `year:1987-2000` |
+| `/search?q=` | hits and gaps, in the syntax `lovkilde search` takes: `AND`, `-word`, `"two words"`, `art:lov`, `year:1987-2000` |
 | `/browse` | everything the mirror holds, by kind, year and initial letter, 200 at a time |
 | `/dok?ref=` | the text, with a table of contents in front. `ref` is an ELI path or an accession; `&addr=§ 5, stk. 2` shows one provision inside the whole |
 | `/status` | what is served and how current it is, the scheduled checks, and the full disclaimer; plain text for curl |
@@ -1452,13 +1452,13 @@ HTML-shaped homage is proven by a test that drives it with the official SDK clie
 The port has no authentication, which is why the default is `127.0.0.1`: whoever can reach
 the port can read the corpus.
 
-### Full-text search: `retsin index build`, and what the measurement decided
+### Full-text search: `lovkilde index build`, and what the measurement decided
 
 ```bash
-retsin serve                            # builds the current artifact's index itself when it needs one
-retsin index build                      # the same build by hand, beside the artifact
-retsin search "pligt fyringsanlæg" --limit 5
-retsin search "ubetinget råderet" --source xml --since 1990
+lovkilde serve                            # builds the current artifact's index itself when it needs one
+lovkilde index build                      # the same build by hand, beside the artifact
+lovkilde search "pligt fyringsanlæg" --limit 5
+lovkilde search "ubetinget råderet" --source xml --since 1990
 ```
 
 **The server keeps its own index; indexes are not distributed.** The index is cut from the
@@ -1482,7 +1482,7 @@ command; the heap profile is taken at the run's peak heap) on 4 cores, as a GitH
 | mirror build, before | 27.0 GB | 4 m 47 s |
 | artifact build of the index, streaming | 7.0 GB | 2 m 14 s |
 | the same with the default 4 GiB `GOMEMLIMIT` | **4.0 GB** | **1 m 35 s** |
-| `retsin-update artifact build` (unchanged) | 2.6 GB | 3 m 27 s |
+| `lovkilde-update artifact build` (unchanged) | 2.6 GB | 3 m 27 s |
 
 The old peak had 10 GB live and the rest uncollected garbage. Of the live part, 5.4 GB was
 the text of every provision, held until the last one was counted, and 3.3 GB was a map from
@@ -1494,7 +1494,7 @@ instead of assembled in memory, and the index build sets a 4 GiB soft memory lim
 artifact's data is better: 191 titles the mirror's header scan left HTML-escaped ("P&amp;T"),
 32 with zero-width characters, the duplicate title units those caused in 86 documents, and
 6,833 documents numbered 0 that no longer get an ELI path like `eli/ft/1985/0`. The ranking
-judgments score identically. `retsin index build --sample N --out file` indexes a
+judgments score identically. `lovkilde index build --sample N --out file` indexes a
 stratum-balanced sample of the artifact (up to N per kind and decade), for measurements.
 
 The index is derived data: cut from the artifact at zero HTTP cost, written to a temporary
@@ -1513,7 +1513,7 @@ compressed stream. Each stage's serial baseline is the same code run with `GOMAX
 so there is no second implementation to keep honest.
 
 The corpus run is the headline and the expensive one; the cheap instrument for the next
-change is a sample. `retsin index build --sample 300` — 12,797 documents chosen across
+change is a sample. `lovkilde index build --sample 300` — 12,797 documents chosen across
 every kind — runs the same code path in 30.4 s serial against 5.5 s parallel, and
 `GOMAXPROCS=1` versus default in one process is enough to catch a layout or ordering
 mistake without a twelve-minute round trip.
@@ -1659,31 +1659,33 @@ Guards: 34 mutations of the reader, encoder, ranking, filters and answer renderi
 caught with 0 holes (each by the test that names it), plus `internal/lexdania/scanroot_test.go`
 for the empty-mirror case that produced the first confusing "0 documents" measurement.
 
-### Compiled serving: `retsin-update artifact build`
+### Compiled serving: `lovkilde-update artifact build`
 
 ```bash
-retsin-update artifact build                   # whole mirror → data/artifacts/artifact-<time>-<stamp>.retsin, made current
+lovkilde-update artifact build                   # whole mirror → data/artifacts/artifact-<time>-<stamp>.lkz, made current
 ```
 
 **Where artifacts live, and how a new one takes over.** Artifacts are named for their build time
 and stamp, their indexes for the stamp, and a one-line pointer names the current one:
 
 ```
-data/artifacts/artifact-20261006T1520Z-8f3a2c1d.retsin        current, served
-data/artifacts/search-8f3a2c1d.idx                            its index, kept by the server
-data/artifacts/artifact-20261007T0310Z-c41e9b07.retsin.part   being built or downloaded
-data/artifact.current                                         artifact-20261006T1520Z-8f3a2c1d.retsin
+data/artifacts/artifact-20261006T1520Z-8f3a2c1d.lkz        current, served
+data/artifacts/search-8f3a2c1d.lkiz                        its index, kept by the server
+data/artifacts/artifact-20261007T0310Z-c41e9b07.lkz.part   being built or downloaded
+data/artifact.current                                      artifact-20261006T1520Z-8f3a2c1d.lkz
 ```
 
-A new artifact is written beside the current one under a `.part` name, becomes a `.retsin` only
+A new artifact is written beside the current one under a `.part` name, becomes a `.lkz` only
 once it is complete and opens, and becomes current when the pointer is replaced (a rename). A
 running `serve` or `mcp` looks at the pointer every 30 seconds; when it names a new artifact, the
 server opens and checks it, loads or builds its index while still answering from the old pair,
 then swaps artifact and index together — no restart, and no moment without search. Two artifacts
 are kept, the current and the previous, with their indexes; older ones, and `.part` files a day
-old, are pruned. The extension is `.retsin`, not `.zst`: the file is a zstd stream, but its
+old, are pruned. The extension is `.lkz`, not `.zst`: the file is a zstd stream, but its
 documents need the dictionary in its second frame, and a name that invited `zstd -d` would fail
-on every one. A data directory from before this layout (`data/artifact.bin`, `data/search.idx`)
+on every one. The index is `.lkiz`. Artifacts named `.retsin`, from before the program was
+called Lovkilde, are still read and pruned; old `.idx` indexes are pruned, and the server cuts a
+`.lkiz` one. A data directory from before this layout (`data/artifact.bin`, `data/search.idx`)
 is moved into it the first time it is read. `internal/artifactdir` holds the layout.
 
 The artifact is the mirror's own document model (`internal/lexdoc`) as JSON, one
@@ -1815,8 +1817,8 @@ measured on the documents after the cutoff before it is adopted.
 
 ### Serving from the artifact
 
-`retsin mcp` and `retsin serve` read the current artifact and nothing else, and refuse to start
-without one: the XML archive is what `retsin-update` builds from, not what a server reads. Every answer's dataset line says which
+`lovkilde mcp` and `lovkilde serve` read the current artifact and nothing else, and refuse to start
+without one: the XML archive is what `lovkilde-update` builds from, not what a server reads. Every answer's dataset line says which
 artifact it came from. The artifact carries three things a server needs besides the documents:
 
 - **each document's model** — lookup, addressed lookup, provenance and warnings, and the unit text
@@ -1839,28 +1841,28 @@ directory is a complete stand-in for Hugging Face, and is how publishing is trie
 
 ```
 latest.json                                manifest: every file's size and SHA-256, the model
-artifact-20261007T0648Z-61f208f4.retsin    the artifact a server downloads
+artifact-20261007T0648Z-61f208f4.lkz    the artifact a server downloads
 state/meta.json, state/inventory.jsonl,    the collection state a fresh machine continues from
 state/bodies.jsonl, state/changes.jsonl
 xml/lta/1995.tar.zst, …                    the XML archive, one pack per kind and year (--with-xml)
 README.md                                  the dataset card, written from the manifest
 ```
 
-- `retsin-update publish --release <repo>` publishes the current artifact and the state, with
+- `lovkilde-update publish --release <repo>` publishes the current artifact and the state, with
   the manifest committed last, so a reader never sees it naming a file that is not there yet;
   the artifact it replaces is deleted. `--state-only` keeps the published artifact. In a
   directory every file is hard-linked where it can be: neither artifacts nor state files are
   ever rewritten in place, so a release costs no space beside the data it came from.
-- `retsin-update restore --release <repo>` downloads the state into an empty data directory,
+- `lovkilde-update restore --release <repo>` downloads the state into an empty data directory,
   each file checked against the manifest and none put in place until all arrived whole;
   `--with-artifact` installs the artifact too. That is everything
   `update` and an incremental build need: `update` fetches only what changed. `--with-xml`
   also unpacks the XML archive, for a full build.
-- `retsin serve` and `retsin mcp` download the published artifact when they have none
+- `lovkilde serve` and `lovkilde mcp` download the published artifact when they have none
   (`--release`), and while they run look for a newer one daily (`--auto-update` sets the
   default: rounded to daily, weekly or monthly, `0` for off), install it and move to it as to
-  any new current artifact. `retsin artifact download` does it by hand.
-- `retsin serve` also asks GitHub daily whether a newer build of itself has been published,
+  any new current artifact. `lovkilde artifact download` does it by hand.
+- `lovkilde serve` also asks GitHub daily whether a newer build of itself has been published,
   and says so at the top of every page. It never installs one: upgrading is the operator's
   decision. Both intervals can be changed, and either check run at once, on the settings page
   (`/indstillinger`); the choice and each check's last result are kept in
@@ -1875,7 +1877,7 @@ holds, and a program reads one model. When a release moves to a new model, the l
 the old one stays published beside it (`older` in `latest.json`, for the two models before), so:
 
 - a server whose program reads the old model keeps that artifact, or installs it on a fresh
-  data directory, and every page says that new texts need a newer version of retsin; it never
+  data directory, and every page says that new texts need a newer version of lovkilde; it never
   installs data it cannot read;
 - an upgraded program that finds the old model's artifact on disk fetches the one of its own
   model at startup;
@@ -1897,7 +1899,7 @@ private repository.
 [protocol](https://huggingface.co/docs/xet)): the server cuts the artifacts it already has into
 the chunks Xet stores them under, copies every chunk the new artifact shares with them from disk,
 and fetches only the others. Each artifact's Xet hash is kept beside it
-(`artifact-….retsin.xet`), so the next download knows what it holds. When Xet storage fails, the
+(`artifact-….lkz.xet`), so the next download knows what it holds. When Xet storage fails, the
 artifact is downloaded whole, and the server says why.
 
 **The daily release runs on a GitHub runner**: `.github/workflows/hf-release.yml` (daily at
@@ -1926,7 +1928,7 @@ release by commit is given up. The script reports the large files the Hub still 
 current release does not use, and deletes none of them.
 
 **The server is built daily too**: `.github/workflows/server-builds.yml` runs the tests and
-`scripts/build-server.sh` (retsin for Linux, macOS and Windows on amd64 and arm64, one archive
+`scripts/build-server.sh` (lovkilde for Linux, macOS and Windows on amd64 and arm64, one archive
 each and a `SHA256SUMS`), and publishes them as the rolling `nightly` GitHub release, whose
 tag moves to the commit built. A day without a new commit builds nothing.
 
@@ -1934,7 +1936,7 @@ tag moves to the commit built. A day without a new commit builds nothing.
 
 A full build compiles every file of the 13 GB archive, which a fresh machine does not have:
 restoring gives it the state, the artifact and the files fetched since the last release. Two ways to make
-the next artifact from that, both through `retsin-update artifact build --mode`:
+the next artifact from that, both through `lovkilde-update artifact build --mode`:
 
 | | `full` + `restore --with-xml` | `--mode patch` |
 |---|---|---|
@@ -1970,7 +1972,7 @@ changed, and `restore --with-xml` skips the shards already on disk as published.
 or time, so a pack depends only on its files.
 
 The search index is cut from the artifact too, by the server, when it is missing or was cut from
-another one (see [Full-text search](#full-text-search-retsin-index-build-and-what-the-measurement-decided)), so anyone holding the artifact can build
+another one (see [Full-text search](#full-text-search-lovkilde-index-build-and-what-the-measurement-decided)), so anyone holding the artifact can build
 it, and indexes are not distributed.
 
 Consolidation is one code path for both sources. `internal/chain` resolves a law's amendment chain
@@ -1987,19 +1989,19 @@ artifact holding its own model version: a change to rendering, templates, the co
 or the tools' wording deploys with a restart, and only a change to what is stored needs a rebuild.
 The version is not left to memory. `TestModelVersionCoversTheStoredModel` compiles a committed
 sample of 38 real documents (`internal/compiled/testdata/models`: laws, orders, amending acts,
-parliamentary and ombudsman documents, XML bodies and HTML-only payloads) through the path `retsin
+parliamentary and ombudsman documents, XML bodies and HTML-only payloads) through the path `lovkilde
 artifact build` takes, hashes the stored JSON, and fails when it changes under the same version,
 naming the constant to bump; `-update-model` then records the new fingerprint. A mismatch at startup
 names the side that is out of date. An artifact written before model versions were recorded is
 compared by its build stamp, as before: same commit and same dirty flag, or refused.
 
 Deploying asks that question rather than guessing it. `make deploy` compiles into `bin/`, runs
-`retsin artifact check` — which prints the model versions and stamps and returns the server's own refusal, so a
+`lovkilde artifact check` — which prints the model versions and stamps and returns the server's own refusal, so a
 deploy sees the failed start before the unit does — rebuilds the artifact only when this binary
 cannot serve the file on disk, and restarts the service. The unit runs the repository's own
-`bin/retsin`, the way the llama.cpp and ninfer user services run their build output, so there is
+`bin/lovkilde`, the way the llama.cpp and ninfer user services run their build output, so there is
 no second copy of the binary that can be older than the one just compiled, and the unit file under
-`~/.config/systemd/user` is a symlink to `deploy/retsin.service` rather than a copy that can
+`~/.config/systemd/user` is a symlink to `deploy/lovkilde.service` rather than a copy that can
 drift. The search index carries no stamp, so its freshness is a file-age rule in the Makefile and
 is called out as a guess there; the artifact's is not.
 
@@ -2681,7 +2683,7 @@ internal self-tests (`bodycensus_internal_test.go`) rather than only the corpus 
 ### What the paired ground truth measured (2,108 documents)
 
 `RETSIN_PAIRED_TRUTH=../../data/paired-truth go test -timeout 2h -run TestPairedTruthParity ./internal/lexdania/ -v`,
-sampled by `retsin-update sample` (seed 20260917) from the 89,667 documents that have both a canonical
+sampled by `lovkilde-update sample` (seed 20260917) from the 89,667 documents that have both a canonical
 body and a payload. Reference is the publisher's own XML, never a third-party API. Full report:
 `internal/lexdania/testdata/paired-truth-20260917.txt`.
 
@@ -2705,9 +2707,9 @@ frequency everywhere.
 If `data/state` is lost or suspect, in this exact order:
 
 ```bash
-retsin-update --data-dir /storage/retsinformation rebuild     # relink on-disk XML → zero requests
-retsin-update --data-dir /storage/retsinformation inventory   # re-discover the catalogue (~22 req)
-retsin-update --data-dir /storage/retsinformation fetch       # resume; already-held docs are skipped
+lovkilde-update --data-dir /storage/retsinformation rebuild     # relink on-disk XML → zero requests
+lovkilde-update --data-dir /storage/retsinformation inventory   # re-discover the catalogue (~22 req)
+lovkilde-update --data-dir /storage/retsinformation fetch       # resume; already-held docs are skipped
 ```
 
 `rebuild` alone recovers only what is on disk; the catalogue comes back from the cheap
@@ -2864,7 +2866,7 @@ XML class above, seen from the outside.
 - **A nightly inventory pass erased the whole catalogue's state, and an amended law
   could never be re-downloaded.** Two separate defects in the same path, both found by
   actually running yesterday→today rather than by reading the code. `PutInventoryBatch`
-  wrote the sitemap's rows blind, so every `retsin-update update` reset all ~200k rows to
+  wrote the sitemap's rows blind, so every `lovkilde-update update` reset all ~200k rows to
   pending with no hash, no accession and no attempt counter — the fetch then re-closed
   200k files locally and re-requested the ~10k resources already recorded as `gone`. And
   the fetch loop closes any row whose file is on disk without asking the site, which

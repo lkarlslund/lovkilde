@@ -1,7 +1,8 @@
 data/
-/retsin
+/lovkilde
 bin/
 *.sqlite
 /tmp/
 .env
 /dist/
+/retsin

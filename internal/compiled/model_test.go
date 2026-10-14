@@ -25,7 +25,7 @@ const modelFingerprintFile = "testdata/model-fingerprint.txt"
 // The artifact is accepted on its model version alone, so the version has to change whenever what
 // a document compiles to changes. A committed sample of real documents — laws, orders, amending
 // acts, parliamentary and ombudsman documents, XML bodies and HTML-only payloads — is compiled
-// through the path `retsin-update artifact build` takes, and the stored JSON is hashed. A different hash
+// through the path `lovkilde-update artifact build` takes, and the stored JSON is hashed. A different hash
 // under the same version fails here, naming the constant to bump.
 func TestModelVersionCoversTheStoredModel(t *testing.T) {
 	a, err := lexdania.Scan(t.Context(), "testdata/models")
@@ -99,7 +99,7 @@ func TestAnArtifactIsReadByModelNotBuild(t *testing.T) {
 		t.Errorf("an artifact of this model from another build was refused: %v", err)
 	}
 	art.Header.Model = 4
-	if err := art.checkModel(5); err == nil || !strings.Contains(err.Error(), "Rebuild it with `retsin-update artifact build`") {
+	if err := art.checkModel(5); err == nil || !strings.Contains(err.Error(), "Rebuild it with `lovkilde-update artifact build`") {
 		t.Errorf("an artifact of an older model was not refused for rebuilding: %v", err)
 	}
 	if err := art.checkModel(3); err == nil || !strings.Contains(err.Error(), "Rebuild and restart the server") {

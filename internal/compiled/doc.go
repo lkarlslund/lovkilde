@@ -1,7 +1,7 @@
 // Package compiled is where the mirror's compiled dataset lives: the artifacts the
 // serving path reads instead of parsing the publisher's XML at query time.
 //
-// The writer and reader of the artifact exist, and `retsin-update artifact build` makes the
+// The writer and reader of the artifact exist, and `lovkilde-update artifact build` makes the
 // file. What is not here yet is serving: lookup and snippets still parse XML, and they
 // will not be pointed at the artifact until the parity gate over all seven media says
 // the artifact answers exactly what the parse answers, and a latency measurement says

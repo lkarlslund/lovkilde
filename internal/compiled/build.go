@@ -84,7 +84,7 @@ func readBuildInfo() (BuildStamp, bool) {
 // who has to run it.
 func (a *Artifact) CheckCurrentBuild() error {
 	if a.Header.Build == "" {
-		return fmt.Errorf("%s: written %s without recording which build wrote it, so there is no way to tell whether its document model is the one this server reads. Rebuild it with `retsin-update artifact build`",
+		return fmt.Errorf("%s: written %s without recording which build wrote it, so there is no way to tell whether its document model is the one this server reads. Rebuild it with `lovkilde-update artifact build`",
 			a.path, a.Header.Created.Format(time.RFC3339))
 	}
 	current, have := CurrentBuild()
@@ -106,7 +106,7 @@ func (a *Artifact) CheckCurrentBuild() error {
 			a.path, wrote)
 	}
 	if a.Header.Created.Before(current.Time) {
-		return fmt.Errorf("%s is stale: it was written %s from %s, before %s which this server was built from. Rebuild the artifact with `retsin-update artifact build`",
+		return fmt.Errorf("%s is stale: it was written %s from %s, before %s which this server was built from. Rebuild the artifact with `lovkilde-update artifact build`",
 			a.path, a.Header.Created.Format(time.RFC3339), wrote, current)
 	}
 	return fmt.Errorf("%s is from a newer source than this server: it was written %s from %s, while this binary is %s. Rebuild and restart the server, since it would decode the artifact's documents as a model it does not have",

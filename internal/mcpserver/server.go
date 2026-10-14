@@ -253,7 +253,7 @@ func (s *Server) PrepareArtifact(path string, cacheBytes int64) (*Prepared, erro
 		p.cat = newCatalogueView(lib)
 	case s.base == nil:
 		c.Close()
-		return nil, fmt.Errorf("%s has no catalogue, so there is nothing to look a document up in: rebuild it with `retsin-update artifact build`", path)
+		return nil, fmt.Errorf("%s has no catalogue, so there is nothing to look a document up in: rebuild it with `lovkilde-update artifact build`", path)
 	}
 	return p, nil
 }
@@ -318,10 +318,10 @@ func (s *Server) indexMismatch(danish bool) string {
 		return ""
 	}
 	if danish {
-		return fmt.Sprintf("søgeindekset er bygget fra en anden kompileret fil (%s) end den, teksten læses fra (%s): byg indekset igen med `retsin index build`",
+		return fmt.Sprintf("søgeindekset er bygget fra en anden kompileret fil (%s) end den, teksten læses fra (%s): byg indekset igen med `lovkilde index build`",
 			strings.TrimPrefix(s.idx().Source, "artifact "), art.Header.Created.UTC().Format(time.RFC3339))
 	}
-	return fmt.Sprintf("the search index was built from a different compiled artifact (%s) than the one text is served from (%s): rebuild the index with `retsin index build`",
+	return fmt.Sprintf("the search index was built from a different compiled artifact (%s) than the one text is served from (%s): rebuild the index with `lovkilde index build`",
 		strings.TrimPrefix(s.idx().Source, "artifact "), art.Header.Created.UTC().Format(time.RFC3339))
 }
 
@@ -384,7 +384,7 @@ func (s *Server) Serve(ctx context.Context) error {
 // added only when an index is loaded.
 func (s *Server) mcpServer() *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
-		Name:    "retsin",
+		Name:    "lovkilde",
 		Version: s.version,
 	}, &mcp.ServerOptions{
 		Instructions: "Lookup Danish law from an unofficial mirror of retsinformation.dk. " +
@@ -500,7 +500,7 @@ func (s *Server) searchTool(_ context.Context, req *mcp.CallToolRequest, in sear
 	if err != nil {
 		return &mcp.CallToolResult{
 			IsError: true,
-			Content: []mcp.Content{&mcp.TextContent{Text: "retsin: " + err.Error()}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "lovkilde: " + err.Error()}},
 		}, nil, nil
 	}
 	return &mcp.CallToolResult{
@@ -527,7 +527,7 @@ func (s *Server) lookupTool(_ context.Context, req *mcp.CallToolRequest, in look
 		// corrects its own request, which is what the answer is for.
 		return &mcp.CallToolResult{
 			IsError: true,
-			Content: []mcp.Content{&mcp.TextContent{Text: "retsin: " + err.Error()}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "lovkilde: " + err.Error()}},
 		}, nil, nil
 	}
 	return &mcp.CallToolResult{

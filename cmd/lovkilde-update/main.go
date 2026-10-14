@@ -1,6 +1,6 @@
-// Command retsin-update mirrors Danish legislation from retsinformation.dk into a
+// Command lovkilde-update mirrors Danish legislation from retsinformation.dk into a
 // local archive of canonical ELI XML, keeps it current via the official harvesting
-// service, and compiles it into the artifact the server reads (command retsin).
+// service, and compiles it into the artifact the server reads (command lovkilde).
 //
 // It is the only program that talks to retsinformation.dk or reads the publisher's
 // XML. Serving needs none of it: an artifact is everything a server reads.
@@ -116,7 +116,7 @@ func newRootCmd() *cobra.Command {
 // rootShell holds only the static description and root-level behaviour.
 func rootShell() *cobra.Command {
 	return &cobra.Command{
-		Use:     "retsin-update",
+		Use:     "lovkilde-update",
 		Short:   "Mirror Danish legislation from retsinformation.dk and compile the artifact",
 		Version: version,
 		Long: `Mirror Danish legislation from retsinformation.dk into a local archive of
@@ -130,7 +130,7 @@ Phases (each independent, resumable and idempotent):
              pass, which is the only one that can repair an outage over 10 days
   changes    read the change feed back and reconcile it against the archive
   artifact build
-             compile the archive into the artifact the server reads (retsin serve);
+             compile the archive into the artifact the server reads (lovkilde serve);
              --mode patch continues the current artifact, compiling only what changed
   publish    publish the artifact and the collection state to a release repository
              (a directory, or hf://owner/name); --with-xml adds the XML archive
@@ -219,7 +219,7 @@ func reportPacingOutcome(a *app, lim *limiter.Limiter) {
 // logPacing states the schedule up front, so an unexpectedly aggressive or timid
 // run is visible in the very first log line.
 func logPacing(cfg config.Config, cmd string) {
-	slog.Info("retsin starting",
+	slog.Info("lovkilde starting",
 		"command", cmd,
 		"data_dir", cfg.DataDir,
 		"floor", cfg.Floor.String(),

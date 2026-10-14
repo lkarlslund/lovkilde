@@ -22,7 +22,7 @@ func runCLI(t *testing.T, root *cobra.Command, args ...string) error {
 }
 
 // buildArtifact compiles the XML archive under dir/xml and installs the artifact in dir, as
-// `retsin-update artifact build` does. The reader's tests need real artifacts; the program that
+// `lovkilde-update artifact build` does. The reader's tests need real artifacts; the program that
 // serves them does not build them, so only its tests reach the builder.
 func buildArtifact(t *testing.T, dir string) {
 	t.Helper()
@@ -44,14 +44,14 @@ func TestTheReaderCommandTree(t *testing.T) {
 	}
 	for _, name := range []string{"fetch", "update", "harvest", "inventory"} {
 		if have[name] {
-			t.Errorf("the reader offers %q, which is retsin-update's", name)
+			t.Errorf("the reader offers %q, which is lovkilde-update's", name)
 		}
 	}
 }
 
 // The server reads an artifact and nothing else, so the binary must not contain the code that
 // collects documents or reads the publisher's XML: if it did, a fallback that reads them could
-// come back without anyone deciding it should. Those packages are retsin-update's. Only the
+// come back without anyone deciding it should. Those packages are lovkilde-update's. Only the
 // binary is checked; tests may parse XML fixtures to build the artifacts they serve.
 func TestTheServerLinksNoCollectionOrXML(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", ".").Output()
@@ -65,7 +65,7 @@ func TestTheServerLinksNoCollectionOrXML(t *testing.T) {
 	}
 	for _, dep := range strings.Fields(string(out)) {
 		if forbidden[dep] {
-			t.Errorf("retsin links %s", strings.TrimPrefix(dep, internal))
+			t.Errorf("lovkilde links %s", strings.TrimPrefix(dep, internal))
 		}
 	}
 }

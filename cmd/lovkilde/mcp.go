@@ -133,7 +133,7 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 func downloadMissing(ctx context.Context, dataDir, spec string) (string, error) {
 	repo, err := release.Open(spec)
 	if errors.Is(err, release.ErrNoRepo) {
-		return "", fmt.Errorf("no compiled artifact in %s: build one with `retsin-update artifact build`, or download one with --release", artifactdir.Dir(dataDir))
+		return "", fmt.Errorf("no compiled artifact in %s: build one with `lovkilde-update artifact build`, or download one with --release", artifactdir.Dir(dataDir))
 	}
 	if err != nil {
 		return "", err
@@ -166,13 +166,13 @@ func checkDataset(ctx context.Context, dataDir string, from release.Repo) checks
 	const needsUpgrade = "Der er udgivet nye lovtekster i et nyere format, som kræver en nyere version af programmet. Serveren bruger fortsat sine nuværende tekster, indtil programmet er opdateret."
 	switch {
 	case errors.Is(err, release.ErrProgramTooOld):
-		slog.Warn("the published artifact needs a newer version of retsin", "model", res.Newer, "reads", compiled.ModelVersion)
+		slog.Warn("the published artifact needs a newer version of lovkilde", "model", res.Newer, "reads", compiled.ModelVersion)
 		return checks.Outcome{Summary: needsUpgrade, Upgrade: true}
 	case err == nil && res.Newer > 0:
 		if res.Installed {
 			logTransfer(res.Transfer)
 		}
-		slog.Warn("the published artifact needs a newer version of retsin; keeping the last one of this version's model", "model", res.Newer, "reads", compiled.ModelVersion, "path", res.Path)
+		slog.Warn("the published artifact needs a newer version of lovkilde; keeping the last one of this version's model", "model", res.Newer, "reads", compiled.ModelVersion, "path", res.Path)
 		return checks.Outcome{Summary: needsUpgrade, Upgrade: true}
 	case errors.Is(err, release.ErrDataTooOld):
 		slog.Info("no published artifact of this version's document model yet", "reads", compiled.ModelVersion)
@@ -331,14 +331,14 @@ The transport is stdio, which is what a client that starts the process expects: 
 process writes protocol on stdout and logs on stderr, so it must not be run with its
 log redirected onto the same pipe.
 
-  retsin mcp
+  lovkilde mcp
   { "jsonrpc": "2.0", "method": "tools/call", "params": { "name": "lookup",
     "arguments": { "document": "eli/lta/2019/1399", "address": "§ 5, stk. 2" } } }
 
 Two tools are offered. "lookup" reads a document by ELI path or accession, optionally
 one provision in Danish citation form ("§ 267, stk. 3 nr. 2"), optionally consolidated
 to a date with as_of. "search" needs the index and is advertised only when one is
-loaded: build it with "retsin index build". Without it this process serves lookup and
+loaded: build it with "lovkilde index build". Without it this process serves lookup and
 says so on stderr, because a tool that answers "actually that needs an index" is worse
 than a tool that is not there.
 
@@ -348,7 +348,7 @@ whose XML has none, text our reader recovered from the site's HTML. The paired s
 says the recovered text reproduces the canonical wording byte for byte in 84.9 % of
 documents, which is worth reading and not worth quoting without saying so.
 
-Everything is read from the compiled artifact ("retsin-update artifact build"): the catalogue,
+Everything is read from the compiled artifact ("lovkilde-update artifact build"): the catalogue,
 each document's model, and the amending acts' changes that as_of applies. Without one it
 downloads the published artifact from --release, and refuses to start when it cannot. While it
 runs it checks --release for a newer artifact every --auto-update and moves to it. An artifact of another document model is refused too, with a message

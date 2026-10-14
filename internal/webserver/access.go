@@ -39,7 +39,7 @@ func (h *Handler) authorized(r *http.Request) bool {
 // the MCP endpoint, or anything that does not ask for HTML — is told to send it.
 func (h *Handler) requireKey(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/mcp" || !strings.Contains(r.Header.Get("Accept"), "text/html") {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="retsin"`)
+		w.Header().Set("WWW-Authenticate", `Bearer realm="lovkilde"`)
 		http.Error(w, "Serveren kræver en API-nøgle: send den som \"Authorization: Bearer <nøgle>\".", http.StatusUnauthorized)
 		return
 	}

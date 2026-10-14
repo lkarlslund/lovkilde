@@ -46,14 +46,14 @@ func indexBuildCmd(resolve configFunc) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "Index every document in the compiled artifact for full-text search",
-		Long: `Build the search index from the compiled artifact (retsin-update artifact build). No
+		Long: `Build the search index from the compiled artifact (lovkilde-update artifact build). No
 network traffic, and no mirror needed: anyone holding the artifact can build the index
 that goes with it, and the index records which artifact it came from so a server can
 tell a matching pair from a mismatched one.
 
-  retsin index build
-  retsin index build --artifact some/artifact.retsin --out some/search.idx
-  retsin index build --sample 50 --out some.idx   # a stratum-balanced subset, for measuring
+  lovkilde index build
+  lovkilde index build --artifact some/artifact.lkz --out some/search.lkiz
+  lovkilde index build --sample 50 --out some.lkiz   # a stratum-balanced subset, for measuring
 
 The build streams: documents are read, cut and counted a batch at a time, and their
 text is let go, so memory is the index's postings rather than the corpus. A full build
@@ -167,10 +167,10 @@ func searchCmd(resolve configFunc) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search <words>",
 		Short: "Full-text search the mirror: hits are provisions, not documents",
-		Example: `  retsin search "miljøbeskyttelse pligt"
-  retsin search "lov nr. 1399" --kind lta --since 2015
-  retsin search "ubetinget råderet" --source xml   # only the register's own text
-  retsin search "pligt AND virksomhed -lejlighed"  # require, require-not; plain words are OR`,
+		Example: `  lovkilde search "miljøbeskyttelse pligt"
+  lovkilde search "lov nr. 1399" --kind lta --since 2015
+  lovkilde search "ubetinget råderet" --source xml   # only the register's own text
+  lovkilde search "pligt AND virksomhed -lejlighed"  # require, require-not; plain words are OR`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolve()
@@ -189,7 +189,7 @@ func searchCmd(resolve configFunc) *cobra.Command {
 			idx, err := search.Load(index)
 			if err != nil {
 				if os.IsNotExist(err) {
-					return fmt.Errorf("%s: %w — build it first with `retsin index build`", index, err)
+					return fmt.Errorf("%s: %w — build it first with `lovkilde index build`", index, err)
 				}
 				return err
 			}
@@ -323,7 +323,7 @@ func indexFromArtifact(ctx context.Context, path string, opts search.Options, pe
 	if n := unshelved.Load(); n == int64(len(idx.Docs)) && n > 0 {
 		// An artifact from before its documents carried their shelf would give an index
 		// without kinds, years or ELI paths: every filter and every citation would be empty.
-		return nil, fmt.Errorf("%s records no shelf (lta, ft, …) for any document: it predates the artifact's identity fields, rebuild it with `retsin-update artifact build`", path)
+		return nil, fmt.Errorf("%s records no shelf (lta, ft, …) for any document: it predates the artifact's identity fields, rebuild it with `lovkilde-update artifact build`", path)
 	}
 	if n := unreadable.Load(); n > 0 {
 		return nil, fmt.Errorf("%d documents could not be read from %s", n, path)

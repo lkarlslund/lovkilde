@@ -1,4 +1,4 @@
-// Package cli is what the retsin commands share: the one writer logs and progress bars go
+// Package cli is what the lovkilde commands share: the one writer logs and progress bars go
 // through, the logger, and the profiler.
 package cli
 

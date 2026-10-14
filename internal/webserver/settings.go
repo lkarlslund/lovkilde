@@ -21,7 +21,7 @@ var checkTexts = []struct{ Name, Title, Explains string }{
 	{checks.Dataset, "Nye udgaver af lovteksterne",
 		"Serveren spørger, om der er udgivet en nyere udgave af datasættet. Findes der en, hentes den og tages i brug automatisk; kun de dele, der er ændret, hentes."},
 	{checks.Software, "Nye versioner af programmet",
-		"Serveren spørger GitHub, om der er udgivet en nyere version af retsin. Den opdaterer ikke sig selv: findes der en, står det øverst på alle sider, og det er op til den, der driver serveren, at installere den."},
+		"Serveren spørger GitHub, om der er udgivet en nyere version af lovkilde. Den opdaterer ikke sig selv: findes der en, står det øverst på alle sider, og det er op til den, der driver serveren, at installere den."},
 }
 
 func (h *Handler) checkViews() []checkView {

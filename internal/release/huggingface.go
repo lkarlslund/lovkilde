@@ -130,7 +130,7 @@ func artifactsInXet(ctx context.Context, hub *xet.Hub, dir string) []xet.Have {
 // staged in a temporary directory under their paths in the repository — hard-linked where they
 // can be — and handed to hf upload.
 func (h *HuggingFace) Commit(ctx context.Context, c Commit) error {
-	stage, err := os.MkdirTemp("", "retsin-commit-*")
+	stage, err := os.MkdirTemp("", "lovkilde-commit-*")
 	if err != nil {
 		return err
 	}

@@ -11,7 +11,7 @@
 // A release is a manifest beside the files it names:
 //
 //	latest.json                                   Manifest
-//	artifact-20261007T0648Z-61f208f4.retsin       the artifact it names
+//	artifact-20261007T0648Z-61f208f4.lkz       the artifact it names
 //	state/meta.json, state/inventory.jsonl, …     the collection state (internal/store)
 //	xml/lta/1995.tar.zst, …                       the XML archive, one pack per shard (optional)
 //	README.md                                     the dataset card, written from the manifest

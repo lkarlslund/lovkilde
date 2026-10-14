@@ -31,7 +31,7 @@ viewer: false
 Every document published on [retsinformation.dk](https://www.retsinformation.dk), the Danish
 state's register of legislation: acts, consolidated acts, executive orders, circulars,
 guidance, the Ombudsman's statements and the rest, as the site publishes them, plus a compiled
-artifact that the [retsin](https://github.com/lkarlslund/retsinformation) server reads.
+artifact that the [Lovkilde](https://github.com/lkarlslund/retsinformation) server reads.
 
 This card is written by the release that publishes the files below; it describes that release.
 
@@ -53,7 +53,7 @@ in one commit; a day with no changed document publishes no release.
 
 - **`latest.json`**: the manifest. It names every file below with its size and SHA-256, and
   is committed last, so a reader that starts from it never finds a file missing.
-- **`artifact-*.retsin`**: the compiled artifact, every document parsed into one model (seekable
+- **`artifact-*.lkz`**: the compiled artifact, every document parsed into one model (seekable
   zstd, one frame per document).
 - **`xml/<kind>/<year>.tar.zst`**: the source archive, as the site publishes it. Each pack holds
   the documents' XML and, beside them, JSON sidecars from the site's document API, whose
@@ -63,14 +63,14 @@ in one commit; a day with no changed document publishes no release.
 
 ## Using it
 
-The retsin server downloads the artifact by itself when it has none, and checks for a newer
+The Lovkilde server downloads the artifact by itself when it has none, and checks for a newer
 one daily:
 
 ```
-retsin serve --release {{.Repo}}
+lovkilde serve --release {{.Repo}}
 ```
 
-`retsin artifact download --release {{.Repo}}` installs it without serving. A server that
+`lovkilde artifact download --release {{.Repo}}` installs it without serving. A server that
 already has an artifact downloads only the chunks the new one does not share with it.
 
 The source packs are plain `tar` compressed with zstd:

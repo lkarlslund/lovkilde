@@ -1,9 +1,9 @@
 GO      ?= go
-BIN     := bin/retsin
-PKG     := ./cmd/retsin
-UPDATER := bin/retsin-update
-UPDPKG  := ./cmd/retsin-update
-SERVICE := retsin.service
+BIN     := bin/lovkilde
+PKG     := ./cmd/lovkilde
+UPDATER := bin/lovkilde-update
+UPDPKG  := ./cmd/lovkilde-update
+SERVICE := lovkilde.service
 DATA    := data
 
 # The service runs this file where it is built, the way the llama.cpp and ninfer units
@@ -12,7 +12,7 @@ DATA    := data
 # to install a two-week-old binary and report success.
 #
 # Which sources decide which compiled file. The artifact needs no rule here: it carries
-# its document model version and `retsin artifact check` answers whether this binary can read
+# its document model version and `lovkilde artifact check` answers whether this binary can read
 # it, which is the same comparison the server makes before it serves anything. The index
 # carries no stamp at all — its provision ids are only meaningful against the artifact they
 # were cut with — so a mtime rule is the only thing that notices, and it is a guess. The
@@ -30,7 +30,7 @@ GOSUMDB ?= off
 
 all: vet test build
 
-# Two programs: retsin serves an artifact and reads nothing else; retsin-update collects the
+# Two programs: lovkilde serves an artifact and reads nothing else; lovkilde-update collects the
 # documents from retsinformation.dk and compiles the artifact.
 build:
 	@mkdir -p bin

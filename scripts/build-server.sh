@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the server (cmd/retsin) for every platform a release ships, packed one archive per
+# Build the server (cmd/lovkilde) for every platform a release ships, packed one archive per
 # platform with a SHA256SUMS beside them:
 #
 #   scripts/build-server.sh [outdir]      (default dist/)
@@ -19,11 +19,11 @@ trap 'rm -rf "$work"' EXIT
 
 for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
   os="${target%/*}" arch="${target#*/}"
-  name="retsin-$os-$arch"
-  exe=retsin
-  [ "$os" = windows ] && exe=retsin.exe
+  name="lovkilde-$os-$arch"
+  exe=lovkilde
+  [ "$os" = windows ] && exe=lovkilde.exe
   mkdir -p "$work/$name"
-  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" -o "$work/$name/$exe" ./cmd/retsin
+  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w" -o "$work/$name/$exe" ./cmd/lovkilde
   if [ "$os" = windows ]; then
     (cd "$work" && zip -qr "$out/$name.zip" "$name")
   else
@@ -31,4 +31,4 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 wi
   fi
   echo "built $name"
 done
-(cd "$out" && sha256sum retsin-* > SHA256SUMS)
+(cd "$out" && sha256sum lovkilde-* > SHA256SUMS)
