@@ -117,7 +117,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.srv.MCPHandler().ServeHTTP(w, r)
 		return
 	}
-	if !acceptedTerms(r) {
+	if !h.acceptedTerms(r) {
 		h.requireTerms(w, r)
 		return
 	}

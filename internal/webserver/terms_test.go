@@ -7,12 +7,15 @@ import (
 	"testing"
 
 	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/eula"
 )
 
 // No page answers a browser that has not accepted the terms; accepting them sends it back where
 // it was going, on this site only, and from then on every page answers.
 func TestPagesAnswerOnlyOnceTheTermsAreAccepted(t *testing.T) {
-	site, _ := newTestSite(t, false)
+	site, srv := newTestSite(t, false)
+	dataDir := t.TempDir()
+	srv.EULA = eula.Open(dataDir)
 	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
 	resp, err := noFollow.Get(site.URL + "/browse?kind=lta")
@@ -53,6 +56,13 @@ func TestPagesAnswerOnlyOnceTheTermsAreAccepted(t *testing.T) {
 	}
 	if _, code := get(t, site, "/browse?kind=lta"); code != http.StatusOK {
 		t.Errorf("a page after the terms: %d", code)
+	}
+	// Accepted once is accepted on the server: another browser, and the server after a restart.
+	if _, code := getAnon(t, site.URL+"/status"); code != http.StatusOK {
+		t.Errorf("a browser without the cookie, after the terms were accepted on the server: %d", code)
+	}
+	if !eula.Open(dataDir).Accepted() {
+		t.Error("the acceptance was not kept in the data directory")
 	}
 }
 

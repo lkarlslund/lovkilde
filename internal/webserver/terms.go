@@ -2,6 +2,7 @@ package webserver
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,15 +11,20 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
-// The terms of use are accepted once per browser, in a cookie that holds the version of the terms
-// accepted; a new version asks again. Nothing but the terms page and the MCP endpoint, which asks
-// through its own tool, answers a browser that has not accepted them.
+// The terms of use are accepted once per server, here or through the MCP tool, and kept in the
+// data directory (internal/eula); a new version asks again. A browser that accepted them also keeps
+// a cookie with the version, which is what a server without a data directory goes by. Nothing but
+// the terms page and the MCP endpoint, which asks through its own tool, answers before they are
+// accepted.
 const (
 	termsPath   = "/eula"
 	termsCookie = "retsin_vilkaar"
 )
 
-func acceptedTerms(r *http.Request) bool {
+func (h *Handler) acceptedTerms(r *http.Request) bool {
+	if h.srv.EULA.Accepted() {
+		return true
+	}
 	c, err := r.Cookie(termsCookie)
 	return err == nil && c.Value == disclaimer.TermsVersion
 }
@@ -52,6 +58,9 @@ func (h *Handler) terms(w http.ResponseWriter, r *http.Request) {
 			h.renderTerms(w, next, true, false)
 			return
 		}
+		if err := h.srv.EULA.Accept(); err != nil {
+			slog.Warn("the acceptance of the terms could not be saved; it holds until the server restarts", "err", err)
+		}
 		http.SetCookie(w, &http.Cookie{
 			Name: termsCookie, Value: disclaimer.TermsVersion, Path: "/",
 			Expires: time.Now().AddDate(1, 0, 0), HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil,
@@ -59,7 +68,7 @@ func (h *Handler) terms(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
-	h.renderTerms(w, next, false, acceptedTerms(r))
+	h.renderTerms(w, next, false, h.acceptedTerms(r))
 }
 
 func (h *Handler) renderTerms(w http.ResponseWriter, next string, unticked, accepted bool) {

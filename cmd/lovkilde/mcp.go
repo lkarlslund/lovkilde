@@ -19,6 +19,7 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/checks"
 	"github.com/lkarlslund/lovkilde/internal/compiled"
 	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/eula"
 	"github.com/lkarlslund/lovkilde/internal/mcpserver"
 	"github.com/lkarlslund/lovkilde/internal/release"
 	"github.com/lkarlslund/lovkilde/internal/search"
@@ -207,6 +208,7 @@ func byteSize(n int64) string {
 // newServingServer is a server with the settings every serving process shares.
 func newServingServer(cfg config.Config, o serveOptions) *mcpserver.Server {
 	srv := mcpserver.New(nil, cfg.SiteBase, version)
+	srv.EULA = eula.Open(cfg.DataDir)
 	if o.MaxChars > 0 {
 		srv.MaxChars = o.MaxChars
 	}

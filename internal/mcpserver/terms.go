@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -65,6 +66,8 @@ func (s *Server) termsTool(_ context.Context, req *mcp.CallToolRequest, in terms
 	id := sessionID(req)
 	shown, accepted := s.terms.state(id)
 	switch {
+	case s.EULA.Accepted():
+		return textResult(false, "Vilkårene er allerede accepteret på denne server. Alle værktøjer kan bruges."), nil, nil
 	case accepted:
 		return textResult(false, "Vilkårene er allerede accepteret i denne session. Alle værktøjer kan bruges."), nil, nil
 	case !in.Accept:
@@ -75,13 +78,20 @@ func (s *Server) termsTool(_ context.Context, req *mcp.CallToolRequest, in terms
 			" without arguments, show the user the terms, and accept only once they have.\n\n"+disclaimer.TermsText()), nil, nil
 	}
 	s.terms.mark(id, true)
-	return textResult(false, "Vilkårene er accepteret for denne session (version "+disclaimer.TermsVersion+
-		"). Alle værktøjer kan nu bruges. Husk: teksterne er uofficielle og kan indeholde fejl."), nil, nil
+	if s.EULA == nil {
+		return textResult(false, "Vilkårene er accepteret for denne session (version "+disclaimer.TermsVersion+
+			"). Alle værktøjer kan nu bruges. Husk: teksterne er uofficielle og kan indeholde fejl."), nil, nil
+	}
+	if err := s.EULA.Accept(); err != nil {
+		slog.Warn("the acceptance of the terms could not be saved; it holds until the server restarts", "err", err)
+	}
+	return textResult(false, "Vilkårene er accepteret på denne server (version "+disclaimer.TermsVersion+
+		"), også for hjemmesiden. Alle værktøjer kan nu bruges. Husk: teksterne er uofficielle og kan indeholde fejl."), nil, nil
 }
 
 // gate answers in place of a tool whose session has not accepted the terms, or nil when it has.
 func (s *Server) gate(req *mcp.CallToolRequest) *mcp.CallToolResult {
-	if _, accepted := s.terms.state(sessionID(req)); accepted {
+	if _, accepted := s.terms.state(sessionID(req)); accepted || s.EULA.Accepted() {
 		return nil
 	}
 	return textResult(true, "The user has not accepted the terms of use in this session. Call the tool "+

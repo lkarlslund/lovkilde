@@ -430,7 +430,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 <header class="site"><div class="wrap">
 <a class="brand" href="/"><svg class="seal" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="15.5" fill="var(--accent)"/><circle cx="16" cy="16" r="12.6" fill="none" stroke="var(--wash)" stroke-width=".9" stroke-dasharray="1.6 1.1"/><text x="16" y="22.6" text-anchor="middle" font-family="Georgia,Times New Roman,serif" font-size="19" font-weight="700" fill="var(--wash)">§</text></svg><span>Lovkilde</span></a>
 {{block "headsearch" .}}<form class="joined" method="get" action="/search" role="search"><input type="search" name="q" placeholder="Søg i lovgivningen" aria-label="Søg" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
-<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/settings">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a></nav>
+<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/settings">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a><a href="https://github.com/lkarlslund/lovkilde" title="Lovkilde på GitHub">GitHub</a></nav>
 </div></header>
 <main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér lovkilde for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
 {{else}}<b>Ny version af lovkilde{{with .Version}}, {{.}}{{end}}:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
@@ -438,7 +438,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar
-for fejl eller tab. Ikke juridisk rådgivning. <a href="/eula">Vilkår for brug</a>. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>. <a href="https://github.com/lkarlslund/lovkilde">Lovkilde på GitHub</a>.</div></footer>
+for fejl eller tab. Ikke juridisk rådgivning. <a href="/eula">Vilkår for brug</a>. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
 <script>
 // Progressive help only: every page works without this. It does four things — a long contents
 // list folds on a phone, a ticked toggle applies itself, an empty field stays out of the

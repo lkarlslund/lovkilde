@@ -15,6 +15,7 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/chain"
 	"github.com/lkarlslund/lovkilde/internal/compiled"
 	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/eula"
 	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 	"github.com/lkarlslund/lovkilde/internal/library"
 	"github.com/lkarlslund/lovkilde/internal/search"
@@ -54,8 +55,12 @@ type Server struct {
 	mcpOnce    sync.Once
 	mcpHandler http.Handler
 
-	// terms is which MCP sessions have accepted the terms of use; see termsTool.
+	// terms is which MCP sessions have been shown the terms of use; see termsTool.
 	terms terms
+
+	// EULA is whether the terms are accepted on this server, through the website or the MCP
+	// tool; nil keeps acceptance to each MCP session.
+	EULA *eula.Store
 }
 
 // clock is the server's idea of now: time.Now, unless a test pinned it.
