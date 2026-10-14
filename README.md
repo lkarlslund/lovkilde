@@ -78,11 +78,11 @@ Værktøjerne:
 | Værktøj | Gør |
 |---|---|
 | `eula` | Henter vilkårene for brug. Assistenten skal vise dem til dig, og først når du har accepteret, kalder den igen med `accept: true`. Indtil da svarer de andre værktøjer ikke. |
+| `lookup` | Henter et dokument eller en bestemmelse. `document` er en ELI-sti (`eli/lta/2019/1399`) eller et accessionsnummer (`B20190139905`); `address` er en bestemmelse; `as_of` (ÅÅÅÅ-MM-DD) giver loven som gældende på datoen. |
+| `search` | Søger. Bøjningsformer og sammensatte ord findes. `a AND b` kræver begge, `-ord` udelukker, `'to ord'` kræver begge i samme bestemmelse. Kan afgrænses på type, år, tekstkilde og status. |
 
 Vilkårene accepteres én gang pr. server, enten på hjemmesiden eller gennem `eula`, og det gælder for
 begge og huskes, også når serveren genstartes. Ændres vilkårene, skal de accepteres igen.
-| `lookup` | Henter et dokument eller en bestemmelse. `document` er en ELI-sti (`eli/lta/2019/1399`) eller et accessionsnummer (`B20190139905`); `address` er en bestemmelse; `as_of` (ÅÅÅÅ-MM-DD) giver loven som gældende på datoen. |
-| `search` | Søger. Bøjningsformer og sammensatte ord findes. `a AND b` kræver begge, `-ord` udelukker, `'to ord'` kræver begge i samme bestemmelse. Kan afgrænses på type, år, tekstkilde og status. |
 
 ## Hjemmesiden
 
