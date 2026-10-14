@@ -1,6 +1,6 @@
 // Package softwareupdate asks whether a newer build of the software has been published than the
-// one running. It only tells: installing a new build is the operator's decision, so nothing here
-// downloads or replaces anything.
+// one running, and downloads it when asked to. It never replaces the running program: a downloaded
+// build is kept in the data directory, and the program started next runs the newest one there.
 //
 // A build is named by the commit it was built from, and the published build is the release tag
 // the nightly workflow moves to each commit it builds. GitHub's compare API says how many commits
@@ -20,12 +20,15 @@ import (
 
 // Checker compares the running build with the published one.
 type Checker struct {
-	Repo      string // owner/name on GitHub
-	Tag       string // the published build's release tag
-	Revision  string // the commit the running binary was built from
-	APIBase   string // https://api.github.com when empty
-	UserAgent string
-	Client    *http.Client
+	Repo     string // owner/name on GitHub
+	Tag      string // the published build's release tag
+	Revision string // the commit the running binary was built from
+	APIBase  string // https://api.github.com when empty
+	// DownloadBase is where the published build's files are; the release's download URL when
+	// empty.
+	DownloadBase string
+	UserAgent    string
+	Client       *http.Client
 }
 
 // URL is the page the published build is downloaded from.

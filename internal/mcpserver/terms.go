@@ -12,7 +12,7 @@ import (
 // termsTool is the tool a session accepts the terms through. Every other tool answers only with
 // the terms until it has: first the model fetches them and shows them to the user, then, once the
 // user has said yes, it calls again to accept.
-const termsTool = "vilkaar"
+const termsTool = "eula"
 
 // termsInput is the terms tool's argument object; see lookupInput for why the tag is the
 // description.

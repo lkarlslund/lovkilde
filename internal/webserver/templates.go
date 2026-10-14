@@ -434,11 +434,11 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 </div></header>
 <main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér lovkilde for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
 {{else}}<b>Ny version af lovkilde:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
-{{end}}{{with .URL}}<a href="{{.}}">Se og hent den på GitHub</a>. {{end}}Serveren opdaterer ikke sig selv; det er op til den, der driver den, at installere den nye version.</p>{{end}}
+{{end}}{{if .Downloaded}}Den er hentet og bruges, når Lovkilde startes igen.{{else}}{{with .URL}}<a href="{{.}}">Se den på GitHub</a>. {{end}}Den hentes ved næste tjek, eller med <code>lovkilde program download</code>.{{end}}</p>{{end}}
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar
-for fejl eller tab. Ikke juridisk rådgivning. <a href="/vilkaar">Vilkår for brug</a>. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
+for fejl eller tab. Ikke juridisk rådgivning. <a href="/eula">Vilkår for brug</a>. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
 <script>
 // Progressive help only: every page works without this. It does four things — a long contents
 // list folds on a phone, a ticked toggle applies itself, an empty field stays out of the
@@ -598,7 +598,7 @@ const termsBody = `{{define "headsearch"}}{{""}}{{end}}{{define "content"}}
 {{range $i, $t := .Terms}}<h2>{{inc $i}}. {{$t.Heading}}</h2>
 <p>{{$t.Text}}</p>
 {{end}}{{if .Accepted}}<p class="note">Du har allerede accepteret vilkårene i denne browser. <a href="/">Til forsiden</a></p>
-{{else}}<form method="post" action="/vilkaar">
+{{else}}<form method="post" action="/eula">
 <input type="hidden" name="next" value="{{.Next}}">
 {{if .Unticked}}<p class="warn">Sæt kryds for at bekræfte, at du accepterer vilkårene.</p>{{end}}
 <label><input type="checkbox" name="accepterer" value="ja" required> {{.Accept}}</label>
@@ -641,7 +641,7 @@ const statusBody = `{{define "content"}}
 <section class="panel legal" aria-labelledby="legal"><h2 id="legal">Ansvarsfraskrivelse</h2>
 <p><b>{{.Short}}</b></p>
 {{range $i, $t := .Terms}}<h3>{{inc $i}}. {{$t.Heading}}</h3><p>{{$t.Text}}</p>
-{{end}}<p><a href="/vilkaar">Vilkår for brug</a></p></section>
+{{end}}<p><a href="/eula">Vilkår for brug</a></p></section>
 {{end}}`
 
 const settingsBody = `{{define "extrahead"}}{{if .Running}}<meta http-equiv="refresh" content="3">{{end}}{{end}}{{define "content"}}

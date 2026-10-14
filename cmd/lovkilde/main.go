@@ -84,6 +84,10 @@ lookup by ELI path or accession, laws as of a date, and full-text search.
                       say whether this binary can serve the artifact on disk
   lovkilde artifact download
                       install the published artifact (serve does this when there is none)
+  lovkilde program check
+                      say whether a newer build of this program is published
+  lovkilde program download
+                      download it; lovkilde runs the newest downloaded build from then on
 
 The artifact is everything this reads: the catalogue, each document's model and each
 amending act's changes. It is made by lovkilde-update, which collects the documents from
@@ -103,7 +107,11 @@ Data layout:
 	pf.StringVar(&cfg.DataDir, "data-dir", cfg.DataDir, "data directory holding the artifacts")
 	pf.StringVar(&logLevel, "log-level", "info", "log level: debug, info, warn, error")
 	prof.Register(root)
-	root.PersistentPreRunE = func(*cobra.Command, []string) error { return prof.Start() }
+	root.PersistentPreRunE = func(*cobra.Command, []string) error {
+		switchToNewer(cfg.DataDir)
+		sayStartedBy()
+		return prof.Start()
+	}
 
 	resolve := func() (config.Config, error) {
 		if err := cfg.Validate(); err != nil {
@@ -122,6 +130,7 @@ Data layout:
 		serve,
 		indexCmd(resolve),
 		artifactCmd(resolve),
+		programCmd(resolve),
 		searchCmd(resolve),
 	)
 	return root

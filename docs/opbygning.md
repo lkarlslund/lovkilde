@@ -21,6 +21,7 @@
 | `internal/webserver` | Hjemmesiden. |
 | `internal/crawl`, `internal/limiter`, `internal/rihttp` | Indsamlingen og dens tempo. |
 | `internal/release` | Udgivelse og hentning af artefakter. |
+| `internal/softwareupdate` | Nye versioner af programmet: tjek mod GitHub og hentning til `<datamappe>/program`. `lovkilde` kører den nyeste hentede version, hvis den er nyere end sig selv. |
 
 ## Dokumentmodellen
 

@@ -85,8 +85,10 @@ type Outcome struct {
 	Summary string    `json:"summary,omitempty"`
 	Err     string    `json:"error,omitempty"`
 	// Newer is how many changes a newer published version holds that this one does not, for a
-	// check that only reports one rather than installing it.
+	// check that does not put it to use by itself.
 	Newer int `json:"newer,omitempty"`
+	// Downloaded says the newer version is downloaded and is used from the next start.
+	Downloaded bool `json:"downloaded,omitempty"`
 	// Upgrade says the check found published data that needs a newer program than this one.
 	Upgrade bool `json:"upgrade,omitempty"`
 }

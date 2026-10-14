@@ -14,7 +14,7 @@ import (
 // accepted; a new version asks again. Nothing but the terms page and the MCP endpoint, which asks
 // through its own tool, answers a browser that has not accepted them.
 const (
-	termsPath   = "/vilkaar"
+	termsPath   = "/eula"
 	termsCookie = "retsin_vilkaar"
 )
 

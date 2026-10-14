@@ -20,10 +20,10 @@ func TestPagesAnswerOnlyOnceTheTermsAreAccepted(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if loc := resp.Header.Get("Location"); resp.StatusCode != http.StatusSeeOther || loc != "/vilkaar?next=%2Fbrowse%3Fkind%3Dlta" {
+	if loc := resp.Header.Get("Location"); resp.StatusCode != http.StatusSeeOther || loc != "/eula?next=%2Fbrowse%3Fkind%3Dlta" {
 		t.Fatalf("a page before the terms: %s, to %q", resp.Status, loc)
 	}
-	body, code := getAnon(t, site.URL+"/vilkaar?next=%2Fbrowse")
+	body, code := getAnon(t, site.URL+"/eula?next=%2Fbrowse")
 	if code != http.StatusOK || !strings.Contains(body, disclaimer.Terms[len(disclaimer.Terms)-1].Text) || !strings.Contains(body, `name="accepterer"`) {
 		t.Errorf("the terms page (%d) does not show the terms and the box to tick:\n%s", code, body)
 	}
@@ -33,7 +33,7 @@ func TestPagesAnswerOnlyOnceTheTermsAreAccepted(t *testing.T) {
 
 	post := func(form url.Values) *http.Response {
 		t.Helper()
-		resp, err := noFollow.PostForm(site.URL+"/vilkaar", form)
+		resp, err := noFollow.PostForm(site.URL+"/eula", form)
 		if err != nil {
 			t.Fatal(err)
 		}

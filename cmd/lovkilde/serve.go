@@ -21,8 +21,6 @@ import (
 
 	"github.com/lkarlslund/lovkilde/internal/apikey"
 	"github.com/lkarlslund/lovkilde/internal/checks"
-	"github.com/lkarlslund/lovkilde/internal/compiled"
-	"github.com/lkarlslund/lovkilde/internal/config"
 	"github.com/lkarlslund/lovkilde/internal/mcpserver"
 	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
 	"github.com/lkarlslund/lovkilde/internal/webserver"
@@ -86,7 +84,7 @@ unreadable stops it.`,
 			if chk == nil {
 				chk = checks.Open(cfg.DataDir)
 			}
-			software := addSoftwareCheck(chk)
+			software := addSoftwareCheck(chk, cfg.DataDir)
 			go chk.Run(cmd.Context())
 			web := webserver.New(srv)
 			web.Checks, web.Software = chk, software
@@ -131,24 +129,32 @@ const (
 )
 
 // addSoftwareCheck schedules the check for a newer published build, daily unless the settings
-// page says otherwise, and returns what it asks. It only reports: the website says a newer build
-// is out, and installing it is the operator's decision. A binary that does not know the commit it
-// was built from has nothing to compare, and gets no check.
-func addSoftwareCheck(chk *checks.Checks) *softwareupdate.Checker {
-	build, ok := compiled.CurrentBuild()
-	if !ok {
+// page says otherwise, and returns what it asks. A newer build is downloaded into the data
+// directory, and the next start runs it (switchToNewer); the running server is not replaced under
+// its users. A binary that does not know the commit it was built from has nothing to compare, and
+// gets no check.
+func addSoftwareCheck(chk *checks.Checks, dataDir string) *softwareupdate.Checker {
+	sw, err := publishedChecker()
+	if err != nil {
 		return nil
 	}
-	sw := &softwareupdate.Checker{Repo: softwareRepo, Tag: softwareTag, Revision: build.Revision, UserAgent: config.DefaultUserAgent}
 	chk.Add(checks.Software, checks.Daily, time.Time{}, func(ctx context.Context) checks.Outcome {
 		n, err := sw.Behind(ctx)
 		switch {
 		case err != nil:
 			return checks.Outcome{Err: err.Error()}
-		case n > 0:
-			return checks.Outcome{Newer: n, Summary: fmt.Sprintf("En nyere version er udgivet, %d %s nyere end denne.", n, map[bool]string{true: "ændring", false: "ændringer"}[n == 1])}
+		case n == 0:
+			return checks.Outcome{Summary: "Denne version er den nyeste udgivne."}
 		}
-		return checks.Outcome{Summary: "Denne version er den nyeste udgivne."}
+		newer := fmt.Sprintf("En nyere version er udgivet, %d %s nyere end denne.", n, map[bool]string{true: "ændring", false: "ændringer"}[n == 1])
+		dir := programDir(dataDir)
+		path, _, err := sw.Download(ctx, dir)
+		if err != nil {
+			return checks.Outcome{Newer: n, Summary: newer + " Den kunne ikke hentes: " + err.Error()}
+		}
+		softwareupdate.Prune(dir, path)
+		fmt.Fprintf(gate.LogWriter(), "downloaded the newer published build to %s; it runs when lovkilde is started again\n", path)
+		return checks.Outcome{Newer: n, Downloaded: true, Summary: newer + " Den er hentet og bruges, når Lovkilde startes igen."}
 	})
 	return sw
 }

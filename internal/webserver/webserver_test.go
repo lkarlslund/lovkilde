@@ -191,13 +191,13 @@ func TestMCPEndpointAnswersARealClient(t *testing.T) {
 	if r := call("lookup", lookupArgs); !r.IsError || strings.Contains(text(r), "KANONISK TEKST") {
 		t.Errorf("lookup answered before the terms were accepted:\n%s", text(r))
 	}
-	if r := call("vilkaar", map[string]any{"accepterer": true}); !r.IsError {
+	if r := call("eula", map[string]any{"accepterer": true}); !r.IsError {
 		t.Errorf("the terms were accepted before they were shown:\n%s", text(r))
 	}
-	if r := call("vilkaar", nil); r.IsError || !strings.Contains(text(r), disclaimer.Terms[0].Text) {
+	if r := call("eula", nil); r.IsError || !strings.Contains(text(r), disclaimer.Terms[0].Text) {
 		t.Errorf("the terms tool did not return the terms:\n%s", text(r))
 	}
-	if r := call("vilkaar", map[string]any{"accepterer": true}); r.IsError {
+	if r := call("eula", map[string]any{"accepterer": true}); r.IsError {
 		t.Errorf("accepting the shown terms failed:\n%s", text(r))
 	}
 
@@ -209,8 +209,8 @@ func TestMCPEndpointAnswersARealClient(t *testing.T) {
 	for _, tool := range tools.Tools {
 		names[tool.Name] = true
 	}
-	if !names["vilkaar"] || !names["lookup"] || !names["search"] {
-		t.Errorf("tools over HTTP = %v, want vilkaar, lookup and search", names)
+	if !names["eula"] || !names["lookup"] || !names["search"] {
+		t.Errorf("tools over HTTP = %v, want eula, lookup and search", names)
 	}
 
 	r := call("lookup", lookupArgs)
@@ -259,7 +259,7 @@ func TestEveryInternalLinkResolves(t *testing.T) {
 				continue
 			}
 			// The full disclaimer is on the status page and the terms; every page links to the terms.
-			if path != "/status" && !strings.Contains(body, `href="/vilkaar"`) {
+			if path != "/status" && !strings.Contains(body, `href="/eula"`) {
 				t.Errorf("GET %s does not link to the terms of use", path)
 			}
 			for _, href := range hrefs(body) {

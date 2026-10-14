@@ -17,7 +17,7 @@
 //	                  and the optional API key
 //	/adgang           where a browser gives the API key, while one is set; nothing else answers
 //	                  without it
-//	/vilkaar          the terms of use, which a browser accepts before any other page answers
+//	/eula          the terms of use, which a browser accepts before any other page answers
 //	/mcp              the MCP endpoint, so one port serves both audiences; it asks for the terms
 //	                  through its own tool
 //
@@ -83,7 +83,7 @@ func (h *Handler) softwareUpdate() *softwareNotice {
 		n.Data = true
 	}
 	if st, ok := h.Checks.State(checks.Software); ok && h.Software != nil {
-		n.Behind = st.Last.Newer
+		n.Behind, n.Downloaded = st.Last.Newer, st.Last.Downloaded
 	}
 	if !n.Data && n.Behind == 0 {
 		return nil
@@ -92,9 +92,10 @@ func (h *Handler) softwareUpdate() *softwareNotice {
 }
 
 type softwareNotice struct {
-	Behind int
-	Data   bool // the published data needs a newer program
-	URL    string
+	Behind     int
+	Downloaded bool // the newer program is downloaded and runs from the next start
+	Data       bool // the published data needs a newer program
+	URL        string
 }
 
 // ServeHTTP routes the paths documented on the package.

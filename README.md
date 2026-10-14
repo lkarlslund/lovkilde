@@ -77,7 +77,7 @@ Værktøjerne:
 
 | Værktøj | Gør |
 |---|---|
-| `vilkaar` | Henter vilkårene for brug. Assistenten skal vise dem til dig, og først når du har accepteret, kalder den igen med `accepterer: true`. Indtil da svarer de andre værktøjer ikke. |
+| `eula` | Henter vilkårene for brug. Assistenten skal vise dem til dig, og først når du har accepteret, kalder den igen med `accepterer: true`. Indtil da svarer de andre værktøjer ikke. |
 | `lookup` | Henter et dokument eller en bestemmelse. `document` er en ELI-sti (`eli/lta/2019/1399`) eller et accessionsnummer (`B20190139905`); `address` er en bestemmelse; `as_of` (ÅÅÅÅ-MM-DD) giver loven som gældende på datoen. |
 | `search` | Søger. Bøjningsformer og sammensatte ord findes. `a AND b` kræver begge, `-ord` udelukker, `'to ord'` kræver begge i samme bestemmelse. Kan afgrænses på type, år, tekstkilde og status. |
 
@@ -91,7 +91,7 @@ Værktøjerne:
 | `/dok?ref=…` | Et dokument; `&addr=§ 5, stk. 2` viser én bestemmelse |
 | `/status` | Hvad serveren indeholder, hvor nyt det er, og den fulde ansvarsfraskrivelse |
 | `/indstillinger` | Hvor ofte der tjekkes for nye data og ny version, og API-nøgle |
-| `/vilkaar` | Vilkårene for brug, som accepteres én gang pr. browser |
+| `/eula` | Vilkårene for brug, som accepteres én gang pr. browser |
 | `/mcp` | MCP-serveren |
 
 ## På netværket
@@ -116,8 +116,10 @@ Der er ingen TLS. Sæt en reverse proxy foran, hvis serveren skal kunne nås fra
 
 - **Data:** Serveren tjekker dagligt for et nyere datasæt og tager det i brug af sig selv. Kun
   de ændrede dele hentes.
-- **Programmet:** Serveren tjekker dagligt, om der er en nyere version, og skriver det øverst på
-  alle sider. Den opdaterer ikke sig selv; hent den nye version og genstart.
+- **Programmet:** Serveren tjekker dagligt, om der er en nyere version. Findes der en, hentes den
+  til `.lovkilde/program`, og det står øverst på alle sider. Næste gang Lovkilde startes, kører
+  den nyeste hentede version, også hvis du starter en ældre kopi, f.eks. den i din
+  download-mappe. Loggen siger, når det sker.
 - **Nyt dataformat:** Kræver nye data en nyere version af programmet, fortsætter serveren med de
   data, den har, og skriver på alle sider, at programmet skal opdateres.
 
@@ -134,6 +136,8 @@ lovkilde search "ord"        søg fra kommandolinjen
 lovkilde index build         byg søgeindekset (serve gør det selv)
 lovkilde artifact download   hent det udgivne datasæt
 lovkilde artifact check      kan denne version læse datasættet på disken?
+lovkilde program check       er der udgivet en nyere version af programmet?
+lovkilde program download    hent den; den bruges fra næste start
 ```
 
 Vigtige flag til `serve` og `mcp`: `--data-dir`, `--addr` og `--no-browser` (kun `serve`), `--max-chars` (længste
