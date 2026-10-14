@@ -1,37 +1,36 @@
 // Package eula keeps whether the terms of use have been accepted on this server. They are
 // accepted once, on the website or through the MCP tool, and the acceptance holds for both and
-// across restarts, until the terms change (disclaimer.TermsVersion). It is kept in one file in
-// the data directory.
+// across restarts, until the terms change (disclaimer.TermsVersion). It is kept in the settings
+// file (internal/settings).
 package eula
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/settings"
 )
 
-// File is where the acceptance is kept, in the data directory: the accepted version of the terms
-// on the first line, and when on the second.
-const File = "eula.accepted"
+// section is where the acceptance is kept in the settings file.
+const section = "eula"
+
+type saved struct {
+	Version  string    `json:"version"`  // the accepted version of the terms
+	Accepted time.Time `json:"accepted"` // when
+}
 
 // Store is the server's acceptance. A nil *Store has none and keeps none.
 type Store struct {
-	path     string
+	file     *settings.File
 	accepted atomic.Bool
 }
 
-// Open reads the acceptance kept in dataDir; a missing or unreadable file, or one for other terms,
-// is none.
+// Open reads the acceptance kept for dataDir; none, or one of other terms, is not accepted.
 func Open(dataDir string) *Store {
-	s := &Store{path: filepath.Join(dataDir, File)}
-	if raw, err := os.ReadFile(s.path); err == nil {
-		version, _, _ := strings.Cut(string(raw), "\n")
-		s.accepted.Store(strings.TrimSpace(version) == disclaimer.TermsVersion)
-	}
+	s := &Store{file: settings.Open(dataDir)}
+	var sv saved
+	s.accepted.Store(s.file.Get(section, &sv) && sv.Version == disclaimer.TermsVersion)
 	return s
 }
 
@@ -45,13 +44,5 @@ func (s *Store) Accept() error {
 		return nil
 	}
 	s.accepted.Store(true)
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return err
-	}
-	tmp := s.path + ".tmp"
-	body := disclaimer.TermsVersion + "\n" + time.Now().UTC().Format(time.RFC3339) + "\n"
-	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	return s.file.Put(section, saved{Version: disclaimer.TermsVersion, Accepted: time.Now().UTC()})
 }

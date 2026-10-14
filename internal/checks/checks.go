@@ -1,18 +1,18 @@
 // Package checks runs the server's scheduled checks — for a newer published dataset and for a
 // newer published build of the software — at the interval the operator chose on the settings
 // page, and runs one at once when asked. The intervals and each check's last outcome are kept in
-// one file in the data directory, so a restart neither forgets the choice nor repeats a check.
+// the settings file (internal/settings), so a restart neither forgets the choice nor repeats a
+// check.
 package checks
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io/fs"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/lkarlslund/lovkilde/internal/settings"
 )
 
 // The checks a server runs.
@@ -21,8 +21,8 @@ const (
 	Software = "software" // a newer published build, only reported
 )
 
-// File is where the intervals and outcomes are kept, in the data directory.
-const File = "checks.json"
+// section is where the intervals and outcomes are kept in the settings file.
+const section = "checks"
 
 // Interval is how often a check runs.
 type Interval string
@@ -114,7 +114,7 @@ type job struct {
 
 // Checks is the server's checks. Add them, then Run.
 type Checks struct {
-	path string
+	file *settings.File
 	mu   sync.Mutex
 	jobs map[string]*job
 }
@@ -127,15 +127,12 @@ type saved struct {
 // Open reads the saved intervals and outcomes from dataDir; a missing or unreadable file is a
 // fresh start.
 func Open(dataDir string) *Checks {
-	return &Checks{path: filepath.Join(dataDir, File), jobs: map[string]*job{}}
+	return &Checks{file: settings.Open(dataDir), jobs: map[string]*job{}}
 }
 
 func (c *Checks) load() map[string]saved {
 	var s map[string]saved
-	raw, err := os.ReadFile(c.path)
-	if err == nil {
-		_ = json.Unmarshal(raw, &s)
-	}
+	c.file.Get(section, &s)
 	return s
 }
 
@@ -224,15 +221,7 @@ func (c *Checks) save() error {
 		s[name] = saved{Every: j.every, Last: j.last}
 	}
 	c.mu.Unlock()
-	raw, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := c.path + ".tmp"
-	if err := os.WriteFile(tmp, append(raw, '\n'), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, c.path)
+	return c.file.Put(section, s)
 }
 
 // poll is how often a check asks itself whether it is due, besides when it is kicked.

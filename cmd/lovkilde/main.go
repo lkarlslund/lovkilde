@@ -98,7 +98,10 @@ Data layout:
   <data-dir>/artifact.current               the current artifact's file name
   <data-dir>/artifacts/artifact-*.lkz       artifacts: the current one and the one before
   <data-dir>/artifacts/search-*.lkiz        the index cut from each
-  <data-dir>/artifact.checked               when the published artifact was last looked for`,
+  <data-dir>/artifact.checked               when the published artifact was last looked for
+  <data-dir>/settings.json                  the settings page's choices, the API key's hash and
+                                            the acceptance of the terms
+  <data-dir>/program/                       newer builds of lovkilde, downloaded`,
 		SilenceUsage: true,
 		// main prints the error once, through the gate that keeps it off a progress frame.
 		SilenceErrors: true,

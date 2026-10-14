@@ -94,6 +94,8 @@ Standard er `.lovkilde` i hjemmemappen, både for `lovkilde` og `lovkilde-update
   sweep.stamp                  hvornår der sidst blev indsamlet
   artifacts/                   artefakter (.lkz) og søgeindeks (.lkiz)
   artifact.current             navnet på det artefakt, der er i brug
+  settings.json                serverens indstillinger, API-nøglens hash og accept af vilkårene
+  program/                     nyere versioner af lovkilde, hentet af serveren
 ```
 
 `state/` kan altid genskabes:

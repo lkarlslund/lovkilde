@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lkarlslund/lovkilde/internal/settings"
 )
 
 // A key is kept as its hash, survives a reopen, and is gone once cleared.
@@ -21,7 +23,7 @@ func TestKeyIsKeptAsItsHash(t *testing.T) {
 	if err := k.Set(key); err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := os.ReadFile(filepath.Join(dir, File))
+	raw, _ := os.ReadFile(filepath.Join(dir, settings.Name))
 	if strings.Contains(string(raw), key) {
 		t.Error("the file holds the key itself")
 	}

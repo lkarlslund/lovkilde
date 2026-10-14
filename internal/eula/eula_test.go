@@ -1,9 +1,9 @@
 package eula
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
+
+	"github.com/lkarlslund/lovkilde/internal/settings"
 )
 
 func TestAcceptanceSurvivesReopeningAndNotNewTerms(t *testing.T) {
@@ -17,7 +17,7 @@ func TestAcceptanceSurvivesReopeningAndNotNewTerms(t *testing.T) {
 	if !Open(dir).Accepted() {
 		t.Fatal("the acceptance did not survive reopening")
 	}
-	os.WriteFile(filepath.Join(dir, File), []byte("0\n2020-01-01T00:00:00Z\n"), 0o644)
+	settings.Open(dir).Put(section, saved{Version: "0"})
 	if Open(dir).Accepted() {
 		t.Error("an acceptance of other terms counts")
 	}

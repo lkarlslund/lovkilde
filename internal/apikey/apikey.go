@@ -1,7 +1,7 @@
 // Package apikey keeps the server's optional access key. It is set on the settings page and is
 // never required: a server without one answers everyone, which is right on a loopback address and
-// a choice the settings page warns about on any other. Only the key's SHA-256 is kept, in one file
-// in the data directory, so the file does not hand out the key.
+// a choice the settings page warns about on any other. Only the key's SHA-256 is kept, in the
+// settings file (internal/settings), so the file does not hand out the key.
 package apikey
 
 import (
@@ -10,15 +10,19 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/lkarlslund/lovkilde/internal/settings"
 )
 
-// File is where the key's hash is kept, in the data directory.
-const File = "apikey"
+// section is where the key's hash is kept in the settings file.
+const section = "apikey"
+
+type saved struct {
+	SHA256 string `json:"sha256"`
+}
 
 // MinLength is the shortest key Set takes, in characters.
 const MinLength = 16
@@ -28,18 +32,17 @@ var ErrTooShort = errors.New("api key too short")
 
 // Key is the server's key, or none. A nil *Key is no key.
 type Key struct {
-	path string
+	file *settings.File
 	mu   sync.RWMutex
 	hash string // hex SHA-256 of the key; "" when none is set
 }
 
 // Open reads the key kept in dataDir; a missing or unreadable file is no key.
 func Open(dataDir string) *Key {
-	k := &Key{path: filepath.Join(dataDir, File)}
-	if raw, err := os.ReadFile(k.path); err == nil {
-		if h := strings.TrimSpace(string(raw)); len(h) == sha256.Size*2 {
-			k.hash = h
-		}
+	k := &Key{file: settings.Open(dataDir)}
+	var sv saved
+	if k.file.Get(section, &sv) && len(sv.SHA256) == sha256.Size*2 {
+		k.hash = sv.SHA256
 	}
 	return k
 }
@@ -59,11 +62,7 @@ func (k *Key) Set(key string) error {
 		return ErrTooShort
 	}
 	h := hashOf(key)
-	tmp := k.path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(h+"\n"), 0o600); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, k.path); err != nil {
+	if err := k.file.Put(section, saved{SHA256: h}); err != nil {
 		return err
 	}
 	k.mu.Lock()
@@ -74,7 +73,7 @@ func (k *Key) Set(key string) error {
 
 // Clear removes the key: the server answers everyone again.
 func (k *Key) Clear() error {
-	if err := os.Remove(k.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := k.file.Put(section, nil); err != nil {
 		return err
 	}
 	k.mu.Lock()
