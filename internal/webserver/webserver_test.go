@@ -258,8 +258,9 @@ func TestEveryInternalLinkResolves(t *testing.T) {
 				t.Errorf("GET %s → %d", path, code)
 				continue
 			}
-			if !strings.Contains(body, disclaimer.ShortDanish) {
-				t.Errorf("GET %s carries no disclaimer", path)
+			// The full disclaimer is on the status page and the terms; every page links to the terms.
+			if path != "/status" && !strings.Contains(body, `href="/vilkaar"`) {
+				t.Errorf("GET %s does not link to the terms of use", path)
 			}
 			for _, href := range hrefs(body) {
 				href = html.UnescapeString(href)

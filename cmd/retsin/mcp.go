@@ -10,11 +10,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/lkarlslund/retsinformation/internal/artifactdir"
+	"github.com/lkarlslund/retsinformation/internal/checks"
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
 	"github.com/lkarlslund/retsinformation/internal/release"
@@ -39,7 +41,7 @@ func addFetchFlags(cmd *cobra.Command, o *serveOptions) {
 	cmd.Flags().StringVar(&o.Release, "release", release.DefaultSource,
 		"release repository the artifact is downloaded from when there is none, and updated from: a directory, or hf://owner/name[@revision]")
 	cmd.Flags().DurationVar(&o.AutoUpdate, "auto-update", release.DefaultEvery,
-		"check --release for a newer artifact this often, and install it; 0 turns it off")
+		"check --release for a newer artifact this often, and install it; 0 turns it off. Rounded to daily, weekly or monthly; the website's settings page overrides it")
 }
 
 // openServingServer loads what a serving process reads, which is an artifact and nothing else: it
@@ -51,10 +53,13 @@ func addFetchFlags(cmd *cobra.Command, o *serveOptions) {
 // the operator built or installed it. The index is different: it is derived from the artifact,
 // never distributed, and the server keeps it itself — rebuilding one that is missing, unreadable
 // or cut from another artifact (buildServingIndex).
-func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) (*mcpserver.Server, error) {
+//
+// The checks it returns, nil when it serves one pinned artifact, hold the scheduled check for a
+// newer dataset; the caller adds any others and runs them.
+func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) (*mcpserver.Server, *checks.Checks, error) {
 	cfg, err := resolve()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// With --artifact the server reads that one file for as long as it runs. Without it, it reads
 	// the current artifact (see internal/artifactdir) and follows the pointer when a new one is
@@ -67,12 +72,12 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 			artifact, err = downloadMissing(ctx, cfg.DataDir, o.Release)
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	srv := newServingServer(cfg, o)
 	if err := srv.UseArtifact(artifact, int64(o.ArtifactCacheMB)<<20); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	slog.Info("serving document text from the compiled artifact", "path", artifact)
 
@@ -82,7 +87,7 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 	index := o.Index
 	if index == "" {
 		if index, err = artifactdir.IndexFor(artifact); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	want := search.SourceFor(srv.ArtifactIdentity())
@@ -97,13 +102,21 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 			}
 		}()
 	}
-	if follow {
-		go followCurrent(ctx, srv, cfg.DataDir, artifact, o, followInterval)
-		if repo, err := release.Open(o.Release); err == nil && o.AutoUpdate > 0 {
-			go autoUpdate(ctx, cfg.DataDir, repo, o.AutoUpdate)
-		}
+	if !follow {
+		return srv, nil, nil
 	}
-	return srv, nil
+	go followCurrent(ctx, srv, cfg.DataDir, artifact, o, followInterval)
+	chk := checks.Open(cfg.DataDir)
+	if repo, err := release.Open(o.Release); err == nil {
+		var lastAt time.Time
+		if info, err := os.Stat(filepath.Join(cfg.DataDir, release.CheckedFile)); err == nil {
+			lastAt = info.ModTime()
+		}
+		chk.Add(checks.Dataset, checks.IntervalFor(o.AutoUpdate), lastAt, func(ctx context.Context) checks.Outcome {
+			return checkDataset(ctx, cfg.DataDir, repo)
+		})
+	}
+	return srv, chk, nil
 }
 
 // downloadMissing installs the published artifact into a data directory that has none.
@@ -133,40 +146,37 @@ func logTransfer(t release.Transfer) {
 	}
 }
 
-// autoCheckInterval is how often autoUpdate asks whether a check is due. The schedule itself is
-// kept on disk (release.Due), so a restart neither resets nor repeats it.
-var autoCheckInterval = time.Hour
-
-// autoUpdate installs a newer published artifact when one is due to be looked for. It only
-// installs: followCurrent moves the server to it as to any other new current artifact, and
-// prunes. A failed check is logged and tried again at the next due time, not sooner, so an
-// unreachable repository costs one line a week.
-func autoUpdate(ctx context.Context, dataDir string, from release.Repo, every time.Duration) {
-	tick := time.NewTicker(min(every, autoCheckInterval))
-	defer tick.Stop()
-	for {
-		if release.Due(dataDir, every, time.Now()) {
-			res, err := release.FetchArtifact(ctx, from, dataDir)
-			if ctx.Err() != nil {
-				return
-			}
-			switch {
-			case err != nil:
-				slog.Warn("checking for a newer published artifact failed", "release", from.String(), "err", err)
-			case res.Installed:
-				logTransfer(res.Transfer)
-				slog.Info("installed a newer published artifact", "path", res.Path, "downloaded", res.Downloaded, "reused", res.Reused)
-			default:
-				slog.Info("the published artifact is the current one", "file", res.Manifest.File)
-			}
-			_ = release.MarkChecked(dataDir)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
-		}
+// checkDataset installs a newer published artifact if there is one. It only installs:
+// followCurrent moves the server to it as to any other new current artifact, and prunes.
+func checkDataset(ctx context.Context, dataDir string, from release.Repo) checks.Outcome {
+	res, err := release.FetchArtifact(ctx, from, dataDir)
+	_ = release.MarkChecked(dataDir)
+	switch {
+	case err != nil:
+		slog.Warn("checking for a newer published artifact failed", "release", from.String(), "err", err)
+		return checks.Outcome{Err: err.Error()}
+	case res.Installed:
+		logTransfer(res.Transfer)
+		slog.Info("installed a newer published artifact", "path", res.Path, "downloaded", res.Downloaded, "reused", res.Reused)
+		return checks.Outcome{Summary: fmt.Sprintf("Installerede en nyere udgivelse, %s (hentede %s, genbrugte %s fra disken).",
+			filepath.Base(res.Path), byteSize(res.Downloaded), byteSize(res.Reused))}
 	}
+	slog.Info("the published artifact is the current one", "file", res.Manifest.File)
+	return checks.Outcome{Summary: "Den udgivne udgave er den, der bruges."}
+}
+
+// byteSize writes a byte count the Danish way, in the largest unit under 1,000.
+func byteSize(n int64) string {
+	const units = "kMGT"
+	f, u := float64(n), -1
+	for f >= 1000 && u < len(units)-1 {
+		f /= 1000
+		u++
+	}
+	if u < 0 {
+		return fmt.Sprintf("%d B", n)
+	}
+	return strings.Replace(fmt.Sprintf("%.1f %cB", f, units[u]), ".", ",", 1)
 }
 
 // newServingServer is a server with the settings every serving process shares.
@@ -324,9 +334,12 @@ Stdout is reserved for the protocol; logs go to stderr either way.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			o.MaxChars, o.Index, o.Artifact, o.ArtifactCacheMB = maxChars, index, artifact, artifactCacheMB
-			srv, err := openServingServer(cmd.Context(), resolve, o)
+			srv, chk, err := openServingServer(cmd.Context(), resolve, o)
 			if err != nil {
 				return err
+			}
+			if chk != nil {
+				go chk.Run(cmd.Context())
 			}
 			// One line of orientation on stderr: what a client is about to be served,
 			// and from where. A server that answers silently cannot be debugged.

@@ -1383,7 +1383,9 @@ means a document cannot run anything in the browser that reads it, only say thin
 | `/search?q=` | hits and gaps, in the syntax `retsin search` takes: `AND`, `-word`, `"two words"`, `art:lov`, `year:1987-2000` |
 | `/browse` | everything the mirror holds, by kind, year and initial letter, 200 at a time |
 | `/dok?ref=` | the text, with a table of contents in front. `ref` is an ELI path or an accession; `&addr=§ 5, stk. 2` shows one provision inside the whole |
-| `/status` | counts, index time, which fast paths are off and how to turn them on |
+| `/status` | what is served and how current it is, the scheduled checks, and the full disclaimer; plain text for curl |
+| `/indstillinger` | how often the server checks for a newer dataset and a newer build of itself (daily, weekly, monthly or off), and a button to check now |
+| `/vilkaar` | the terms of use, accepted once per browser before any other page answers |
 | `/mcp` | the MCP endpoint — an agent and a person get the same text out of the same process |
 
 **Everything naming a document is a link, and the link carries its address.** Three kinds:
@@ -1848,10 +1850,14 @@ README.md                                  the dataset card, written from the ma
   `update` and an incremental build need: `update` fetches only what changed. `--with-xml`
   also unpacks the XML archive, for a full build.
 - `retsin serve` and `retsin mcp` download the published artifact when they have none
-  (`--release`), and while they run look for a newer one every `--auto-update` (a day by
-  default; `0` turns it off), install it and move to it as to any new current artifact.
-  `retsin artifact download` does it by hand. The last check is kept in
-  `<data-dir>/artifact.checked`, so restarting does not reset the schedule.
+  (`--release`), and while they run look for a newer one daily (`--auto-update` sets the
+  default: rounded to daily, weekly or monthly, `0` for off), install it and move to it as to
+  any new current artifact. `retsin artifact download` does it by hand.
+- `retsin serve` also asks GitHub daily whether a newer build of itself has been published,
+  and says so at the top of every page. It never installs one: upgrading is the operator's
+  decision. Both intervals can be changed, and either check run at once, on the settings page
+  (`/indstillinger`); the choice and each check's last result are kept in
+  `<data-dir>/checks.json`, so restarting neither resets the schedule nor repeats a check.
 
 The manifest's document model is checked before downloading, so a binary never fetches an
 artifact it would refuse; the size and SHA-256 after, and the artifact's own header before it

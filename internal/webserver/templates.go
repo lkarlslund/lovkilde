@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 )
@@ -50,7 +51,10 @@ var templateFuncs = template.FuncMap{
 	"kindLink": func(kind string) string { return browseQueryArgs(kind, 0, "", "", "", 0) },
 	"kindName": kindName,
 	"num":      num,
+	"num64":    func(n int64) string { return num(int(n)) },
 	"inc":      func(i int) int { return i + 1 },
+	"when":     when,
+	"short":    func(rev string) string { return rev[:min(12, len(rev))] },
 }
 
 // num writes a count the Danish way, with a point between thousands: 12.345.
@@ -196,17 +200,19 @@ func coverageText(covered, requested int) string {
 	return fmt.Sprintf("dækker %d af %d ord", covered, requested)
 }
 
-func parseTemplates() map[string]*template.Template {
+func parseTemplates(handlerFuncs template.FuncMap) map[string]*template.Template {
 	pages := map[string]string{
 		"index":    indexBody,
 		"search":   searchBody,
 		"document": documentBody,
 		"browse":   browseBody,
 		"terms":    termsBody,
+		"status":   statusBody,
+		"settings": settingsBody,
 	}
 	out := make(map[string]*template.Template, len(pages))
 	for name, body := range pages {
-		t := template.Must(template.New("layout").Funcs(templateFuncs).Parse(layoutTmpl))
+		t := template.Must(template.New("layout").Funcs(templateFuncs).Funcs(handlerFuncs).Parse(layoutTmpl))
 		out[name] = template.Must(t.New("content").Parse(body))
 	}
 	return out
@@ -218,6 +224,7 @@ const layoutTmpl = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.PageTitle}} · Retsinformation-MCP</title>
+{{block "extrahead" .}}{{end}}
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%2032%2032%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2215.5%22%20fill%3D%22%2314532d%22/%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2212.6%22%20fill%3D%22none%22%20stroke%3D%22%23f6f5f2%22%20stroke-width%3D%22.9%22%20stroke-dasharray%3D%221.6%201.1%22/%3E%3Ctext%20x%3D%2216%22%20y%3D%2222.6%22%20text-anchor%3D%22middle%22%20font-family%3D%22Georgia%2CTimes%20New%20Roman%2Cserif%22%20font-size%3D%2219%22%20font-weight%3D%22700%22%20fill%3D%22%23f6f5f2%22%3E%C2%A7%3C/text%3E%3C/svg%3E">
 <style>
 :root { color-scheme: light dark; --ink: #1b1b1b; --muted: #66635d; --line: #d8d5cf; --accent: #14532d; --accent-ink: #fff; --wash: #f6f5f2; --panel: #fffefb; --band: #efece6; --amber: #b0763a; --red: #a12a2a;
@@ -380,6 +387,20 @@ footer { color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line
 .disclaimer { border: 2px solid var(--amber); border-radius: 8px; background: var(--band); padding: .6rem .9rem; margin: 1rem 0; font: .9rem/1.5 var(--ui); }
 .disclaimer b { color: var(--red); }
 .disclaimer.consolidated { border-color: var(--red); }
+.panel { margin: 1.2rem 0; padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.panel h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
+dl.facts { display: grid; grid-template-columns: minmax(9rem, max-content) 1fr; gap: .35rem 1.2rem; margin: 0; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; overflow-wrap: anywhere; }
+.panel.legal { border: 3px solid var(--red); }
+.panel.legal h2 { color: var(--red); }
+.panel.legal h3 { font-size: 1rem; margin: .9rem 0 .2rem; }
+.check .choices { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin: .7rem 0; }
+.check .choices label { display: flex; gap: .35rem; align-items: center; }
+.check .outcome { margin: .5rem 0 .8rem; }
+.check .bad { color: var(--red); }
+.actions { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
+.update { margin: 1rem 0; padding: .7rem 1rem; border: 1px solid var(--accent); border-left-width: 6px; border-radius: 6px; background: var(--panel); }
 .terms { max-width: 46rem; margin: 1.5rem auto; padding: 1.5rem 1.75rem; border: 3px solid var(--red); border-radius: 10px; background: var(--panel); }
 .terms h1 { color: var(--red); margin-top: 0; }
 .terms h2 { font-size: 1.05rem; margin: 1.1rem 0 .3rem; }
@@ -394,9 +415,10 @@ footer { color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line
 <header class="site"><div class="wrap">
 <a class="brand" href="/"><svg class="seal" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="15.5" fill="var(--accent)"/><circle cx="16" cy="16" r="12.6" fill="none" stroke="var(--wash)" stroke-width=".9" stroke-dasharray="1.6 1.1"/><text x="16" y="22.6" text-anchor="middle" font-family="Georgia,Times New Roman,serif" font-size="19" font-weight="700" fill="var(--wash)">§</text></svg><span>Retsinformation<span class="mcp">-MCP</span></span></a>
 {{block "headsearch" .}}<form class="joined" method="get" action="/search" role="search"><input type="search" name="q" placeholder="Søg i lovgivningen" aria-label="Søg" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
-<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a></nav>
+<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/indstillinger">Indstillinger</a></nav>
 </div></header>
-<main class="wrap"><p class="disclaimer" role="note"><b>Ansvarsfraskrivelse:</b> {{disclaimer}}</p>
+<main class="wrap">{{with softwareUpdate}}<p class="update" role="status"><b>Ny version af retsin:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
+<a href="{{.URL}}">Se og hent den på GitHub</a>. Serveren opdaterer ikke sig selv; det er op til den, der driver den, at installere den nye version.</p>{{end}}
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar
@@ -568,4 +590,55 @@ const termsBody = `{{define "headsearch"}}{{""}}{{end}}{{define "content"}}
 <a href="https://www.retsinformation.dk/">Jeg accepterer ikke – gå til den officielle Retsinformation</a></div>
 </form>{{end}}
 </section>
+{{end}}`
+
+// when writes a moment the Danish way, in local time: 14. oktober 2026 kl. 11.13.
+func when(t time.Time) string {
+	if t.IsZero() {
+		return "aldrig"
+	}
+	t = t.Local()
+	return fmt.Sprintf("%d. %s %d kl. %02d.%02d", t.Day(), danishMonths[t.Month()-1], t.Year(), t.Hour(), t.Minute())
+}
+
+var danishMonths = [...]string{"januar", "februar", "marts", "april", "maj", "juni", "juli", "august",
+	"september", "oktober", "november", "december"}
+
+const statusBody = `{{define "content"}}
+<h1>Status</h1>
+{{with .Info}}<section class="panel"><h2>Lovteksterne</h2><dl class="facts">
+<dt>Dokumenter</dt><dd>{{num .Documents}}</dd>
+<dt>Hentet fra retsinformation.dk</dt><dd>{{when .PulledAt}}{{if or .Owed .Failed}} — {{if .Owed}}{{num64 .Owed}} mangler endnu{{end}}{{if and .Owed .Failed}}, {{end}}{{if .Failed}}{{num64 .Failed}} kunne ikke hentes og forsøges igen ugentligt{{end}}{{end}}</dd>
+<dt>Udgave</dt><dd>{{if .Artifact}}{{.Artifact}}, bygget {{when .ArtifactBuilt}}{{else}}ingen endnu{{end}}</dd>
+<dt>Søgeindeks</dt><dd>{{if .Index}}{{num .IndexTerms}} ord{{if not .IndexBuilt.IsZero}}, bygget {{when .IndexBuilt}}{{end}}{{else if .IndexBuilding}}bygges nu, klar om et minut eller to{{else}}mangler{{end}}{{if .IndexStale}}<br><span class="bad">{{.IndexStale}}</span>{{end}}</dd>
+</dl></section>{{end}}
+{{if .Kinds}}<section class="panel"><h2>Dokumenter efter type</h2><dl class="facts">
+{{range .Kinds}}<dt>{{.Label}}</dt><dd><a href="{{kindLink .Value}}">{{num .Count}}</a></dd>
+{{end}}</dl></section>{{end}}
+{{with .Info}}<section class="panel"><h2>Programmet</h2><dl class="facts">
+<dt>Version</dt><dd>retsin {{.Version}}{{if .Revision}}, bygget fra {{short .Revision}}{{if .Modified}} med lokale ændringer{{end}}{{end}}</dd>
+<dt>Startet</dt><dd>{{when .Started}}</dd>
+</dl></section>{{end}}
+{{if .Checks}}<section class="panel"><h2>Automatiske tjek</h2><dl class="facts">
+{{range .Checks}}<dt>{{.Title}}</dt><dd>{{.Every.Label}}; sidst {{when .Last.At}}{{if .Last.Err}} — <span class="bad">fejlede: {{.Last.Err}}</span>{{else if .Last.Summary}} — {{.Last.Summary}}{{end}}</dd>
+{{end}}</dl><p><a href="/indstillinger">Skift hvor ofte, eller tjek nu</a></p></section>{{end}}
+<section class="panel legal" aria-labelledby="legal"><h2 id="legal">Ansvarsfraskrivelse</h2>
+<p><b>{{.Short}}</b></p>
+{{range $i, $t := .Terms}}<h3>{{inc $i}}. {{$t.Heading}}</h3><p>{{$t.Text}}</p>
+{{end}}<p><a href="/vilkaar">Vilkår for brug</a></p></section>
+{{end}}`
+
+const settingsBody = `{{define "extrahead"}}{{if .Running}}<meta http-equiv="refresh" content="3">{{end}}{{end}}{{define "content"}}
+<h1>Indstillinger</h1>
+<p>Hvor ofte serveren selv tjekker, om der er noget nyt. Valget gemmes på serveren og gælder for alle, der bruger den.</p>
+<form method="post" action="/indstillinger">
+{{range .Checks}}<section class="panel check"><h2>{{.Title}}</h2>
+<p>{{.Explains}}</p>
+<div class="choices" role="radiogroup" aria-label="{{.Title}}">{{$cur := .Every}}{{$name := .Name}}{{range .Intervals}}<label><input type="radio" name="{{$name}}" value="{{.}}"{{if eq . $cur}} checked{{end}}> {{.Label}}</label>{{end}}</div>
+<p class="outcome">{{if .Running}}<b>Tjekker nu …</b>{{else}}Sidst tjekket {{when .Last.At}}{{if .Last.Err}}: <span class="bad">fejlede: {{.Last.Err}}</span>{{else if .Last.Summary}}: {{.Last.Summary}}{{end}}{{end}}</p>
+<button type="submit" name="tjek" value="{{.Name}}"{{if .Running}} disabled{{end}}>↻ Tjek nu</button>
+</section>{{else}}<p class="note">Denne server følger ikke en udgivelse og har ingen automatiske tjek.</p>{{end}}
+{{if not .Software}}<p class="note">Denne version af programmet ved ikke, hvilken kode den er bygget fra, og kan derfor ikke tjekke for nyere versioner.</p>{{end}}
+{{if .Checks}}<div class="actions"><button type="submit">Gem</button></div>{{end}}
+</form>
 {{end}}`

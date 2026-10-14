@@ -69,3 +69,24 @@ func getAnon(t *testing.T, u string) (string, int) {
 	}
 	return body, resp.StatusCode
 }
+
+// A browser gets the status as a page carrying the whole disclaimer; curl gets plain text.
+func TestStatusIsAPageForABrowserWithTheDisclaimer(t *testing.T) {
+	site, _ := newTestSite(t, true)
+	req, _ := http.NewRequest(http.MethodGet, site.URL+"/status", nil)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req.AddCookie(&http.Cookie{Name: termsCookie, Value: disclaimer.TermsVersion})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := readAll(resp)
+	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") || !strings.Contains(body, "<h1>Status</h1>") ||
+		!strings.Contains(body, disclaimer.ShortDanish) || !strings.Contains(body, disclaimer.Terms[5].Text) {
+		t.Errorf("the status page for a browser:\n%s", body)
+	}
+	if body, _ := get(t, site, "/status"); strings.Contains(body, "<") {
+		t.Errorf("curl got HTML:\n%s", body)
+	}
+}

@@ -46,7 +46,7 @@ func TestTheServerKeepsItsOwnIndex(t *testing.T) {
 	defer cancel() // stops the servers' watchers with the test
 	start := func() *mcpserver.Server {
 		t.Helper()
-		srv, err := openServingServer(ctx, resolve, serveOptions{})
+		srv, _, err := openServingServer(ctx, resolve, serveOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -146,7 +146,7 @@ func TestTheServerFollowsANewArtifact(t *testing.T) {
 	buildArtifact(t, dir)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	srv, err := openServingServer(ctx, resolve, serveOptions{})
+	srv, _, err := openServingServer(ctx, resolve, serveOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestAServerNeedsOnlyTheArtifact(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	srv, err := openServingServer(ctx, resolve, serveOptions{})
+	srv, _, err := openServingServer(ctx, resolve, serveOptions{})
 	if err != nil {
 		t.Fatalf("a server with no XML archive: %v", err)
 	}
@@ -272,10 +272,10 @@ func TestAServerWithoutAnArtifactDownloadsThePublishedOne(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if _, err := openServingServer(ctx, resolve, serveOptions{}); err == nil || !strings.Contains(err.Error(), "--release") {
+	if _, _, err := openServingServer(ctx, resolve, serveOptions{}); err == nil || !strings.Contains(err.Error(), "--release") {
 		t.Fatalf("an empty directory with no repository: %v", err)
 	}
-	srv, err := openServingServer(ctx, resolve, serveOptions{Release: repo})
+	srv, _, err := openServingServer(ctx, resolve, serveOptions{Release: repo})
 	if err != nil {
 		t.Fatal(err)
 	}

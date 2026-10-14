@@ -12,7 +12,8 @@
 //	/search           results, each linking to the provision it matched
 //	/dok              one document: table of contents, text, related acts
 //	/browse           a listing by type and year
-//	/status           plain text, for curl
+//	/status           what is served and how current it is; plain text for curl
+//	/indstillinger    how often the server checks for a newer dataset and software, and "check now"
 //	/vilkaar          the terms of use, which a browser accepts before any other page answers
 //	/mcp              the MCP endpoint, so one port serves both audiences; it asks for the terms
 //	                  through its own tool
@@ -30,8 +31,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lkarlslund/retsinformation/internal/checks"
 	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
+	"github.com/lkarlslund/retsinformation/internal/softwareupdate"
 )
 
 // pageSize is how many browse rows one load carries; scrolling to the end brings the next as
@@ -43,11 +46,33 @@ const pageSize = 100
 type Handler struct {
 	srv  *mcpserver.Server
 	tmpl map[string]*template.Template
+
+	// Checks are the server's scheduled checks, shown and set on the settings page; nil serves
+	// no settings. Software names where a newer build is published: while the software check
+	// has found one, every page says so. It only tells: upgrading is the operator's decision.
+	Checks   *checks.Checks
+	Software *softwareupdate.Checker
 }
 
 // New returns the handler for a server that already has its archive, index, and artifact.
 func New(srv *mcpserver.Server) *Handler {
-	return &Handler{srv: srv, tmpl: parseTemplates()}
+	h := &Handler{srv: srv}
+	h.tmpl = parseTemplates(template.FuncMap{"softwareUpdate": h.softwareUpdate})
+	return h
+}
+
+// softwareUpdate is the notice every page shows while a newer build is published, or nil.
+func (h *Handler) softwareUpdate() *softwareNotice {
+	st, ok := h.Checks.State(checks.Software)
+	if !ok || h.Software == nil || st.Last.Newer == 0 {
+		return nil
+	}
+	return &softwareNotice{Behind: st.Last.Newer, URL: h.Software.URL()}
+}
+
+type softwareNotice struct {
+	Behind int
+	URL    string
 }
 
 // ServeHTTP routes the paths documented on the package.
@@ -75,6 +100,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.browse(w, r)
 	case "/status":
 		h.status(w, r)
+	case settingsPath:
+		h.settings(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -705,9 +732,27 @@ func (h *Handler) browse(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprint(w, h.srv.StatusDA())
-	fmt.Fprintf(w, "\n%s\n", disclaimer.ShortDanish)
+	if !wantsHTML(r) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprint(w, h.srv.StatusDA())
+		fmt.Fprintf(w, "\n%s\n", disclaimer.ShortDanish)
+		return
+	}
+	facets := h.srv.Browse(mcpserver.BrowseRequest{Limit: 1})
+	h.render(w, "status", map[string]any{
+		"PageTitle": "Status",
+		"Info":      h.srv.StatusInfo(),
+		"Kinds":     kindToggles(facets.Kinds, nil),
+		"Checks":    h.checkViews(),
+		"Short":     disclaimer.ShortDanish,
+		"Terms":     disclaimer.Terms,
+	})
+}
+
+// wantsHTML says whether the request comes from a browser rather than curl: /status answers a
+// browser with a page and everything else with plain text.
+func wantsHTML(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
 // documentLink is the one way a link to a provision gets built, so every link in the interface

@@ -19,7 +19,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/lkarlslund/retsinformation/internal/checks"
+	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
+	"github.com/lkarlslund/retsinformation/internal/softwareupdate"
 	"github.com/lkarlslund/retsinformation/internal/webserver"
 )
 
@@ -68,11 +72,22 @@ installed every --auto-update; without one the server does not start, and one th
 unreadable stops it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			srv, err := openServingServer(cmd.Context(), resolve, o)
+			srv, chk, err := openServingServer(cmd.Context(), resolve, o)
 			if err != nil {
 				return err
 			}
-			service, err := startServer(cmd.Context(), addr, srv, verbose)
+			cfg, err := resolve()
+			if err != nil {
+				return err
+			}
+			if chk == nil {
+				chk = checks.Open(cfg.DataDir)
+			}
+			software := addSoftwareCheck(chk)
+			go chk.Run(cmd.Context())
+			web := webserver.New(srv)
+			web.Checks, web.Software = chk, software
+			service, err := startServer(cmd.Context(), addr, web, verbose)
 			if err != nil {
 				return err
 			}
@@ -95,6 +110,36 @@ unreadable stops it.`,
 		"log every request line; off by default because a public page's traffic is a list of other people's questions")
 	addFetchFlags(cmd, &o)
 	return cmd
+}
+
+// softwareRepo and softwareTag are where the published builds of this program are: the nightly
+// release, whose tag the build workflow moves to each commit it builds.
+const (
+	softwareRepo = "lkarlslund/retsinformation"
+	softwareTag  = "nightly"
+)
+
+// addSoftwareCheck schedules the check for a newer published build, daily unless the settings
+// page says otherwise, and returns what it asks. It only reports: the website says a newer build
+// is out, and installing it is the operator's decision. A binary that does not know the commit it
+// was built from has nothing to compare, and gets no check.
+func addSoftwareCheck(chk *checks.Checks) *softwareupdate.Checker {
+	build, ok := compiled.CurrentBuild()
+	if !ok {
+		return nil
+	}
+	sw := &softwareupdate.Checker{Repo: softwareRepo, Tag: softwareTag, Revision: build.Revision, UserAgent: config.DefaultUserAgent}
+	chk.Add(checks.Software, checks.Daily, time.Time{}, func(ctx context.Context) checks.Outcome {
+		n, err := sw.Behind(ctx)
+		switch {
+		case err != nil:
+			return checks.Outcome{Err: err.Error()}
+		case n > 0:
+			return checks.Outcome{Newer: n, Summary: fmt.Sprintf("En nyere version er udgivet, %d %s nyere end denne.", n, map[bool]string{true: "ændring", false: "ændringer"}[n == 1])}
+		}
+		return checks.Outcome{Summary: "Denne version er den nyeste udgivne."}
+	})
+	return sw
 }
 
 // httpService is a running HTTP server this process can wait for and report honestly.
@@ -120,13 +165,13 @@ func (h *httpService) Wait() error {
 // It returns once the listener is up, so a caller can print the address it actually got: a
 // server that logs a port it failed to bind is how an operator spends an hour on a stale
 // process.
-func startServer(ctx context.Context, addr string, srv *mcpserver.Server, logRequests bool) (*httpService, error) {
+func startServer(ctx context.Context, addr string, handler http.Handler, logRequests bool) (*httpService, error) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", addr, err)
 	}
 	httpSrv := &http.Server{
-		Handler: webserver.New(srv),
+		Handler: handler,
 		// ReadHeaderTimeout is not decoration: a serving process that waits forever on a
 		// half-sent request line is a process with a free resource leak.
 		ReadHeaderTimeout: 10 * time.Second,
