@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Address is a parsed reference to a provision, as written in Danish amendment prose. The

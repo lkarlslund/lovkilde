@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // donated is what one change brings with it, sorted into the model's shapes.

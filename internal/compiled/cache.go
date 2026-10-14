@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Cache is a byte-bounded document cache in front of an Artifact.

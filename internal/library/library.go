@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Artifact is a library read from a compiled artifact.

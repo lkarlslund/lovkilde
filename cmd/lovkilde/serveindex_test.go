@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/mcpserver"
-	"github.com/lkarlslund/retsinformation/internal/release"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/mcpserver"
+	"github.com/lkarlslund/lovkilde/internal/release"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // TestTheServerKeepsItsOwnIndex: indexes are never distributed, so a serving process builds the

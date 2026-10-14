@@ -34,7 +34,7 @@
 
 [Unit]
 Description=Lovkilde mirror: HTML reading UI and MCP endpoint
-Documentation=https://github.com/lkarlslund/retsinformation
+Documentation=https://github.com/lkarlslund/lovkilde
 After=network-online.target
 Wants=network-online.target
 

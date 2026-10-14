@@ -15,9 +15,9 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/library"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/library"
 )
 
 func main() {

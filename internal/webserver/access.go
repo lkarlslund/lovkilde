@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/apikey"
+	"github.com/lkarlslund/lovkilde/internal/apikey"
 )
 
 // While a key is set, nothing but the key page answers without it. A program sends it as

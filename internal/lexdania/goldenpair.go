@@ -7,8 +7,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // A golden pair is a document pair the register itself produced: a newer executive order that

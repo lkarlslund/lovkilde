@@ -3,8 +3,8 @@ package webserver
 import (
 	"net/http"
 
-	"github.com/lkarlslund/retsinformation/internal/apikey"
-	"github.com/lkarlslund/retsinformation/internal/checks"
+	"github.com/lkarlslund/lovkilde/internal/apikey"
+	"github.com/lkarlslund/lovkilde/internal/checks"
 )
 
 const settingsPath = "/indstillinger"

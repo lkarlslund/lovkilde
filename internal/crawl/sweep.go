@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/store"
+	"github.com/lkarlslund/lovkilde/internal/store"
 )
 
 // SweepRecord is what a collection pass leaves behind: when it pulled, and a

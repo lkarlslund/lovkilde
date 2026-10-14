@@ -3,7 +3,7 @@ package search
 import (
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // DefaultSnippetRunes is how much text a hit shows around the match.

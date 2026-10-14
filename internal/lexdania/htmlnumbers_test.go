@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // The legacy HTML bodies the site serves print a provision's number as the first words of its

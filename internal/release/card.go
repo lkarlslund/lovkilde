@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
 // CardFile is the dataset card at the repository root, which Hugging Face shows as the

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // An ELI path is not a unique identifier, and this is not hypothetical: the first real

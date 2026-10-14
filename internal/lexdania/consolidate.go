@@ -3,7 +3,7 @@ package lexdania
 import (
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Consolidation: a law as it stood on a date.

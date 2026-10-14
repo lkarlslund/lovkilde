@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
-	"github.com/lkarlslund/retsinformation/internal/parallel"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/parallel"
 )
 
 // CutVersion names how documents are cut into units and counted (DocUnits, Units, Tokenize).

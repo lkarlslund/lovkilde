@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
 )
 
 // Ranking judged against questions people ask. Each question carries the document a lawyer

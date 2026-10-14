@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
 var templateFuncs = template.FuncMap{

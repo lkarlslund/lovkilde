@@ -3,7 +3,7 @@ package lexdania
 import (
 	"regexp"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Model converts a parsed document into the mirror's own representation.

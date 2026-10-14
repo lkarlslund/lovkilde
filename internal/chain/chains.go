@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Entry is one document as recorded in the archive's file index.

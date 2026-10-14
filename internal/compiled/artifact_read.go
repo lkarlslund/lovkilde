@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Artifact is an open artifact, read-only.

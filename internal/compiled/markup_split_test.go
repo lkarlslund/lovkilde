@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // TestMarkupSplit answers how much of the publisher's XML is markup rather than text,

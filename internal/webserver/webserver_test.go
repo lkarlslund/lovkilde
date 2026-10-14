@@ -17,10 +17,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/mcpserver"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/mcpserver"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // The claims these tests exist to keep are the two the package comment makes: a page and an

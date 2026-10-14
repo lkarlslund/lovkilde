@@ -15,7 +15,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
 )
 
 // Release is what Publish publishes.

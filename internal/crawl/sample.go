@@ -37,8 +37,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/archive"
-	"github.com/lkarlslund/retsinformation/internal/docapi"
+	"github.com/lkarlslund/lovkilde/internal/archive"
+	"github.com/lkarlslund/lovkilde/internal/docapi"
 )
 
 // SampleManifestHeader marks a manifest file and carries the seed, so a plan made

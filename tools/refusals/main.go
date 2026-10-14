@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 func main() {

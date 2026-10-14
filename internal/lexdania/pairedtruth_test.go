@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // pairedTruthEnv points the run at a directory of sampled payloads laid out like

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // The unit of retrieval, cut from the model.

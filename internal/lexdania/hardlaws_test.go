@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // difficulty is one law's stress profile. Every field is a shape that has either

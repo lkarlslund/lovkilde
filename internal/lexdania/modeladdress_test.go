@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // TestModelAddressParityOnCorpus resolves every address the amendment inventory produces on

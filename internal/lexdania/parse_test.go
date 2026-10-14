@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 func TestParseIdentity(t *testing.T) {

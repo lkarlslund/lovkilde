@@ -1,6 +1,6 @@
 package chain
 
-import "github.com/lkarlslund/retsinformation/internal/lexdoc"
+import "github.com/lkarlslund/lovkilde/internal/lexdoc"
 
 // Law is a document as consolidation reads it: the register's metadata and the model. It is what
 // the chain is resolved against and what it consults in other documents, and it carries nothing of

@@ -27,11 +27,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/archive"
-	"github.com/lkarlslund/retsinformation/internal/docapi"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/rihttp"
-	"github.com/lkarlslund/retsinformation/internal/store"
+	"github.com/lkarlslund/lovkilde/internal/archive"
+	"github.com/lkarlslund/lovkilde/internal/docapi"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/rihttp"
+	"github.com/lkarlslund/lovkilde/internal/store"
 )
 
 // JSONExt is the sidecar representation's extension: data/xml/lta/1995/498.json

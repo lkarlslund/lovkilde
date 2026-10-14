@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Rendering real documents as markdown, to check that the rendering loses nothing the model holds

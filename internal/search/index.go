@@ -13,7 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/lkarlslund/retsinformation/internal/parallel"
+	"github.com/lkarlslund/lovkilde/internal/parallel"
 )
 
 // Index is a term-to-unit inverted index over the mirror.

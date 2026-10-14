@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // SearchRequest is a full-text query over the mirror.

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
 )
 
 // StatusInfo is what Status says, as fields, for a page that lays it out.

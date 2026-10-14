@@ -27,13 +27,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/archive"
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/docapi"
-	"github.com/lkarlslund/retsinformation/internal/harvest"
-	"github.com/lkarlslund/retsinformation/internal/rihttp"
-	"github.com/lkarlslund/retsinformation/internal/sitemap"
-	"github.com/lkarlslund/retsinformation/internal/store"
+	"github.com/lkarlslund/lovkilde/internal/archive"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/docapi"
+	"github.com/lkarlslund/lovkilde/internal/harvest"
+	"github.com/lkarlslund/lovkilde/internal/rihttp"
+	"github.com/lkarlslund/lovkilde/internal/sitemap"
+	"github.com/lkarlslund/lovkilde/internal/store"
 )
 
 // Crawler drives the phases against one shared store and archive.

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/lkarlslund/retsinformation/internal/progress"
+	"github.com/lkarlslund/lovkilde/internal/progress"
 )
 
 // Gate serializes progress frames and log records, which share stderr. It is

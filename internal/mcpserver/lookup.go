@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // DefaultMaxChars bounds one answer. An agent that asks for "the whole law" and gets

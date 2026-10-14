@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 // A golden answer: one document written the way the register writes one, and the exact text the

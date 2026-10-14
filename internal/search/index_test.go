@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 func TestTokenizeKeepsDanishLettersAndCitations(t *testing.T) {

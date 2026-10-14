@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
 )
 
 // "lovkilde artifact check" is what a deploy consults before restarting a service, so its answer has

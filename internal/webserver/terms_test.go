@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
 // No page answers a browser that has not accepted the terms; accepting them sends it back where

@@ -19,13 +19,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/apikey"
-	"github.com/lkarlslund/retsinformation/internal/checks"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/mcpserver"
-	"github.com/lkarlslund/retsinformation/internal/softwareupdate"
-	"github.com/lkarlslund/retsinformation/internal/webserver"
+	"github.com/lkarlslund/lovkilde/internal/apikey"
+	"github.com/lkarlslund/lovkilde/internal/checks"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/mcpserver"
+	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
+	"github.com/lkarlslund/lovkilde/internal/webserver"
 )
 
 // defaultServeAddr binds to localhost. A readable interface over a legal corpus is a thing
@@ -117,7 +117,7 @@ unreadable stops it.`,
 // softwareRepo and softwareTag are where the published builds of this program are: the nightly
 // release, whose tag the build workflow moves to each commit it builds.
 const (
-	softwareRepo = "lkarlslund/retsinformation"
+	softwareRepo = "lkarlslund/lovkilde"
 	softwareTag  = "nightly"
 )
 

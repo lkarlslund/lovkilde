@@ -12,12 +12,12 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
-	"github.com/lkarlslund/retsinformation/internal/library"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/library"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // Server is the archive behind an MCP endpoint. It holds an index and nothing else:

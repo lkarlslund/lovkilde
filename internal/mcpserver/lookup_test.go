@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 // The server's contract is that an answer identifies itself: which document it is,

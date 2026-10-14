@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
 // The terms of use are accepted once per browser, in a cookie that holds the version of the terms

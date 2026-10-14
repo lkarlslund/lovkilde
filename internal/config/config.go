@@ -18,7 +18,7 @@ import (
 // DefaultUserAgent identifies the client to the server. Keep a contact address
 // here: the terms ask users not to burden the service, and an identifiable client
 // lets the operator reach us instead of banning our address.
-const DefaultUserAgent = "lovkilde-mirror/0.1 (open-data mirror; contact: https://github.com/lkarlslund/retsinformation)"
+const DefaultUserAgent = "lovkilde-mirror/0.1 (open-data mirror; contact: https://github.com/lkarlslund/lovkilde)"
 
 const (
 	// DefaultJitterPercent is the share of the current interval added at random on

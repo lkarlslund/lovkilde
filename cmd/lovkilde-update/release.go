@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/release"
-	"github.com/lkarlslund/retsinformation/internal/store"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/release"
+	"github.com/lkarlslund/lovkilde/internal/store"
 )
 
 const releaseFlagHelp = "release repository: a directory, or hf://owner/name[@revision]"

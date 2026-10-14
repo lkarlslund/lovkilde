@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
 )
 
 // put writes an XML file into the mirror under data, from a fixture with replacements applied.

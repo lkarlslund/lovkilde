@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/lkarlslund/retsinformation/internal/compiled/dictionary"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/compiled/dictionary"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // The artifact is the mirror's own compiled form: internal/lexdoc documents as JSON, one

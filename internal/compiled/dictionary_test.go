@@ -11,7 +11,7 @@ import (
 
 	"github.com/klauspost/compress/dict"
 
-	"github.com/lkarlslund/retsinformation/internal/compiled/dictionary"
+	"github.com/lkarlslund/lovkilde/internal/compiled/dictionary"
 )
 
 // TestAnArtifactCarriesItsOwnDictionary: documents are compressed against a dictionary, and the

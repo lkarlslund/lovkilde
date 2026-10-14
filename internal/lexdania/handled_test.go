@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // fixtureHandledLaw exercises the shapes the whole-archive scan reported as

@@ -20,12 +20,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
-	"github.com/lkarlslund/retsinformation/internal/progress"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/progress"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 func indexCmd(resolve configFunc) *cobra.Command {

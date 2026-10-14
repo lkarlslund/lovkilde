@@ -1,6 +1,6 @@
 package lexdania
 
-import "github.com/lkarlslund/retsinformation/internal/lexdoc"
+import "github.com/lkarlslund/lovkilde/internal/lexdoc"
 
 // The text rules moved to lexdoc, because they are rules about Danish legal text rather than
 // about the register's markup: the XML front end and the HTML front end must normalise

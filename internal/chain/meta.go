@@ -7,7 +7,7 @@ package chain
 import (
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // TargetHint is the law a change list names: "lov nr. 1399 af 19. december 2019".

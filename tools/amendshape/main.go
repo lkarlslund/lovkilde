@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 type shape struct {

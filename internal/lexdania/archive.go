@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/parallel"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/parallel"
 )
 
 // Archive is a read-only index over a directory of stored documents.

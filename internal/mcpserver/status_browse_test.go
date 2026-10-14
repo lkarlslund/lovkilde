@@ -3,7 +3,7 @@ package mcpserver
 import (
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 // TestStatusFilterNamesTheBucketsTheUIOffers: the page offers "Valid", "Historic" and "unknown"

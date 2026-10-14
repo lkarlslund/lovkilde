@@ -1,8 +1,8 @@
 package lexdania
 
 import (
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Location is the archive's root directory.

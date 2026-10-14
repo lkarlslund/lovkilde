@@ -16,8 +16,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/crawl"
-	"github.com/lkarlslund/retsinformation/internal/limiter"
+	"github.com/lkarlslund/lovkilde/internal/crawl"
+	"github.com/lkarlslund/lovkilde/internal/limiter"
 )
 
 // sampleSubdir is where the manifest and payloads live, beside the archive rather

@@ -12,13 +12,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/archive"
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/crawl"
-	"github.com/lkarlslund/retsinformation/internal/limiter"
-	"github.com/lkarlslund/retsinformation/internal/progress"
-	"github.com/lkarlslund/retsinformation/internal/rihttp"
-	"github.com/lkarlslund/retsinformation/internal/store"
+	"github.com/lkarlslund/lovkilde/internal/archive"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/crawl"
+	"github.com/lkarlslund/lovkilde/internal/limiter"
+	"github.com/lkarlslund/lovkilde/internal/progress"
+	"github.com/lkarlslund/lovkilde/internal/rihttp"
+	"github.com/lkarlslund/lovkilde/internal/store"
 )
 
 // app is the wired-up runtime: one state store, one archive, one HTTP client and

@@ -22,9 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/limiter"
-	"github.com/lkarlslund/retsinformation/internal/rihttp"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/limiter"
+	"github.com/lkarlslund/lovkilde/internal/rihttp"
 )
 
 // Entry is one ELI resource with its advertised last-modification date.

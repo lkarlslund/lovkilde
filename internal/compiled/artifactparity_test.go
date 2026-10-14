@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // TestArtifactAnswersWhatTheParseAnswers is the gate that lets serving read the artifact instead of

@@ -3,7 +3,7 @@ package lexdania
 import (
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // TestModelIdentity checks the conversion on a document whose contents are known, so a

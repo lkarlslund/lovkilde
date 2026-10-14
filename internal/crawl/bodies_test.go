@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/archive"
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/limiter"
-	"github.com/lkarlslund/retsinformation/internal/rihttp"
-	"github.com/lkarlslund/retsinformation/internal/store"
+	"github.com/lkarlslund/lovkilde/internal/archive"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/limiter"
+	"github.com/lkarlslund/lovkilde/internal/rihttp"
+	"github.com/lkarlslund/lovkilde/internal/store"
 )
 
 // stubXML is what the canonical endpoint actually serves for older documents: the

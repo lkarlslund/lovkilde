@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/checks"
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
-	"github.com/lkarlslund/retsinformation/internal/softwareupdate"
+	"github.com/lkarlslund/lovkilde/internal/checks"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
 )
 
 // The settings page sets how often each check runs and runs one at once; while the software

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 var updateModel = flag.Bool("update-model", false, "record the stored-model fingerprint of testdata/models after bumping ModelVersion")

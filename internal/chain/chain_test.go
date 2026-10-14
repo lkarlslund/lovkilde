@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // A later act repealing an earlier act's changes before they took effect leaves them out (lov nr.

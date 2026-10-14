@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/store"
+	"github.com/lkarlslund/lovkilde/internal/store"
 )
 
 // TestFeedChangesQueueWhatWasFetchedBeforeThem: the sitemap's lastmod does not move for every

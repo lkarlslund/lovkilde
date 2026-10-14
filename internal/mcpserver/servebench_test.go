@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // TestServingBaselineCost measures what a query costs on both read paths, over the mirror itself.

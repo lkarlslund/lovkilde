@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/builder"
+	"github.com/lkarlslund/lovkilde/internal/builder"
 )
 
 // runCLI runs a command tree with args, its output discarded.
@@ -58,7 +58,7 @@ func TestTheServerLinksNoCollectionOrXML(t *testing.T) {
 	if err != nil {
 		t.Skipf("go list: %v", err)
 	}
-	const internal = "github.com/lkarlslund/retsinformation/internal/"
+	const internal = "github.com/lkarlslund/lovkilde/internal/"
 	forbidden := map[string]bool{}
 	for _, p := range []string{"lexdania", "builder", "crawl", "store", "harvest", "docapi", "sitemap", "rihttp", "limiter", "archive"} {
 		forbidden[internal+p] = true

@@ -50,7 +50,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 type pair struct {

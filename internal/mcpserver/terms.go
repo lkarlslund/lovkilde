@@ -6,7 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
 // termsTool is the tool a session accepts the terms through. Every other tool answers only with

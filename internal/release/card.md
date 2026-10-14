@@ -31,7 +31,7 @@ viewer: false
 Every document published on [retsinformation.dk](https://www.retsinformation.dk), the Danish
 state's register of legislation: acts, consolidated acts, executive orders, circulars,
 guidance, the Ombudsman's statements and the rest, as the site publishes them, plus a compiled
-artifact that the [Lovkilde](https://github.com/lkarlslund/retsinformation) server reads.
+artifact that the [Lovkilde](https://github.com/lkarlslund/lovkilde) server reads.
 
 This card is written by the release that publishes the files below; it describes that release.
 

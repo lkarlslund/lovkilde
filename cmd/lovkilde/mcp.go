@@ -15,13 +15,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/checks"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/mcpserver"
-	"github.com/lkarlslund/retsinformation/internal/release"
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/checks"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/mcpserver"
+	"github.com/lkarlslund/lovkilde/internal/release"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // serveOptions are the settings a serving process takes. One struct because every serving

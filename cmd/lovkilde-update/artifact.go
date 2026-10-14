@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/builder"
-	"github.com/lkarlslund/retsinformation/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/builder"
+	"github.com/lkarlslund/lovkilde/internal/config"
 )
 
 // configFunc resolves the validated flags without opening any storage.

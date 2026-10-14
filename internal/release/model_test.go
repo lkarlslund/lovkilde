@@ -9,8 +9,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/artifactdir"
-	"github.com/lkarlslund/retsinformation/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/artifactdir"
+	"github.com/lkarlslund/lovkilde/internal/compiled"
 )
 
 // A release in a new document model keeps the last artifact of the model before it published,

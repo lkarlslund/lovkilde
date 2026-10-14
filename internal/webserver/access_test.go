@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/apikey"
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/apikey"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 )
 
 // A server reachable from the network warns next to the settings link until a key is set; once

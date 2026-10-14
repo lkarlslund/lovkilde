@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
-	"github.com/lkarlslund/retsinformation/internal/parallel"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/parallel"
 )
 
 // The XML archive, read directly: what the measurements in this package's tests replay. Nothing

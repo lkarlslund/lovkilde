@@ -1,4 +1,4 @@
-module github.com/lkarlslund/retsinformation
+module github.com/lkarlslund/lovkilde
 
 go 1.27
 

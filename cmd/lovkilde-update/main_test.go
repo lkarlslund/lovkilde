@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/lkarlslund/retsinformation/internal/config"
-	"github.com/lkarlslund/retsinformation/internal/limiter"
-	"github.com/lkarlslund/retsinformation/internal/progress"
+	"github.com/lkarlslund/lovkilde/internal/config"
+	"github.com/lkarlslund/lovkilde/internal/limiter"
+	"github.com/lkarlslund/lovkilde/internal/progress"
 )
 
 // testTree builds the same flag registration as the real CLI but attaches a probe

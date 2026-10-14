@@ -23,8 +23,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // decimalNumber matches a structural number at the head of an element's own text: "1.3.5 Bygningers

@@ -14,7 +14,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 var queries = []string{

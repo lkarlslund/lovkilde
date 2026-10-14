@@ -18,7 +18,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"github.com/lkarlslund/retsinformation/internal/parallel"
+	"github.com/lkarlslund/lovkilde/internal/parallel"
 )
 
 // XMLDir is where the XML archive is published, inside the repository: one pack per shard of

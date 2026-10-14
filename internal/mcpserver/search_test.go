@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // A tool the server cannot honour is worse than no tool: the client only finds out

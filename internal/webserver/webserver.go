@@ -34,11 +34,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lkarlslund/retsinformation/internal/apikey"
-	"github.com/lkarlslund/retsinformation/internal/checks"
-	"github.com/lkarlslund/retsinformation/internal/disclaimer"
-	"github.com/lkarlslund/retsinformation/internal/mcpserver"
-	"github.com/lkarlslund/retsinformation/internal/softwareupdate"
+	"github.com/lkarlslund/lovkilde/internal/apikey"
+	"github.com/lkarlslund/lovkilde/internal/checks"
+	"github.com/lkarlslund/lovkilde/internal/disclaimer"
+	"github.com/lkarlslund/lovkilde/internal/mcpserver"
+	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
 )
 
 // pageSize is how many browse rows one load carries; scrolling to the end brings the next as

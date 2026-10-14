@@ -3,7 +3,7 @@ package chain
 import (
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Library is a collection of documents a server answers from: the XML archive the crawl writes, or

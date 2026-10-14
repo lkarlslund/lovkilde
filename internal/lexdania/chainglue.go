@@ -3,8 +3,8 @@ package lexdania
 import (
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/chain"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/chain"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Consolidation lives in package chain and reads nothing but models and metadata. What is here

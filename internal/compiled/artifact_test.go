@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/lkarlslund/retsinformation/internal/compiled/dictionary"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/compiled/dictionary"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // firstDiffByte is the first index where two files differ, or -1 when they are equal.

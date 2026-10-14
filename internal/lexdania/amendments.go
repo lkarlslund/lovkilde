@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // EditKind is what an amendment does to the target provision. It is the model's own kind: the

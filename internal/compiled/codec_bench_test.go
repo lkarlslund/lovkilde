@@ -16,7 +16,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/klauspost/compress/zstd"
-	"github.com/lkarlslund/retsinformation/internal/lexdania"
+	"github.com/lkarlslund/lovkilde/internal/lexdania"
 )
 
 // TestCodecBench measures how a compiled document should be stored, on real documents,

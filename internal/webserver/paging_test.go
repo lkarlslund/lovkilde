@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // TestSearchCountsEverythingAndLoadsTheRestOnRequest: the page states how many provisions match

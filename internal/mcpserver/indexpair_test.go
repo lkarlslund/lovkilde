@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lkarlslund/retsinformation/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/search"
 )
 
 // TestASearchSaysWhenItsIndexIsFromAnotherArtifact: the index is cut from the artifact, and a

@@ -8,7 +8,7 @@ import (
 
 	stdhtml "golang.org/x/net/html"
 
-	"github.com/lkarlslund/retsinformation/internal/lexdoc"
+	"github.com/lkarlslund/lovkilde/internal/lexdoc"
 )
 
 // Changes is what this document changes in other laws, in the model's form: the one structure
