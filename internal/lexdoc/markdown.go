@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"html"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -22,9 +21,9 @@ import (
 // Two things are deliberately kept rather than tidied away. A footnote stays where the document
 // put it — separated only by a paragraph break, since its marker is already in the text and the
 // identifier the register generated for it is not something a reader needs to see — because a legal
-// citation without its note is a different citation. And unmapped content is printed under a heading of its own: content the
-// mirror has no concept for belongs in the open, where a reader can see the model is incomplete,
-// rather than missing quietly.
+// citation without its note is a different citation. And text outside the model's concepts is printed
+// as the document's own text — a ruling's body, a bill's remarks under their heading — never left
+// out, since a reader cannot tell missing text from text that was never there (see prose.go).
 
 // renderer writes the model's text either as markdown, which is the form an answer to a reader is
 // served in, or as plain text, which is what a search snippet is cut from and what proximity is
@@ -215,10 +214,13 @@ func (c *Content) render(a Address, mode renderMode) (string, bool) {
 
 // renderWhole prints everything the document has, in reading order.
 func renderWhole(r renderer, c *Content) {
-	writeSegments(r, c.Title, "")
-	writeSegments(r, c.Preamble, "\n")
+	writeProse(r, c.Title, "", false)
+	writeProse(r, c.Preamble, "\n", true)
+	groups := textGroups(c.Unmapped)
+	writeTextGroups(r, groups, true, "summary")
 	writeNodes(r, c.Order, 0)
-	writeSegments(r, c.Signature, "\n")
+	writeTextGroups(r, groups, false, "")
+	writeProse(r, c.Signature, "\n", false)
 
 	if len(c.EntryIntoForce) > 0 {
 		// These are provisions, and they are cited — but their numbering is its own series, so
@@ -238,12 +240,13 @@ func renderWhole(r renderer, c *Content) {
 
 	for i := range c.Appendices {
 		ap := &c.Appendices[i]
-		r.heading(2, r.ids.appendixID(ap), appendixLabel(ap))
-		writeSegments(r, ap.Segments, "")
+		writeAppendixHead(r, ap)
+		writeProse(r, ap.Segments, "", true)
 		writeNodes(r, ap.Order, 0)
+		writeTextGroups(r, textGroups(ap.Unmapped), false, "")
 	}
 
-	writeUnmapped(r, c.Unmapped)
+	writeTextGroups(r, groups, true, "")
 }
 
 // renderLocated prints the narrowest unit an address names, and nothing else.
@@ -262,13 +265,14 @@ func renderLocated(r renderer, c *Content, loc Located) {
 	case loc.Part != nil:
 		writePart(r, loc.Part)
 	case loc.Appendix != nil:
-		r.heading(2, r.ids.appendixID(loc.Appendix), appendixLabel(loc.Appendix))
-		writeSegments(r, loc.Appendix.Segments, "")
+		writeAppendixHead(r, loc.Appendix)
+		writeProse(r, loc.Appendix.Segments, "", true)
 		writeNodes(r, loc.Appendix.Order, 0)
+		writeTextGroups(r, textGroups(loc.Appendix.Unmapped), false, "")
 	case loc.Preamble:
-		writeSegments(r, c.Preamble, "")
+		writeProse(r, c.Preamble, "", true)
 	case loc.Title:
-		writeSegments(r, c.Title, "")
+		writeProse(r, c.Title, "", false)
 	case loc.Provision != nil:
 		writeProvision(r, loc.Provision)
 	}
@@ -572,55 +576,6 @@ func appendixLabel(ap *Appendix) string {
 		return ap.Label
 	}
 	return "Bilag " + ap.Number // the document's own word for it
-}
-
-// writeUnmapped prints the content the model has no concept for, counted by what the mirror called
-// it. Leaving it out would make an incomplete model look complete.
-func writeUnmapped(r renderer, unmapped []Unmapped) {
-	if len(unmapped) == 0 {
-		return
-	}
-	counts := map[string]int{}
-	for _, u := range unmapped {
-		counts[u.Concept]++
-	}
-	kinds := make([]string, 0, len(counts))
-	for k := range counts {
-		kinds = append(kinds, k)
-	}
-	sort.Strings(kinds)
-	labels := make([]string, 0, len(kinds))
-	for _, k := range kinds {
-		labels = append(labels, fmt.Sprintf("%s ×%s", k, strconv.Itoa(counts[k])))
-	}
-	if r.mode == htmlText {
-		r.heading(2, "ovrigt", fmt.Sprintf("Indhold modellen ikke har et begreb for (%d stykker)", len(unmapped)))
-	} else {
-		r.heading(2, "ovrigt", fmt.Sprintf("Other content the model has no concept for (%d pieces)", len(unmapped)))
-		r.emphasis(strings.Join(labels, ", "))
-	}
-	for _, u := range unmapped {
-		if strings.TrimSpace(u.Text) == "" {
-			continue
-		}
-		r.quote(strings.TrimSpace(u.Text))
-	}
-}
-
-// writeSegments renders a run of segments, optionally separated from what came before.
-func writeSegments(r renderer, segs []Segment, sep string) {
-	if len(segs) == 0 {
-		return
-	}
-	r.b.WriteString(sep)
-	var out strings.Builder
-	for _, s := range segs {
-		out.WriteString(s.Text)
-		if s.Break {
-			out.WriteByte('\n')
-		}
-	}
-	r.paragraph(strings.TrimRight(out.String(), "\n"))
 }
 
 // collapse keeps the document's paragraphs apart and nothing else, and starts the answer on its

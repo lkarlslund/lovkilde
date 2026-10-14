@@ -79,10 +79,14 @@ func Units(docID int, meta DocMeta, m *lexdoc.Document) []Unit {
 		run.Reset()
 	}
 	for _, un := range m.Content.Unmapped {
-		run.WriteString(un.Text)
-		run.WriteString("\n")
-		if run.Len() >= maxUnitRunes {
-			flush()
+		// A piece kept with its layout — a ruling's whole body — is cut at its paragraphs, so a
+		// run stays a passage.
+		for _, para := range un.Paragraphs() {
+			run.WriteString(para)
+			run.WriteString("\n")
+			if run.Len() >= maxUnitRunes {
+				flush()
+			}
 		}
 	}
 	flush()
@@ -213,7 +217,12 @@ func (u *unitBuilder) appendix(ap *lexdoc.Appendix) {
 	// sections and divisions — is indexed alongside it rather than folded into its text,
 	// because the address for an annex renders the annex, and a unit quoting text that the
 	// opened annex does not show is a citation that does not lead where it says.
-	u.cite(addr, ap.Label+" "+ap.Heading+"\n"+lexdoc.SegmentsText(ap.Segments), func(l lexdoc.Located) bool { return l.Appendix == ap })
+	text := ap.Label + " " + ap.Heading + "\n" + lexdoc.SegmentsText(ap.Segments)
+	for _, un := range ap.Unmapped {
+		// the annex's prose between its provisions, which the opened annex shows
+		text += "\n" + un.Words()
+	}
+	u.cite(addr, text, func(l lexdoc.Located) bool { return l.Appendix == ap })
 	for _, n := range ap.Order {
 		if n.Provision != nil {
 			u.provision(n.Provision, false)

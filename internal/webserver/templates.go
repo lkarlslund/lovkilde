@@ -378,6 +378,15 @@ details.refused summary { font-weight: 700; cursor: pointer; }
 details.refused li { margin: .7rem 0; }
 details.refused blockquote { margin: .3rem 0 0 0; font: .95rem/1.5 var(--text); }
 article.law p.refused-mark { border-left: 4px solid var(--amber); padding: .2rem .6rem; font: .88rem/1.5 var(--ui); background: var(--band); }
+article.law p.pitem { margin: .2rem 0 .2rem 1.2rem; padding-left: 2.4rem; text-indent: -2.4rem; }
+article.law p.pitem.d2 { margin-left: 3.6rem; }
+article.law p.pitem.d3 { margin-left: 6rem; }
+article.law p.pitem .lbl { display: inline-block; min-width: 2.4rem; text-indent: 0; font-variant-numeric: tabular-nums; }
+article.law p.prose-head { font: 700 1rem/1.4 var(--ui); margin: 1.4rem 0 .35rem; }
+article.law p.annex-title { font: 700 1.02rem/1.4 var(--text); margin: -.1rem 0 1rem; }
+article.law div.table { overflow-x: auto; margin: .8rem 0 1rem; }
+article.law div.table table { border-collapse: collapse; font: .92rem/1.4 var(--text); }
+article.law div.table td { border: 1px solid var(--line); padding: .25rem .55rem; vertical-align: top; }
 article.law :target { background: color-mix(in srgb, var(--accent) 18%, transparent); scroll-margin-top: 4.5rem; }
 aside.related { margin-top: 2.5rem; border-top: 2px solid var(--line); padding-top: .6rem; }
 aside.related ul { list-style: none; padding: 0; }
@@ -415,7 +424,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 .terms label input { width: 1.25rem; height: 1.25rem; flex: none; margin-top: .15rem; }
 .terms .actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
 .terms button { font-size: 1.05rem; padding: .6rem 1.2rem; }
-@media (max-width: 36rem) { .filters legend { float: none; width: auto; } </style>
+@media (max-width: 36rem) { .filters legend { float: none; width: auto; } }</style>
 </head>
 <body>
 <header class="site"><div class="wrap">

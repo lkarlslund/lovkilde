@@ -206,6 +206,18 @@ type Segment struct {
 	// paragraphs, not lines.
 	Para bool `json:",omitempty"`
 
+	// Style is how the document set the text: "b" bold, "i" italic, "bi" both, "" plain. The
+	// register sets a heading inside prose — "Generelle bemærkninger", "§ 1." in an annex that
+	// prints its own provisions as text — in bold and nothing else, so without it a renderer
+	// cannot tell a heading from the sentence under it.
+	Style string `json:",omitempty"`
+
+	// Indent is how deep in the document's own lists the text sits: 1 for an entry of a list,
+	// 2 for an entry of a list inside that one, 0 outside any. Marker marks the entry's printed
+	// label ("1.", "a)"), which the document prints apart from the entry's text.
+	Indent int  `json:",omitempty"`
+	Marker bool `json:",omitempty"`
+
 	// Table, Row and Col place text printed in a table cell: the document's Table-th table, its
 	// Row-th row and the grid column the cell starts in (a cell spanning columns counts them).
 	// Zero Table is text outside any table. A change to a table's cells — "indsættes i gruppen
@@ -227,7 +239,42 @@ type Unmapped struct {
 	// "signature", "remarks", "presentation", "image", "unclassified". It is never the
 	// publisher's element name, so the artifact cannot leak the schema by accident.
 	Concept string
-	Text    string
+
+	// Text is the piece's words, kept for content read from markup with no layout to keep. Where
+	// the reader kept the layout — the paragraphs, headings, lists and tables of a ruling's
+	// body, a bill's remarks, a summary — it is in Segments instead and Text is empty, so the
+	// words are stored once. Words reads either.
+	Text     string    `json:",omitempty"`
+	Segments []Segment `json:",omitempty"`
+}
+
+// Paragraphs is the piece's text paragraph by paragraph, whichever form it was kept in.
+func (u Unmapped) Paragraphs() []string {
+	if len(u.Segments) == 0 {
+		if strings.TrimSpace(u.Text) == "" {
+			return nil
+		}
+		return []string{u.Text}
+	}
+	var out []string
+	from := 0
+	for i, sg := range u.Segments {
+		if sg.Para || i == len(u.Segments)-1 {
+			if t := SegmentsText(u.Segments[from : i+1]); strings.TrimSpace(t) != "" {
+				out = append(out, t)
+			}
+			from = i + 1
+		}
+	}
+	return out
+}
+
+// Words is the piece's text, whichever form it was kept in.
+func (u Unmapped) Words() string {
+	if len(u.Segments) > 0 {
+		return SegmentsText(u.Segments)
+	}
+	return u.Text
 }
 
 // Appendix is an annex to the document, with its own label ("bilag 1", "Bilag A").

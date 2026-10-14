@@ -143,7 +143,7 @@ func census(a *lexdania.Archive, acc string) {
 		}
 		concepts := map[string]int{}
 		for _, u := range ap.Unmapped {
-			concepts[u.Concept] += len([]rune(u.Text))
+			concepts[u.Concept] += len([]rune(u.Words()))
 		}
 		concepts["(segments)"] = 0
 		for _, s := range ap.Segments {

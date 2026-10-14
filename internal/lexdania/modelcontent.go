@@ -168,6 +168,30 @@ type contentBuilder struct {
 
 	// carried is a heading the site printed at the end of the provision before the one it heads.
 	carried string
+
+	// indent is how many lists the renderer is inside; markers are the labels of their entries.
+	// See lexdoc.Segment.Indent.
+	indent  int
+	markers map[*Node]bool
+
+	// printedLabel is an annex's own label element, "Bilag 2": the annex's Label, so not the
+	// first line of its text as well, which printed "Bilag 2" twice.
+	printedLabel map[*Node]bool
+}
+
+// charStyle is the model's Style for a <Char>'s formaChar: bold and italic are kept, the rest
+// (underline, super- and subscript) is not.
+func charStyle(forma string) string {
+	st := ""
+	for _, f := range strings.Fields(forma) {
+		switch f {
+		case "Bold":
+			st = "b" + st
+		case "Italic":
+			st += "i"
+		}
+	}
+	return st
 }
 
 // walk classifies the children of n, recursing through containers. Structure is not stable
@@ -325,6 +349,13 @@ func (b *contentBuilder) walk(order *[]lexdoc.Node, n *Node, ctx walkCtx) {
 			b.walk(order, c, ctx)
 
 		default: // container
+			if !knownConceptBelow(c) {
+				// Text and nothing the model addresses: a ruling's body, a paragraph between a
+				// bill's provisions. It is one piece, with its layout, rather than every run of
+				// it a piece of its own — a ruling had been 471 of them.
+				b.recordUnmapped(concept{word: proseWord(con.word)}, c)
+				continue
+			}
 			b.captureProse(c, con.word)
 			b.walk(order, c, ctx)
 		}
@@ -346,10 +377,26 @@ func (b *contentBuilder) appendix(n *Node) {
 	if ap.Number == "" {
 		ap.Number = lexdoc.FirstNumber(ap.Label)
 	}
+	pile := len(b.unmapped)
 	b.walk(&ap.Order, n, walkCtx{inAnnex: true})
 	// Whatever the annex holds that became no concept is the annex's own text: an annex with
-	// no provisions inside it is prose and tables, and that text has to live somewhere.
+	// no provisions inside it is prose and tables, and that text has to live somewhere. It lives
+	// there and only there: the walk above also piled every line of it up as unmapped prose, and
+	// kept, a 7-annex circular printed its whole agreement a second time under "content the model
+	// has no concept for".
+	if len(ap.Order) > 0 {
+		// The annex's prose between its provisions is the annex's, and prints in it.
+		ap.Unmapped = append(ap.Unmapped, b.unmapped[pile:]...)
+		b.unmapped = b.unmapped[:pile]
+	}
 	if len(ap.Order) == 0 {
+		b.unmapped = b.unmapped[:pile]
+		if m := n.Elem("Explicatus"); m != nil {
+			if b.printedLabel == nil {
+				b.printedLabel = map[*Node]bool{}
+			}
+			b.printedLabel[m] = true
+		}
 		ap.Segments = b.render(nil, n, true)
 	}
 	// The annex's number is what it prints, "Bilag 5". The site's payload keeps that in a title
@@ -498,7 +545,46 @@ func (b *contentBuilder) render(out []lexdoc.Segment, n *Node, block bool) []lex
 	if watched {
 		b.spanStart[n] = len(out)
 	}
+	// Style, list depth and list labels are set on what the element appended, after it has: an
+	// inner element has set its own by then, and only what it left unset takes the outer's.
+	if b.markers[n] {
+		from := len(out)
+		defer func() {
+			for i := from; i < len(out); i++ {
+				out[i].Marker = true
+			}
+		}()
+	}
 	switch n.Name {
+	case "Char":
+		if st := charStyle(n.Attrs["formaChar"]); st != "" {
+			from := len(out)
+			defer func() {
+				for i := from; i < len(out); i++ {
+					if out[i].Style == "" {
+						out[i].Style = st
+					}
+				}
+			}()
+		}
+	case "Indentatio":
+		b.indent++
+		depth := b.indent
+		if m := n.Elem("Explicatus"); m != nil {
+			if b.markers == nil {
+				b.markers = map[*Node]bool{}
+			}
+			b.markers[m] = true
+		}
+		from := len(out)
+		defer func() {
+			b.indent--
+			for i := from; i < len(out); i++ {
+				if out[i].Indent == 0 {
+					out[i].Indent = depth
+				}
+			}
+		}()
 	case "Table":
 		b.tableCount++
 		b.cells = append(b.cells, cellPos{table: b.tableCount})
@@ -530,7 +616,7 @@ func (b *contentBuilder) render(out []lexdoc.Segment, n *Node, block bool) []lex
 	}
 	out = appendRun(out, n.Runs[0])
 	for i, c := range n.Elems {
-		if b.labelled[n] == c {
+		if b.labelled[n] == c || b.printedLabel[c] {
 			out = appendRun(out, n.Runs[i+1])
 			continue // the provision's rubric is its heading, not the first line of its text
 		}
@@ -555,13 +641,23 @@ func (b *contentBuilder) render(out []lexdoc.Segment, n *Node, block bool) []lex
 	if block || blockElements[n.Name] {
 		markBreak(&out)
 	}
-	if n.Name == "Exitus" && len(out) > 0 {
+	if (n.Name == "Exitus" || n.Name == "Rubrica") && len(out) > 0 {
+		// A heading printed inside text is a paragraph of its own, not the first line of the
+		// paragraph under it.
 		out[len(out)-1].Para = true
 	}
 	if watched {
 		b.spanEnd[n] = len(out)
 	}
 	return out
+}
+
+// proseWord is the concept text with no concept of its own is kept under.
+func proseWord(word string) string {
+	if word == "" {
+		return "prose"
+	}
+	return word
 }
 
 // captureProse keeps the prose that sits directly inside a container, between its children.
@@ -599,12 +695,14 @@ func (b *contentBuilder) recordUnmapped(con concept, n *Node) {
 			return
 		}
 	}
-	text := DisplayText(n)
-	if text == "" {
+	// Kept as segments, so the paragraphs, headings, lists and tables of a summary or a bill's
+	// remarks print as what they are rather than as one run of words.
+	segs := b.render(nil, n, true)
+	if len(segs) == 0 {
 		b.record(lexdoc.Unmapped{Concept: word})
 		return
 	}
-	b.record(lexdoc.Unmapped{Concept: word, Text: text})
+	b.record(lexdoc.Unmapped{Concept: word, Segments: segs})
 }
 
 func (b *contentBuilder) record(u lexdoc.Unmapped) {

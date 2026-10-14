@@ -50,7 +50,10 @@ func (c *Content) anchorSet() *anchorSet {
 	}
 	// The two headings the mirror adds itself are reserved before anything else is named, so a
 	// thing whose own number happens to slug to the same word loses the tie rather than the page.
-	a.reserve("ikraft", "ovrigt")
+	a.reserve("ikraft")
+	for _, h := range textHeads {
+		a.reserve(h.id)
+	}
 	a.walk(c.Order, 2, "")
 	if len(c.EntryIntoForce) > 0 {
 		a.contents = append(a.contents, Contents{ID: "ikraft", Label: "Ikrafttrædelsesbestemmelser", Level: 2})
@@ -65,10 +68,18 @@ func (c *Content) anchorSet() *anchorSet {
 		ap := &c.Appendices[i]
 		id := a.name("bilag", firstNonEmpty(ap.Number, ap.Label), strconv.Itoa(i+1))
 		a.appendices[ap] = id
-		a.contents = append(a.contents, Contents{ID: id, Label: appendixLabel(ap), Level: 2})
+		a.contents = append(a.contents, Contents{ID: id, Label: appendixTitle(ap), Level: 2})
 	}
-	if len(c.Unmapped) > 0 {
-		a.contents = append(a.contents, Contents{ID: "ovrigt", Label: "Indhold modellen ikke har et begreb for", Level: 2})
+	for _, g := range textGroups(c.Unmapped) {
+		h, ok := textHeads[g.concept]
+		switch {
+		case !ok:
+		case g.concept == "summary":
+			// printed ahead of the provisions, so first in the contents too
+			a.contents = append([]Contents{{ID: h.id, Label: h.da, Level: 2}}, a.contents...)
+		default:
+			a.contents = append(a.contents, Contents{ID: h.id, Label: h.da, Level: 2})
+		}
 	}
 	return a
 }

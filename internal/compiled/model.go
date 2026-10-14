@@ -12,7 +12,7 @@ import "fmt"
 // TestModelVersionCoversTheStoredModel compiles a committed sample of real documents through the
 // same path `retsin-update artifact build` uses and fails, naming this constant, when their stored form
 // changed and the version did not.
-const ModelVersion = 1
+const ModelVersion = 2
 
 // CheckModel refuses an artifact whose stored model this server does not read, and accepts one
 // that holds this server's model version from any build. An artifact written before model versions

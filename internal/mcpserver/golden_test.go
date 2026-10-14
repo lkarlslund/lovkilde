@@ -13,7 +13,7 @@ import (
 // identifies itself; this one checks the part a client actually quotes, on a document shaped to
 // have the things the model knows and the flat section list did not — a chapter with a rubric, a
 // provision with a rubric, a footnote inside a subsection, entry-into-force material whose
-// numbering starts again at 1, and a table the model has no concept for.
+// numbering starts again at 1, and a table the model has no cells for, which prints as text.
 //
 // The golden is the text alone, not the whole answer: the header carries the archive path and the
 // date the mirror was asked, and those are checked where they are claimed.
@@ -84,6 +84,8 @@ bilaget.
 
 Bemaerkninger fastsaettes af ministeren.
 
+en tabelcelle
+
 ## Entry into force and transitional provisions
 
 *Numbered in their own series: citing them as a section of the law would reach a different provision.*
@@ -91,12 +93,6 @@ Bemaerkninger fastsaettes af ministeren.
 § 1.
 
 Loven traeder i kraft den 1. januar 1997.
-
-## Other content the model has no concept for (2 pieces)
-
-*metadata ×1, table ×1*
-
-> en tabelcelle
 `
 	if res.Text != want {
 		t.Errorf("the whole-document answer changed shape:\n got:\n%s\nwant:\n%s", res.Text, want)

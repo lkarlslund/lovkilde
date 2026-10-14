@@ -73,16 +73,25 @@ func TestMarkdownProvisionsScopes(t *testing.T) {
 	}
 }
 
-// Content the model has no concept for stays visible, counted.
-func TestMarkdownShowsUnmapped(t *testing.T) {
+// Text outside the model's concepts is the document's own text and prints as such: body text
+// after the provisions with no heading, a summary ahead of them and remarks after the annexes,
+// each under the heading that says what it is.
+func TestMarkdownShowsTextOutsideTheConcepts(t *testing.T) {
 	c := sampleLaw()
-	c.Unmapped = []Unmapped{{Concept: "henvisning til andet dokument", Text: "Jf. lov nr. 100."}}
-
+	c.Unmapped = []Unmapped{
+		{Concept: "metadata"},
+		{Concept: "prose", Text: "Jf. lov nr. 100."},
+		{Concept: "summary", Segments: []Segment{{Text: "Kort fortalt.", Para: true}}},
+		{Concept: "remarks", Segments: []Segment{{Text: "Almindelige bemærkninger", Style: "b", Para: true}, {Text: "Forslaget går ud på noget.", Para: true}}},
+	}
 	got := c.Markdown()
-	if !strings.Contains(got, "Other content the model has no concept for (1 pieces)") ||
-		!strings.Contains(got, "henvisning til andet dokument ×1") ||
-		!strings.Contains(got, "Jf. lov nr. 100.") {
-		t.Errorf("unmapped content is not shown:\n%s", got)
+	summary, body, annex, remarks := strings.Index(got, "## Summary\n\nKort fortalt."), strings.Index(got, "Jf. lov nr. 100."),
+		strings.Index(got, "## Bilag 1"), strings.Index(got, "## Remarks\n\n#### Almindelige bemærkninger\n\nForslaget går ud på noget.")
+	if summary < 0 || body < 0 || annex < 0 || remarks < 0 || !(summary < strings.Index(got, "§ 1.") && body < annex && annex < remarks) {
+		t.Errorf("the text is missing or out of place:\n%s", got)
+	}
+	if strings.Contains(got, "concept") || strings.Contains(got, "metadata") {
+		t.Errorf("the answer talks about the model instead of the document:\n%s", got)
 	}
 }
 
@@ -170,4 +179,18 @@ func squashRendered(s string) string {
 		}
 		return r
 	}, s)
+}
+
+// A table printed in prose is set as a table: rows and columns in HTML and as a markdown pipe table.
+func TestProseTableKeepsItsCells(t *testing.T) {
+	c := &Content{Appendices: []Appendix{{Number: "5", Label: "Bilag 5", Segments: []Segment{
+		{Text: "Trin", Table: 1, Row: 1, Col: 1}, {Text: "Løn", Table: 1, Row: 1, Col: 2},
+		{Text: "1", Table: 1, Row: 2, Col: 1}, {Text: "300.000", Table: 1, Row: 2, Col: 2},
+	}}}}
+	if html := c.HTML(); !strings.Contains(html, "<tr><td>Trin</td><td>Løn</td></tr>\n<tr><td>1</td><td>300.000</td></tr>") {
+		t.Errorf("the HTML table:\n%s", html)
+	}
+	if md := c.Markdown(); !strings.Contains(md, "| Trin | Løn |\n| --- | --- |\n| 1 | 300.000 |") {
+		t.Errorf("the markdown table:\n%s", md)
+	}
 }

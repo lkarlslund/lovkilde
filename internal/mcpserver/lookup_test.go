@@ -200,12 +200,12 @@ func TestLookupLeavesThePageRenderingToThePage(t *testing.T) {
 // measured on the mirror's 12.5 MB document page — so the cap belongs to the answer path only.
 func TestLookupTruncatesAnAnswerButNotAPage(t *testing.T) {
 	s := newTestServer(t)
-	req := LookupRequest{Document: "lta/1998/2", MaxChars: 40}
+	req := LookupRequest{Document: "lta/1998/2", MaxChars: 20}
 	answer, err := s.Lookup(req)
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	if !answer.Truncated || len(answer.Text) > 40 {
+	if !answer.Truncated || len(answer.Text) > 20 {
 		t.Errorf("the answer did not respect the cap: %d bytes, truncated=%v", len(answer.Text), answer.Truncated)
 	}
 	page, err := s.LookupPage(req)

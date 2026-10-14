@@ -582,7 +582,7 @@ func modelText(c *lexdoc.Content) string {
 	// Unmapped is part of the answer: content the model has no concept for keeps its text here
 	// so that an incomplete model is visible per document rather than inferred from an average.
 	for _, u := range c.Unmapped {
-		b.WriteString(u.Text)
+		b.WriteString(u.Words())
 		b.WriteString("\n")
 	}
 	return b.String()
