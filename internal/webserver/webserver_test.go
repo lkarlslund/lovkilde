@@ -127,8 +127,14 @@ func newTestSite(t *testing.T, withIndex bool) (*httptest.Server, *mcpserver.Ser
 	return site, srv
 }
 
+// get fetches a page as a browser that has accepted the terms of use.
 func get(t *testing.T, site *httptest.Server, path string) (string, int) {
-	resp, err := http.Get(site.URL + path)
+	req, err := http.NewRequest(http.MethodGet, site.URL+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(&http.Cookie{Name: termsCookie, Value: disclaimer.TermsVersion})
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", path, err)
 	}
@@ -162,6 +168,39 @@ func TestMCPEndpointAnswersARealClient(t *testing.T) {
 	}
 	defer session.Close()
 
+	text := func(r *mcp.CallToolResult) string {
+		var s string
+		for _, c := range r.Content {
+			if tc, ok := c.(*mcp.TextContent); ok {
+				s += tc.Text
+			}
+		}
+		return s
+	}
+	call := func(name string, args map[string]any) *mcp.CallToolResult {
+		t.Helper()
+		r, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	lookupArgs := map[string]any{"document": "eli/lta/1998/2", "address": "§ 1, stk. 1"}
+
+	// Nothing answers before the terms are accepted, and they cannot be accepted unseen.
+	if r := call("lookup", lookupArgs); !r.IsError || strings.Contains(text(r), "KANONISK TEKST") {
+		t.Errorf("lookup answered before the terms were accepted:\n%s", text(r))
+	}
+	if r := call("vilkaar", map[string]any{"accepterer": true}); !r.IsError {
+		t.Errorf("the terms were accepted before they were shown:\n%s", text(r))
+	}
+	if r := call("vilkaar", nil); r.IsError || !strings.Contains(text(r), disclaimer.Terms[0].Text) {
+		t.Errorf("the terms tool did not return the terms:\n%s", text(r))
+	}
+	if r := call("vilkaar", map[string]any{"accepterer": true}); r.IsError {
+		t.Errorf("accepting the shown terms failed:\n%s", text(r))
+	}
+
 	tools, err := session.ListTools(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -170,33 +209,22 @@ func TestMCPEndpointAnswersARealClient(t *testing.T) {
 	for _, tool := range tools.Tools {
 		names[tool.Name] = true
 	}
-	if !names["lookup"] || !names["search"] {
-		t.Errorf("tools over HTTP = %v, want lookup and search", names)
+	if !names["vilkaar"] || !names["lookup"] || !names["search"] {
+		t.Errorf("tools over HTTP = %v, want vilkaar, lookup and search", names)
 	}
 
-	call, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "lookup",
-		Arguments: map[string]any{"document": "eli/lta/1998/2", "address": "§ 1, stk. 1"},
-	})
-	if err != nil {
-		t.Fatal(err)
+	r := call("lookup", lookupArgs)
+	if r.IsError {
+		t.Fatalf("lookup over HTTP returned an error result: %v", r.Content)
 	}
-	if call.IsError {
-		t.Fatalf("lookup over HTTP returned an error result: %v", call.Content)
-	}
-	var text string
-	for _, c := range call.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			text += tc.Text
-		}
-	}
-	if !strings.Contains(text, "KANONISK TEKST") {
-		t.Errorf("lookup over HTTP did not carry the document text:\n%s", text)
+	answer := text(r)
+	if !strings.Contains(answer, "KANONISK TEKST") {
+		t.Errorf("lookup over HTTP did not carry the document text:\n%s", answer)
 	}
 	// The provenance line has to survive the transport too: an answer that arrived without it
 	// would look as trustworthy as one that came from the register's own body.
-	if !strings.Contains(strings.ToLower(text), "xml") {
-		t.Errorf("answer over HTTP lost its provenance:\n%s", text)
+	if !strings.Contains(strings.ToLower(answer), "xml") {
+		t.Errorf("answer over HTTP lost its provenance:\n%s", answer)
 	}
 }
 

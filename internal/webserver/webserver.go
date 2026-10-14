@@ -13,7 +13,9 @@
 //	/dok              one document: table of contents, text, related acts
 //	/browse           a listing by type and year
 //	/status           plain text, for curl
-//	/mcp              the MCP endpoint, so one port serves both audiences
+//	/vilkaar          the terms of use, which a browser accepts before any other page answers
+//	/mcp              the MCP endpoint, so one port serves both audiences; it asks for the terms
+//	                  through its own tool
 //
 // There is no /api. The machine-readable forms are what the MCP tools return; a page asks the
 // Go methods directly.
@@ -51,6 +53,18 @@ func New(srv *mcpserver.Server) *Handler {
 // ServeHTTP routes the paths documented on the package.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
+	case termsPath:
+		h.terms(w, r)
+		return
+	case "/mcp":
+		h.srv.MCPHandler().ServeHTTP(w, r)
+		return
+	}
+	if !acceptedTerms(r) {
+		h.requireTerms(w, r)
+		return
+	}
+	switch r.URL.Path {
 	case "/":
 		h.index(w, r)
 	case "/search":
@@ -61,8 +75,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.browse(w, r)
 	case "/status":
 		h.status(w, r)
-	case "/mcp":
-		h.srv.MCPHandler().ServeHTTP(w, r)
 	default:
 		http.NotFound(w, r)
 	}

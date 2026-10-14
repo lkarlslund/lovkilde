@@ -50,6 +50,7 @@ var templateFuncs = template.FuncMap{
 	"kindLink": func(kind string) string { return browseQueryArgs(kind, 0, "", "", "", 0) },
 	"kindName": kindName,
 	"num":      num,
+	"inc":      func(i int) int { return i + 1 },
 }
 
 // num writes a count the Danish way, with a point between thousands: 12.345.
@@ -201,6 +202,7 @@ func parseTemplates() map[string]*template.Template {
 		"search":   searchBody,
 		"document": documentBody,
 		"browse":   browseBody,
+		"terms":    termsBody,
 	}
 	out := make(map[string]*template.Template, len(pages))
 	for name, body := range pages {
@@ -378,6 +380,14 @@ footer { color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line
 .disclaimer { border: 2px solid var(--amber); border-radius: 8px; background: var(--band); padding: .6rem .9rem; margin: 1rem 0; font: .9rem/1.5 var(--ui); }
 .disclaimer b { color: var(--red); }
 .disclaimer.consolidated { border-color: var(--red); }
+.terms { max-width: 46rem; margin: 1.5rem auto; padding: 1.5rem 1.75rem; border: 3px solid var(--red); border-radius: 10px; background: var(--panel); }
+.terms h1 { color: var(--red); margin-top: 0; }
+.terms h2 { font-size: 1.05rem; margin: 1.1rem 0 .3rem; }
+.terms p { margin: 0 0 .5rem; }
+.terms label { display: flex; gap: .6rem; align-items: flex-start; margin: 1.4rem 0 1rem; font-weight: 600; }
+.terms label input { width: 1.25rem; height: 1.25rem; flex: none; margin-top: .15rem; }
+.terms .actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.terms button { font-size: 1.05rem; padding: .6rem 1.2rem; }
 @media (max-width: 36rem) { .filters legend { float: none; width: auto; } </style>
 </head>
 <body>
@@ -390,7 +400,7 @@ footer { color: var(--muted); font-size: .8rem; border-top: 1px solid var(--line
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar
-for fejl eller tab. Ikke juridisk rådgivning. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
+for fejl eller tab. Ikke juridisk rådgivning. <a href="/vilkaar">Vilkår for brug</a>. Samme svar til sprogmodeller på <a href="/mcp">/mcp</a>.</div></footer>
 <script>
 // Progressive help only: every page works without this. It does four things — a long contents
 // list folds on a phone, a ticked toggle applies itself, an empty field stays out of the
@@ -542,3 +552,20 @@ const browseBody = `{{define "content"}}
 {{end}}
 {{define "rows"}}{{range .Items}}<div class="r"><span class="n">{{.Year}} nr. {{.Number}}</span><div><a href="{{.Link}}">{{.Title}}</a><span class="meta">{{kindName .Kind}}{{if .Type}} · {{.Type}}{{end}} · <span class="pill {{statusClass .Status}}">{{statusShort .Status}}</span></span></div></div>
 {{end}}{{if .More}}<a class="more" href="{{.More}}" data-more>Vis flere</a>{{else if gt .Total 0}}<p class="end">Det var alle {{num .Total}}.</p>{{end}}{{end}}`
+
+const termsBody = `{{define "headsearch"}}{{""}}{{end}}{{define "content"}}
+<section class="terms" aria-labelledby="terms-title">
+<h1 id="terms-title">{{.Title}}</h1>
+<p>Før du kan bruge tjenesten, skal du læse og acceptere disse vilkår.</p>
+{{range $i, $t := .Terms}}<h2>{{inc $i}}. {{$t.Heading}}</h2>
+<p>{{$t.Text}}</p>
+{{end}}{{if .Accepted}}<p class="note">Du har allerede accepteret vilkårene i denne browser. <a href="/">Til forsiden</a></p>
+{{else}}<form method="post" action="/vilkaar">
+<input type="hidden" name="next" value="{{.Next}}">
+{{if .Unticked}}<p class="warn">Sæt kryds for at bekræfte, at du accepterer vilkårene.</p>{{end}}
+<label><input type="checkbox" name="accepterer" value="ja" required> {{.Accept}}</label>
+<div class="actions"><button type="submit">Jeg accepterer – fortsæt</button>
+<a href="https://www.retsinformation.dk/">Jeg accepterer ikke – gå til den officielle Retsinformation</a></div>
+</form>{{end}}
+</section>
+{{end}}`

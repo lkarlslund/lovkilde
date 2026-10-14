@@ -53,6 +53,9 @@ type Server struct {
 	// has to be the same one every time, and why the building is guarded rather than checked.
 	mcpOnce    sync.Once
 	mcpHandler http.Handler
+
+	// terms is which MCP sessions have accepted the terms of use; see termsTool.
+	terms terms
 }
 
 // clock is the server's idea of now: time.Now, unless a test pinned it.
@@ -385,6 +388,9 @@ func (s *Server) mcpServer() *mcp.Server {
 		Version: s.version,
 	}, &mcp.ServerOptions{
 		Instructions: "Lookup Danish law from an unofficial mirror of retsinformation.dk. " +
+			"Before anything else, call the tool " + termsTool + " to fetch the terms of use, show them to the " +
+			"user in full, and call it again with accepterer: true only once the user has accepted them; " +
+			"no other tool answers before that. " +
 			disclaimer.ShortEnglish + " " + disclaimer.ConsolidatedEnglish + " " +
 			"Pass these warnings on to the user with any answer built on this text. " +
 			"Every answer names where its text came from: 'xml' is the register's own " +
@@ -392,6 +398,12 @@ func (s *Server) mcpServer() *mcp.Server {
 			"payload, and 'none' means the mirror has metadata but no text. Say which one " +
 			"a quotation came from. " + s.horizon().Policy(),
 	})
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: termsTool,
+		Description: "The terms of use (vilkår), which the user must accept before any other tool answers. " +
+			"Call without arguments to fetch them, show them to the user in full, and call again with " +
+			"accepterer: true only once the user has said they accept. Never accept on the user's behalf.",
+	}, s.termsTool)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "lookup",
 		Description: "Read one document from the mirror: metadata plus text, optionally one " +
@@ -470,7 +482,10 @@ type searchInput struct {
 	NoNear bool `json:"no_near,omitempty" jsonschema:"rank from the index alone and skip the text reads that measure word distance"`
 }
 
-func (s *Server) searchTool(_ context.Context, _ *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, any, error) {
+func (s *Server) searchTool(_ context.Context, req *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, any, error) {
+	if r := s.gate(req); r != nil {
+		return r, nil, nil
+	}
 	res, err := s.Search(SearchRequest{
 		Query:  in.Query,
 		Kind:   in.Kind,
@@ -493,7 +508,10 @@ func (s *Server) searchTool(_ context.Context, _ *mcp.CallToolRequest, in search
 	}, nil, nil
 }
 
-func (s *Server) lookupTool(_ context.Context, _ *mcp.CallToolRequest, in lookupInput) (*mcp.CallToolResult, any, error) {
+func (s *Server) lookupTool(_ context.Context, req *mcp.CallToolRequest, in lookupInput) (*mcp.CallToolResult, any, error) {
+	if r := s.gate(req); r != nil {
+		return r, nil, nil
+	}
 	maxChars := in.MaxChars
 	if maxChars <= 0 {
 		maxChars = s.MaxChars

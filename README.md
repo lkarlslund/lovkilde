@@ -1296,7 +1296,14 @@ that already have XML, the premise needs restating, and that is a 30-request dis
 retsin mcp                     # Model Context Protocol over stdin/stdout
 ```
 
-One tool, `lookup`, in the three forms a caller is likely to hold:
+**Nothing answers before the user has accepted the terms of use.** A session starts with the tool
+`vilkaar`: called without arguments it returns the terms, in Danish, for the model to show the
+user in full; once the user has said they accept, the model calls it again with
+`{"accepterer": true}`. Until then `lookup` and `search` answer only with how to do that, and the
+terms cannot be accepted in a session that was never shown them. The website asks the same once
+per browser, on `/vilkaar`, before any other page answers.
+
+Then `lookup`, in the three forms a caller is likely to hold:
 
 ```json
 {"method":"tools/call","params":{"name":"lookup","arguments":
