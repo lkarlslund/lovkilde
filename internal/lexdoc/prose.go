@@ -319,7 +319,9 @@ func writeProseParagraph(r renderer, b proseBlock) {
 		}
 		for i, l := range b.lines {
 			if i > 0 && b.flow {
-				r.b.WriteByte(' ')
+				if spaceBetween(lineText(b.lines[i-1]), lineText(l)) {
+					r.b.WriteByte(' ')
+				}
 			} else if i > 0 {
 				r.b.WriteString("<br>")
 			}
@@ -343,7 +345,9 @@ func writeProseParagraph(r renderer, b proseBlock) {
 		for i, l := range b.lines {
 			if i > 0 {
 				if b.kind == proseItem || depth > 0 || b.flow {
-					r.b.WriteByte(' ')
+					if spaceBetween(lineText(b.lines[i-1]), lineText(l)) {
+						r.b.WriteByte(' ')
+					}
 				} else {
 					r.b.WriteByte('\n')
 				}

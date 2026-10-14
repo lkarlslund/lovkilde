@@ -194,3 +194,12 @@ func TestProseTableKeepsItsCells(t *testing.T) {
 		t.Errorf("the markdown table:\n%s", md)
 	}
 }
+
+// Danish opens a quotation with ”, and a quotation the register set over two runs reads without a
+// space inside it: artiklen ”Jødiske børn …”.
+func TestProseKeepsAnOpeningQuoteOnItsWord(t *testing.T) {
+	c := &Content{Preamble: []Segment{{Text: "over artiklen ”", Break: true}, {Text: "Jødiske børn", Style: "i", Break: true}, {Text: "”, bragt", Break: true, Para: true}}}
+	if got := c.PlainText(); !strings.Contains(got, "over artiklen ”Jødiske børn”, bragt") {
+		t.Errorf("got %q", got)
+	}
+}
