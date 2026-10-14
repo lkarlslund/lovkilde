@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/lkarlslund/retsinformation/internal/compiled"
@@ -40,7 +41,7 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Manifest{}, err
 	}
-	m := Manifest{File: prev.File, Size: prev.Size, SHA256: prev.SHA256, Model: prev.Model, Documents: prev.Documents, XML: prev.XML, Published: time.Now().UTC()}
+	m := Manifest{File: prev.File, Size: prev.Size, SHA256: prev.SHA256, Model: prev.Model, Documents: prev.Documents, XML: prev.XML, Older: prev.Older, Published: time.Now().UTC()}
 	var c Commit
 	if rel.XMLDir != "" {
 		tmp, err := os.MkdirTemp("", "retsin-packs-*")
@@ -83,9 +84,9 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 		}
 		m.File, m.Size, m.SHA256 = ref.Path, ref.Size, ref.SHA256
 		c.Add = append(c.Add, Upload{Path: ref.Path, From: rel.Artifact})
-		if prev.File != "" {
-			c.Delete = append(c.Delete, prev.File)
-		}
+		var drop []string
+		m.Older, drop = keepOlder(prev, m.Model)
+		c.Delete = append(c.Delete, drop...)
 	}
 	// The card describes the release, so it is rewritten with it.
 	card, err := writeCard(m, r.String())
@@ -118,6 +119,37 @@ func Publish(ctx context.Context, r Repo, rel Release) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return m, nil
+}
+
+// keptModels is how many earlier document models keep their last artifact published.
+const keptModels = 2
+
+// keepOlder is the Older list after a release whose artifact is of model, and the files it no
+// longer names. The artifact the release replaces is deleted when it is of the same model, and
+// kept as that model's last when the release moves to a new one; an older model's entry goes once
+// keptModels newer ones are kept, or when the release is of its model again.
+func keepOlder(prev Manifest, model int) (older []ModelArtifact, drop []string) {
+	if prev.File != "" {
+		if prev.Model != model {
+			older = append(older, ModelArtifact{Model: prev.Model, FileRef: FileRef{Path: prev.File, Size: prev.Size, SHA256: prev.SHA256}})
+		} else {
+			drop = append(drop, prev.File)
+		}
+	}
+	for _, o := range prev.Older {
+		if o.Model == model || o.Model == prev.Model && prev.File != "" && prev.Model != model {
+			// the release, or the artifact it replaces, is that model's newer one
+			drop = append(drop, o.Path)
+			continue
+		}
+		older = append(older, o)
+	}
+	slices.SortFunc(older, func(a, b ModelArtifact) int { return b.Model - a.Model })
+	for len(older) > keptModels {
+		drop = append(drop, older[len(older)-1].Path)
+		older = older[:len(older)-1]
+	}
+	return older, drop
 }
 
 // RestoreState downloads the published state into dir, checking every file against the

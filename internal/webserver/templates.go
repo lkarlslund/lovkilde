@@ -415,6 +415,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 .newkey { font: 1.05rem/1.4 ui-monospace, monospace; padding: .5rem .7rem; background: var(--band); border-radius: 6px; user-select: all; overflow-wrap: anywhere; }
 .keyform { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: .7rem 0; }
 .keyform input { min-width: min(22rem, 100%); }
+.update.needed { border-color: var(--amber); }
 .update { margin: 1rem 0; padding: .7rem 1rem; border: 1px solid var(--accent); border-left-width: 6px; border-radius: 6px; background: var(--panel); }
 .terms { max-width: 46rem; margin: 1.5rem auto; padding: 1.5rem 1.75rem; border: 3px solid var(--red); border-radius: 10px; background: var(--panel); }
 .terms h1 { color: var(--red); margin-top: 0; }
@@ -432,8 +433,9 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 {{block "headsearch" .}}<form class="joined" method="get" action="/search" role="search"><input type="search" name="q" placeholder="Søg i lovgivningen" aria-label="Søg" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
 <nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/indstillinger">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a></nav>
 </div></header>
-<main class="wrap">{{with softwareUpdate}}<p class="update" role="status"><b>Ny version af retsin:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
-<a href="{{.URL}}">Se og hent den på GitHub</a>. Serveren opdaterer ikke sig selv; det er op til den, der driver den, at installere den nye version.</p>{{end}}
+<main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér retsin for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
+{{else}}<b>Ny version af retsin:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
+{{end}}{{with .URL}}<a href="{{.}}">Se og hent den på GitHub</a>. {{end}}Serveren opdaterer ikke sig selv; det er op til den, der driver den, at installere den nye version.</p>{{end}}
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar

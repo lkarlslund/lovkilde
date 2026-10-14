@@ -1,11 +1,19 @@
 # The daily server build: retsin for Linux, macOS and Windows on amd64 and arm64, published as
 # the rolling "nightly" GitHub release (its tag moves to the commit built). A day with no new
 # commit builds nothing.
+#
+# A build is published only once the Hugging Face dataset holds an artifact in the document model
+# it reads (compiled.ModelVersion): a program that changes the model would otherwise reach servers
+# before any data it can read, and refuse to start on the artifact they have. It also runs after
+# each dataset release, so a build waiting for its model follows the release that publishes it.
 name: Server builds
 
 on:
   schedule:
     - cron: "41 2 * * *" # daily 02:41 UTC, before the dataset release
+  workflow_run:
+    workflows: ["Hugging Face release"]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -30,24 +38,42 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           built="$(git rev-parse -q --verify 'refs/tags/nightly^{commit}' || true)"
-          if [ "$built" = "$GITHUB_SHA" ] && [ "$GITHUB_EVENT_NAME" = schedule ]; then
+          if [ "$built" = "$GITHUB_SHA" ] && [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
             echo "nightly is $built already"
             echo "build=false" >> "$GITHUB_OUTPUT"
           else
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/setup-go@v6
+      - name: Is the dataset in this build's document model published?
+        id: model
         if: steps.new.outputs.build == 'true'
+        env:
+          HF_REPO: ${{ secrets.HF_REPO }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          model="$(sed -n 's/^const ModelVersion = \([0-9]*\)$/\1/p' internal/compiled/model.go)"
+          repo="${HF_REPO#hf://}"
+          published="$(curl -fsSL ${HF_TOKEN:+-H "Authorization: Bearer $HF_TOKEN"} \
+            "https://huggingface.co/datasets/$repo/resolve/main/latest.json" | jq -c '[.model] + [.older[]?.model]')"
+          echo "this build reads document model $model; the dataset publishes models $published"
+          if jq -e --argjson m "$model" 'index($m) != null' <<<"$published" >/dev/null; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Not published: no dataset in document model $model yet. The build follows the dataset release that publishes it."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-go@v6
+        if: steps.model.outputs.publish == 'true'
         with:
           go-version-file: go.mod
       - name: Test
-        if: steps.new.outputs.build == 'true'
+        if: steps.model.outputs.publish == 'true'
         run: go test ./...
       - name: Build
-        if: steps.new.outputs.build == 'true'
+        if: steps.model.outputs.publish == 'true'
         run: scripts/build-server.sh dist
       - name: Publish the nightly release
-        if: steps.new.outputs.build == 'true'
+        if: steps.model.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

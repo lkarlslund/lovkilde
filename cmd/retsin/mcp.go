@@ -17,6 +17,7 @@ import (
 
 	"github.com/lkarlslund/retsinformation/internal/artifactdir"
 	"github.com/lkarlslund/retsinformation/internal/checks"
+	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/config"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
 	"github.com/lkarlslund/retsinformation/internal/release"
@@ -76,7 +77,16 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 		}
 	}
 	srv := newServingServer(cfg, o)
-	if err := srv.UseArtifact(artifact, int64(o.ArtifactCacheMB)<<20); err != nil {
+	err = srv.UseArtifact(artifact, int64(o.ArtifactCacheMB)<<20)
+	if follow && errors.Is(err, compiled.ErrOtherModel) {
+		// An upgraded program finding the artifact of the model it read before: it fetches the
+		// published artifact of its own model, or says what it is waiting for.
+		slog.Info("the current artifact is of another document model; fetching the published one this version reads", "path", artifact, "reads", compiled.ModelVersion)
+		if artifact, err = downloadMissing(ctx, cfg.DataDir, o.Release); err == nil {
+			err = srv.UseArtifact(artifact, int64(o.ArtifactCacheMB)<<20)
+		}
+	}
+	if err != nil {
 		return nil, nil, err
 	}
 	slog.Info("serving document text from the compiled artifact", "path", artifact)
@@ -151,7 +161,22 @@ func logTransfer(t release.Transfer) {
 func checkDataset(ctx context.Context, dataDir string, from release.Repo) checks.Outcome {
 	res, err := release.FetchArtifact(ctx, from, dataDir)
 	_ = release.MarkChecked(dataDir)
+	// Data in a newer document model needs a newer program first. The server keeps the artifact
+	// it has — the last one of its own model — and says so; it never installs what it cannot read.
+	const needsUpgrade = "Der er udgivet nye lovtekster i et nyere format, som kræver en nyere version af programmet. Serveren bruger fortsat sine nuværende tekster, indtil programmet er opdateret."
 	switch {
+	case errors.Is(err, release.ErrProgramTooOld):
+		slog.Warn("the published artifact needs a newer version of retsin", "model", res.Newer, "reads", compiled.ModelVersion)
+		return checks.Outcome{Summary: needsUpgrade, Upgrade: true}
+	case err == nil && res.Newer > 0:
+		if res.Installed {
+			logTransfer(res.Transfer)
+		}
+		slog.Warn("the published artifact needs a newer version of retsin; keeping the last one of this version's model", "model", res.Newer, "reads", compiled.ModelVersion, "path", res.Path)
+		return checks.Outcome{Summary: needsUpgrade, Upgrade: true}
+	case errors.Is(err, release.ErrDataTooOld):
+		slog.Info("no published artifact of this version's document model yet", "reads", compiled.ModelVersion)
+		return checks.Outcome{Summary: "Denne version af programmet læser et nyere format af lovteksterne, end der er udgivet endnu. Serveren bruger fortsat sine nuværende tekster, indtil udgivelsen kommer."}
 	case err != nil:
 		slog.Warn("checking for a newer published artifact failed", "release", from.String(), "err", err)
 		return checks.Outcome{Err: err.Error()}

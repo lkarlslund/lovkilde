@@ -1870,6 +1870,19 @@ The manifest's document model is checked before downloading, so a binary never f
 artifact it would refuse; the size and SHA-256 after, and the artifact's own header before it
 becomes current.
 
+**A new document model needs the program first.** An artifact records the document model it
+holds, and a program reads one model. When a release moves to a new model, the last artifact of
+the old one stays published beside it (`older` in `latest.json`, for the two models before), so:
+
+- a server whose program reads the old model keeps that artifact, or installs it on a fresh
+  data directory, and every page says that new texts need a newer version of retsin; it never
+  installs data it cannot read;
+- an upgraded program that finds the old model's artifact on disk fetches the one of its own
+  model at startup;
+- the nightly build of a program in a new model is published only once the dataset holds that
+  model, and the build runs again after every dataset release, so a program never reaches a
+  server before data it can read.
+
 **A snapshot is a release in a directory**, so an incremental collection can be run from the
 same starting point as often as needed, the way a fresh runner would.
 

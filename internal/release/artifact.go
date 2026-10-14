@@ -31,8 +31,20 @@ type Installed struct {
 	Manifest  Manifest
 	Path      string // the installed artifact, or the current one when nothing was downloaded
 	Installed bool   // false when the current artifact is already the published one
+	// Newer is the document model of published data this program cannot read, 0 when there is
+	// none: the latest release needs a newer program, and until it is upgraded the server keeps
+	// the last artifact of its own model.
+	Newer int
 	Transfer
 }
+
+// ErrProgramTooOld is published data that needs a newer program, with none of this program's
+// model published beside it.
+var ErrProgramTooOld = errors.New("the published data needs a newer version of retsin")
+
+// ErrDataTooOld is a program newer than every published artifact: the release with its model is
+// not out yet.
+var ErrDataTooOld = errors.New("no published artifact is of the document model this version of retsin reads yet")
 
 // Transfer says how the downloaded files came to be on disk.
 type Transfer struct {
@@ -58,31 +70,41 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 		return Installed{}, err
 	}
 	out := Installed{Manifest: m}
-	switch {
-	case m.File == "":
+	if m.File == "" {
 		return out, fmt.Errorf("the release in %s holds no artifact", r)
-	case !strings.HasSuffix(m.File, artifactdir.Ext) || strings.Contains(m.File, "/"):
-		return out, fmt.Errorf("the release in %s names %q, which is not an artifact file name", r, m.File)
-	case m.Model != compiled.ModelVersion:
-		return out, fmt.Errorf("the published artifact %s holds document model %d and this binary reads model %d: upgrade retsin", m.File, m.Model, compiled.ModelVersion)
 	}
-	if cur, err := artifactdir.Current(dataDir); err == nil && filepath.Base(cur) == m.File {
+	// The artifact this program reads: the latest one, or the last one of its own model when the
+	// latest needs a newer program. The model is checked before anything is downloaded.
+	ref, ok, newer := m.For(compiled.ModelVersion)
+	out.Newer = newer
+	switch {
+	case !ok && newer > 0:
+		return out, fmt.Errorf("the published artifact %s holds document model %d and this version of retsin reads model %d: upgrade retsin: %w", m.File, m.Model, compiled.ModelVersion, ErrProgramTooOld)
+	case !ok:
+		return out, fmt.Errorf("the published artifact %s holds document model %d and this version of retsin reads model %d, which is not published yet: %w", m.File, m.Model, compiled.ModelVersion, ErrDataTooOld)
+	case !strings.HasSuffix(ref.Path, artifactdir.Ext) || strings.Contains(ref.Path, "/"):
+		return out, fmt.Errorf("the release in %s names %q, which is not an artifact file name", r, ref.Path)
+	}
+	if cur, err := artifactdir.Current(dataDir); err == nil && filepath.Base(cur) == ref.Path {
 		out.Path = cur
 		return out, nil
 	}
 	if err := os.MkdirAll(artifactdir.Dir(dataDir), 0o755); err != nil {
 		return out, err
 	}
-	if have := filepath.Join(artifactdir.Dir(dataDir), m.File); fileExists(have) {
+	if have := filepath.Join(artifactdir.Dir(dataDir), ref.Path); fileExists(have) {
 		// Downloaded before and since replaced, or installed by hand: verified when it was installed.
-		if err := artifactdir.SetCurrent(dataDir, m.File); err != nil {
+		if err := checkModel(have); err != nil {
+			return out, err
+		}
+		if err := artifactdir.SetCurrent(dataDir, ref.Path); err != nil {
 			return out, err
 		}
 		out.Path, out.Installed = have, true
 		return out, nil
 	}
-	part := filepath.Join(artifactdir.Dir(dataDir), m.File+artifactdir.PartExt)
-	t, err := downloadArtifact(ctx, r, FileRef{Path: m.File, Size: m.Size, SHA256: m.SHA256}, part)
+	part := filepath.Join(artifactdir.Dir(dataDir), ref.Path+artifactdir.PartExt)
+	t, err := downloadArtifact(ctx, r, ref, part)
 	out.add(t)
 	if err != nil {
 		return out, err
@@ -97,10 +119,10 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 		return out, err
 	}
 	out.Path, out.Installed = path, true
-	if filepath.Base(path) != m.File {
+	if filepath.Base(path) != ref.Path {
 		// The header names the file; a manifest naming it otherwise is a publishing slip, and the
 		// next check would download it again. Say so rather than loop quietly.
-		return out, fmt.Errorf("installed %s, but the manifest calls it %s", filepath.Base(path), m.File)
+		return out, fmt.Errorf("installed %s, but the manifest calls it %s", filepath.Base(path), ref.Path)
 	}
 	return out, nil
 }

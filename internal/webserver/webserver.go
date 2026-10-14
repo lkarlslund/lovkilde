@@ -71,17 +71,29 @@ func New(srv *mcpserver.Server) *Handler {
 	return h
 }
 
-// softwareUpdate is the notice every page shows while a newer build is published, or nil.
+// softwareUpdate is the notice every page shows while a newer build is published, or while the
+// published data needs one, or nil. The second is shown whatever the software check is set to:
+// the server is no longer receiving new texts until it is upgraded.
 func (h *Handler) softwareUpdate() *softwareNotice {
-	st, ok := h.Checks.State(checks.Software)
-	if !ok || h.Software == nil || st.Last.Newer == 0 {
+	n := &softwareNotice{}
+	if h.Software != nil {
+		n.URL = h.Software.URL()
+	}
+	if st, ok := h.Checks.State(checks.Dataset); ok && st.Last.Upgrade {
+		n.Data = true
+	}
+	if st, ok := h.Checks.State(checks.Software); ok && h.Software != nil {
+		n.Behind = st.Last.Newer
+	}
+	if !n.Data && n.Behind == 0 {
 		return nil
 	}
-	return &softwareNotice{Behind: st.Last.Newer, URL: h.Software.URL()}
+	return n
 }
 
 type softwareNotice struct {
 	Behind int
+	Data   bool // the published data needs a newer program
 	URL    string
 }
 

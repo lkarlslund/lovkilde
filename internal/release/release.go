@@ -82,10 +82,39 @@ type Manifest struct {
 	SHA256 string `json:"sha256"`
 	Model  int    `json:"model"`
 	// Documents is how many documents the artifact holds, for the dataset card.
-	Documents int       `json:"documents,omitempty"`
-	State     []FileRef `json:"state,omitempty"`
-	XML       []Pack    `json:"xml,omitempty"`
-	Published time.Time `json:"published"`
+	Documents int `json:"documents,omitempty"`
+	// Older is the last artifact of each earlier document model, kept published when a release
+	// moves to a new one: a server whose program reads an older model keeps an artifact it can
+	// read — no longer updated — until it is upgraded, and says that newer data needs a newer
+	// program. Newest model first.
+	Older     []ModelArtifact `json:"older,omitempty"`
+	State     []FileRef       `json:"state,omitempty"`
+	XML       []Pack          `json:"xml,omitempty"`
+	Published time.Time       `json:"published"`
+}
+
+// ModelArtifact is a published artifact of one document model.
+type ModelArtifact struct {
+	Model int `json:"model"`
+	FileRef
+}
+
+// For is the published artifact a program reading model reads: the latest one when it is of that
+// model, otherwise the last one of that model kept in Older. Newer is the model of the latest
+// artifact when it is newer than model: data this program cannot read until it is upgraded.
+func (m Manifest) For(model int) (ref FileRef, ok bool, newer int) {
+	if m.Model > model {
+		newer = m.Model
+	}
+	if m.File != "" && m.Model == model {
+		return FileRef{Path: m.File, Size: m.Size, SHA256: m.SHA256}, true, newer
+	}
+	for _, o := range m.Older {
+		if o.Model == model {
+			return o.FileRef, true, newer
+		}
+	}
+	return FileRef{}, false, newer
 }
 
 // FileRef is a published file and what it must be.
@@ -127,6 +156,9 @@ func Latest(ctx context.Context, r Repo) (Manifest, error) {
 		return m, fmt.Errorf("%s in %s names %q, which is not a file in it", ManifestFile, r, m.File)
 	}
 	refs := slices.Clone(m.State)
+	for _, o := range m.Older {
+		refs = append(refs, o.FileRef)
+	}
 	for _, p := range m.XML {
 		refs = append(refs, p.FileRef)
 	}

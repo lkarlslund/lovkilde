@@ -87,6 +87,8 @@ type Outcome struct {
 	// Newer is how many changes a newer published version holds that this one does not, for a
 	// check that only reports one rather than installing it.
 	Newer int `json:"newer,omitempty"`
+	// Upgrade says the check found published data that needs a newer program than this one.
+	Upgrade bool `json:"upgrade,omitempty"`
 }
 
 // State is a check as a page shows it.

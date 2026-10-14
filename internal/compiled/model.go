@@ -1,6 +1,13 @@
 package compiled
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrOtherModel is an artifact holding another document model than this program reads: a newer
+// program, or an artifact of the model it reads, is the way out.
+var ErrOtherModel = errors.New("the artifact holds another document model")
 
 // ModelVersion names the document model the artifact stores: what a document compiles to, not
 // which commit compiled it. A server reads an artifact whose model version is its own, whatever
@@ -29,9 +36,9 @@ func (a *Artifact) checkModel(reads int) error {
 		return nil
 	}
 	if a.Header.Model < reads {
-		return fmt.Errorf("%s holds document model %d, and this server reads model %d: the way documents compile has changed since it was built. Rebuild it with `retsin-update artifact build`",
-			a.path, a.Header.Model, reads)
+		return fmt.Errorf("%s holds document model %d, and this server reads model %d: the way documents compile has changed since it was built. Rebuild it with `retsin-update artifact build`: %w",
+			a.path, a.Header.Model, reads, ErrOtherModel)
 	}
-	return fmt.Errorf("%s holds document model %d, newer than the model %d this server reads. Rebuild and restart the server, since it would decode the artifact's documents as a model it does not have",
-		a.path, a.Header.Model, reads)
+	return fmt.Errorf("%s holds document model %d, newer than the model %d this server reads. Rebuild and restart the server, since it would decode the artifact's documents as a model it does not have: %w",
+		a.path, a.Header.Model, reads, ErrOtherModel)
 }

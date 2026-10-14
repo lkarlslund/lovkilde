@@ -73,3 +73,29 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 		t.Errorf("the page does not say a newer build is out:\n%s", body)
 	}
 }
+
+// Published data the program cannot read puts the upgrade notice on every page, whatever the
+// software check is set to: the server gets no new texts until it is upgraded.
+func TestDataNeedingANewerProgramIsNoticedOnEveryPage(t *testing.T) {
+	chk := checks.Open(t.TempDir())
+	chk.Add(checks.Dataset, checks.Off, time.Time{}, func(context.Context) checks.Outcome {
+		return checks.Outcome{Upgrade: true, Summary: "kræver en nyere version"}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go chk.Run(ctx)
+	chk.Now(checks.Dataset)
+	for i := 0; i < 200; i++ {
+		if s, _ := chk.State(checks.Dataset); s.Last.Upgrade {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	h := New(newTestServer(t, false))
+	h.Checks = chk
+	site := httptest.NewServer(h)
+	defer site.Close()
+	if body, _ := get(t, site, "/browse"); !strings.Contains(body, "Opdatér retsin for at få nye lovtekster") {
+		t.Errorf("no upgrade notice:\n%s", body)
+	}
+}
