@@ -209,6 +209,7 @@ func parseTemplates(handlerFuncs template.FuncMap) map[string]*template.Template
 		"terms":    termsBody,
 		"status":   statusBody,
 		"settings": settingsBody,
+		"access":   accessBody,
 	}
 	out := make(map[string]*template.Template, len(pages))
 	for name, body := range pages {
@@ -400,6 +401,11 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 .check .outcome { margin: .5rem 0 .8rem; }
 .check .bad { color: var(--red); }
 .actions { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
+.warnsign { color: var(--amber); font-weight: 700; margin-left: .25rem; text-decoration: none; display: inline-block; }
+.panel.exposed { border: 2px solid var(--amber); }
+.newkey { font: 1.05rem/1.4 ui-monospace, monospace; padding: .5rem .7rem; background: var(--band); border-radius: 6px; user-select: all; overflow-wrap: anywhere; }
+.keyform { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: .7rem 0; }
+.keyform input { min-width: min(22rem, 100%); }
 .update { margin: 1rem 0; padding: .7rem 1rem; border: 1px solid var(--accent); border-left-width: 6px; border-radius: 6px; background: var(--panel); }
 .terms { max-width: 46rem; margin: 1.5rem auto; padding: 1.5rem 1.75rem; border: 3px solid var(--red); border-radius: 10px; background: var(--panel); }
 .terms h1 { color: var(--red); margin-top: 0; }
@@ -415,7 +421,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 <header class="site"><div class="wrap">
 <a class="brand" href="/"><svg class="seal" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="15.5" fill="var(--accent)"/><circle cx="16" cy="16" r="12.6" fill="none" stroke="var(--wash)" stroke-width=".9" stroke-dasharray="1.6 1.1"/><text x="16" y="22.6" text-anchor="middle" font-family="Georgia,Times New Roman,serif" font-size="19" font-weight="700" fill="var(--wash)">§</text></svg><span>Retsinformation<span class="mcp">-MCP</span></span></a>
 {{block "headsearch" .}}<form class="joined" method="get" action="/search" role="search"><input type="search" name="q" placeholder="Søg i lovgivningen" aria-label="Søg" autocomplete="off"><button type="submit">Søg</button></form>{{end}}
-<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/indstillinger">Indstillinger</a></nav>
+<nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/indstillinger">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a></nav>
 </div></header>
 <main class="wrap">{{with softwareUpdate}}<p class="update" role="status"><b>Ny version af retsin:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
 <a href="{{.URL}}">Se og hent den på GitHub</a>. Serveren opdaterer ikke sig selv; det er op til den, der driver den, at installere den nye version.</p>{{end}}
@@ -641,4 +647,29 @@ const settingsBody = `{{define "extrahead"}}{{if .Running}}<meta http-equiv="ref
 {{if not .Software}}<p class="note">Denne version af programmet ved ikke, hvilken kode den er bygget fra, og kan derfor ikke tjekke for nyere versioner.</p>{{end}}
 {{if .Checks}}<div class="actions"><button type="submit">Gem</button></div>{{end}}
 </form>
+{{if .CanKey}}<form method="post" action="/indstillinger" autocomplete="off"><section class="panel check{{if and .Exposed (not .KeySet)}} exposed{{end}}" id="noegle"><h2>{{if and .Exposed (not .KeySet)}}<span class="warnsign" aria-hidden="true">⚠</span> {{end}}API-nøgle</h2>
+{{if .Exposed}}<p>Serveren lytter ikke kun på denne maskine, men kan nås fra netværket.{{if not .KeySet}} <b>Uden en API-nøgle kan alle, der kan nå den, bruge den og ændre disse indstillinger.</b>{{end}}</p>
+{{else}}<p>Serveren lytter kun på denne maskine.</p>{{end}}
+<p>En API-nøgle er altid valgfri. Er der sat en, svarer serveren kun dem, der kender den: en browser bliver bedt om nøglen én gang, og et program eller en MCP-klient sender den som <code>Authorization: Bearer &lt;nøgle&gt;</code>. Kun nøglens hash gemmes på serveren.</p>
+{{with .Problem}}<p class="bad"><b>{{.}}</b></p>{{end}}
+{{with .Made}}<p><b>Den nye nøgle vises kun denne ene gang — gem den nu:</b></p><p class="newkey">{{.}}</p>{{end}}
+<p class="outcome">{{if .KeySet}}Der er sat en API-nøgle.{{else}}Der er ingen API-nøgle; serveren svarer alle.{{end}}</p>
+<div class="keyform"><input type="password" name="ny_noegle" minlength="{{.MinKey}}" placeholder="Ny nøgle, mindst {{.MinKey}} tegn" aria-label="Ny API-nøgle" autocomplete="new-password">
+<button type="submit" name="noegle" value="gem">Brug denne nøgle</button></div>
+<div class="actions"><button type="submit" name="noegle" value="lav" formnovalidate>Lav en tilfældig nøgle</button>
+{{if .KeySet}}<button type="submit" name="noegle" value="fjern" formnovalidate>Fjern nøglen</button>{{end}}</div>
+</section></form>{{end}}
+{{end}}`
+
+const accessBody = `{{define "headsearch"}}{{""}}{{end}}{{define "content"}}
+<section class="terms" aria-labelledby="access-title">
+<h1 id="access-title">API-nøgle</h1>
+<p>Denne server kræver en API-nøgle. Spørg den, der driver serveren, om nøglen.</p>
+<form method="post" action="/adgang">
+<input type="hidden" name="next" value="{{.Next}}">
+{{if .Wrong}}<p class="warn">Nøglen passer ikke.</p>{{end}}
+<div class="keyform"><input type="password" name="noegle" required autofocus aria-label="API-nøgle" autocomplete="current-password">
+<button type="submit">Fortsæt</button></div>
+</form>
+</section>
 {{end}}`

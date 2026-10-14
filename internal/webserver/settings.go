@@ -3,6 +3,7 @@ package webserver
 import (
 	"net/http"
 
+	"github.com/lkarlslund/retsinformation/internal/apikey"
 	"github.com/lkarlslund/retsinformation/internal/checks"
 )
 
@@ -34,9 +35,15 @@ func (h *Handler) checkViews() []checkView {
 }
 
 // settings shows how often each check runs and when it last did, and takes a new interval or a
-// request to check now.
+// request to check now; it also sets, makes or removes the API key.
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost && h.Checks != nil {
+	var made, problem string
+	if action := r.PostFormValue("noegle"); r.Method == http.MethodPost && action != "" {
+		if made, problem = h.keyAction(w, r, action); made == "" && problem == "" {
+			http.Redirect(w, r, settingsPath, http.StatusSeeOther)
+			return
+		}
+	} else if r.Method == http.MethodPost && h.Checks != nil {
 		if name := r.PostFormValue("tjek"); name != "" {
 			h.Checks.Now(name)
 		} else {
@@ -62,5 +69,11 @@ func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 		"Checks":    views,
 		"Running":   running,
 		"Software":  h.Checks.Has(checks.Software),
+		"Exposed":   h.Exposed,
+		"KeySet":    h.Key.Enabled(),
+		"CanKey":    h.Key != nil,
+		"MinKey":    apikey.MinLength,
+		"Made":      made,
+		"Problem":   problem,
 	})
 }

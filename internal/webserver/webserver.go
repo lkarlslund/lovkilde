@@ -13,7 +13,10 @@
 //	/dok              one document: table of contents, text, related acts
 //	/browse           a listing by type and year
 //	/status           what is served and how current it is; plain text for curl
-//	/indstillinger    how often the server checks for a newer dataset and software, and "check now"
+//	/indstillinger    how often the server checks for a newer dataset and software, "check now",
+//	                  and the optional API key
+//	/adgang           where a browser gives the API key, while one is set; nothing else answers
+//	                  without it
 //	/vilkaar          the terms of use, which a browser accepts before any other page answers
 //	/mcp              the MCP endpoint, so one port serves both audiences; it asks for the terms
 //	                  through its own tool
@@ -31,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lkarlslund/retsinformation/internal/apikey"
 	"github.com/lkarlslund/retsinformation/internal/checks"
 	"github.com/lkarlslund/retsinformation/internal/disclaimer"
 	"github.com/lkarlslund/retsinformation/internal/mcpserver"
@@ -52,12 +56,18 @@ type Handler struct {
 	// has found one, every page says so. It only tells: upgrading is the operator's decision.
 	Checks   *checks.Checks
 	Software *softwareupdate.Checker
+
+	// Key is the optional API key, set on the settings page; while one is set, nothing but the
+	// key page answers without it. Exposed says the server listens beyond this machine, which
+	// puts a warning next to the settings link for as long as no key is set.
+	Key     *apikey.Key
+	Exposed bool
 }
 
 // New returns the handler for a server that already has its archive, index, and artifact.
 func New(srv *mcpserver.Server) *Handler {
 	h := &Handler{srv: srv}
-	h.tmpl = parseTemplates(template.FuncMap{"softwareUpdate": h.softwareUpdate})
+	h.tmpl = parseTemplates(template.FuncMap{"softwareUpdate": h.softwareUpdate, "exposedWithoutKey": h.exposedWithoutKey})
 	return h
 }
 
@@ -77,6 +87,14 @@ type softwareNotice struct {
 
 // ServeHTTP routes the paths documented on the package.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == accessPath {
+		h.access(w, r)
+		return
+	}
+	if !h.authorized(r) {
+		h.requireKey(w, r)
+		return
+	}
 	switch r.URL.Path {
 	case termsPath:
 		h.terms(w, r)

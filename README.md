@@ -1384,9 +1384,16 @@ means a document cannot run anything in the browser that reads it, only say thin
 | `/browse` | everything the mirror holds, by kind, year and initial letter, 200 at a time |
 | `/dok?ref=` | the text, with a table of contents in front. `ref` is an ELI path or an accession; `&addr=§ 5, stk. 2` shows one provision inside the whole |
 | `/status` | what is served and how current it is, the scheduled checks, and the full disclaimer; plain text for curl |
-| `/indstillinger` | how often the server checks for a newer dataset and a newer build of itself (daily, weekly, monthly or off), and a button to check now |
+| `/indstillinger` | how often the server checks for a newer dataset and a newer build of itself (daily, weekly, monthly or off), a button to check now, and the optional API key |
+| `/adgang` | where a browser gives the API key, while one is set |
 | `/vilkaar` | the terms of use, accepted once per browser before any other page answers |
 | `/mcp` | the MCP endpoint — an agent and a person get the same text out of the same process |
+
+**An API key is optional.** Set one on `/indstillinger` (type your own, at least 16 characters,
+or let the server make one and show it once) and nothing but `/adgang` answers without it: a
+browser is asked for it once, and an MCP client or `curl` sends `Authorization: Bearer <key>`.
+Only its SHA-256 is kept, in `<data-dir>/apikey`. A server listening on anything but loopback
+shows ⚠ next to "Indstillinger" for as long as no key is set.
 
 **Everything naming a document is a link, and the link carries its address.** Three kinds:
 

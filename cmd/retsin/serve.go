@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/lkarlslund/retsinformation/internal/apikey"
 	"github.com/lkarlslund/retsinformation/internal/checks"
 	"github.com/lkarlslund/retsinformation/internal/compiled"
 	"github.com/lkarlslund/retsinformation/internal/config"
@@ -87,6 +88,7 @@ unreadable stops it.`,
 			go chk.Run(cmd.Context())
 			web := webserver.New(srv)
 			web.Checks, web.Software = chk, software
+			web.Key, web.Exposed = apikey.Open(cfg.DataDir), exposedAddr(addr)
 			service, err := startServer(cmd.Context(), addr, web, verbose)
 			if err != nil {
 				return err
@@ -140,6 +142,29 @@ func addSoftwareCheck(chk *checks.Checks) *softwareupdate.Checker {
 		return checks.Outcome{Summary: "Denne version er den nyeste udgivne."}
 	})
 	return sw
+}
+
+// exposedAddr says whether a listen address reaches beyond this machine: anything but a loopback
+// address does, including every interface (":8787", "0.0.0.0:8787") and a name that does not
+// resolve to loopback alone.
+func exposedAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil || host == "" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return !ip.IsLoopback()
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return true
+	}
+	for _, ip := range ips {
+		if !ip.IsLoopback() {
+			return true
+		}
+	}
+	return false
 }
 
 // httpService is a running HTTP server this process can wait for and report honestly.
