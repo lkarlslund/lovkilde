@@ -65,15 +65,16 @@ func switchToNewer(dataDir string) error {
 	return nil
 }
 
-// newerProgram is the newest downloaded build, when it is newer than this one and this one is a
-// published build: one from uncommitted files, or one that does not know its commit, stays itself.
+// newerProgram is the newest downloaded build, when it is newer than this one, is not this one's
+// own file, and this one is a published build: one from uncommitted files, or one that does not
+// know its commit, stays itself.
 func newerProgram(dataDir string) (string, softwareupdate.Stamp, bool) {
 	current, ok := compiled.CurrentBuild()
 	if !ok || current.Modified {
 		return "", softwareupdate.Stamp{}, false
 	}
 	path, stamp, ok := softwareupdate.Newest(softwareupdate.Dir(dataDir))
-	if !ok || !stamp.Time.After(current.Time) {
+	if !ok || !stamp.Time.After(current.Time) || isRunning(path) {
 		return "", softwareupdate.Stamp{}, false
 	}
 	return path, stamp, true
@@ -94,7 +95,7 @@ func watchProgram(ctx context.Context, dataDir string, every time.Duration) stri
 		case <-tick.C:
 		}
 		path, _, ok := newerProgram(dataDir)
-		if !ok || path == refused || isRunning(path) {
+		if !ok || path == refused {
 			continue
 		}
 		if err := answersVersion(ctx, path); err != nil {
@@ -110,7 +111,7 @@ func watchProgram(ctx context.Context, dataDir string, every time.Duration) stri
 }
 
 // isRunning says whether path is this program's own file: a build whose name claims a later commit
-// than the build records would otherwise restart as itself every time it looked.
+// than the build records would otherwise switch to itself every time it started or looked.
 func isRunning(path string) bool {
 	self, err := os.Executable()
 	if err != nil {
