@@ -57,7 +57,7 @@ func TestDownloadKeepsTheBuildNamedForItsStamp(t *testing.T) {
 	readStamp = func(string) (Stamp, error) { return stamp, nil }
 
 	dir := t.TempDir()
-	older := filepath.Join(dir, programName(Stamp{Revision: "fedcba987654", Time: stamp.Time.Add(-time.Hour)}))
+	older := filepath.Join(dir, ProgramName(Stamp{Revision: "fedcba987654", Time: stamp.Time.Add(-time.Hour)}))
 	os.WriteFile(older, []byte("old build"), 0o755)
 
 	c := &Checker{DownloadBase: srv.URL}

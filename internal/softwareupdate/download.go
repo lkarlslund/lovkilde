@@ -155,7 +155,7 @@ func (c *Checker) Download(ctx context.Context, dir, tag string) (string, Stamp,
 	if err != nil {
 		return "", Stamp{}, fmt.Errorf("%s: %w", asset, err)
 	}
-	dest := filepath.Join(dir, programName(stamp))
+	dest := filepath.Join(dir, ProgramName(stamp))
 	if _, err := os.Stat(dest); err == nil {
 		return dest, stamp, nil
 	}
@@ -208,8 +208,8 @@ const stampLayout = "20060102T150405Z"
 // Dir is where downloaded builds are kept in a data directory.
 func Dir(dataDir string) string { return filepath.Join(dataDir, "program") }
 
-// programName is a kept program's file name: lovkilde-<commit time>-<revision>.
-func programName(s Stamp) string {
+// ProgramName is a kept program's file name: lovkilde-<commit time>-<revision>.
+func ProgramName(s Stamp) string {
 	name := "lovkilde-" + s.Time.UTC().Format(stampLayout) + "-" + s.short()
 	if runtime.GOOS == "windows" {
 		name += ".exe"

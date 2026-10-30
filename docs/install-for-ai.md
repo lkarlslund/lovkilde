@@ -91,18 +91,18 @@ Then `systemctl --user daemon-reload && systemctl --user enable --now lovkilde`.
 set to the program's path, `serve`, `--no-browser`, and `RunAtLoad` and `KeepAlive` set to true.
 Then `launchctl load ~/Library/LaunchAgents/dk.lovkilde.plist`.
 
-**Windows:** create a scheduled task that runs at the user's logon:
+**Windows:** install it as a Windows service, from a prompt running as administrator (the user
+has to approve that):
 
 ```powershell
-$exe = "$env:LOCALAPPDATA\Programs\lovkilde\lovkilde.exe"
-Register-ScheduledTask -TaskName Lovkilde -Trigger (New-ScheduledTaskTrigger -AtLogOn) `
-  -Action (New-ScheduledTaskAction -Execute $exe -Argument "serve --no-browser") `
-  -Settings (New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan))
-Start-ScheduledTask -TaskName Lovkilde
+& "$env:LOCALAPPDATA\Programs\lovkilde\lovkilde.exe" service install
 ```
 
-Do not run it as a Windows service through a wrapper such as NSSM: when the user updates the
-program, Lovkilde restarts itself as a new process, which such a wrapper does not follow.
+It copies itself into `%USERPROFILE%\.lovkilde\program`, starts at boot, starts again if it
+fails, and logs to `%USERPROFILE%\.lovkilde\lovkilde.log`. `lovkilde service uninstall` removes
+it. Use this rather than a service wrapper such as NSSM: when the user updates the program, the
+service switches to the new build through the service manager, which a wrapper does not
+follow.
 
 Without any of these, the user starts Lovkilde themselves; on Windows by double-clicking it.
 

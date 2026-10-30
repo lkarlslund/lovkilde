@@ -102,6 +102,22 @@ begge og huskes, også når serveren genstartes. Ændres vilkårene, skal de acc
 | `/eula` | Vilkårene for brug |
 | `/mcp` | MCP-serveren |
 
+## Start automatisk
+
+**Windows:** Kør i en kommandoprompt som administrator:
+
+```
+lovkilde service install
+```
+
+Så kører Lovkilde som Windows-tjeneste, starter med computeren og genstarter, hvis den stopper.
+Programmet kopieres til `.lovkilde\program`, så det ikke afhænger af din download-mappe, og loggen
+ligger i `.lovkilde\lovkilde.log`. `--addr` vælger adressen. `lovkilde service uninstall` fjerner
+tjenesten igen; data bliver liggende.
+
+**Linux og macOS:** Brug systemd eller launchd; [vejledningen til AI-assistenter](docs/install-for-ai.md)
+viser hvordan.
+
 ## På netværket
 
 Som standard lytter Lovkilde kun på denne maskine. Sådan gør du den tilgængelig for andre:
@@ -150,6 +166,8 @@ lovkilde artifact download   hent det udgivne datasæt
 lovkilde artifact check      kan denne version læse datasættet på disken?
 lovkilde program check       er der udgivet en nyere version af programmet?
 lovkilde program download    hent den; en kørende server genstarter med den
+lovkilde service install     Windows: kør som tjeneste, der starter med computeren
+lovkilde service uninstall   fjern tjenesten igen
 ```
 
 Vigtige flag til `serve` og `mcp`: `--data-dir`, `--addr` og `--no-browser` (kun `serve`), `--max-chars` (længste

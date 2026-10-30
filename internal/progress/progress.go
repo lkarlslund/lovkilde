@@ -36,6 +36,14 @@ func NewGate(w io.Writer) *Gate {
 	return &Gate{w: w}
 }
 
+// SetOutput sends everything from now on to w: a Windows service has no console, so its log
+// goes to a file.
+func (g *Gate) SetOutput(w io.Writer) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.w, g.barLive = w, false
+}
+
 // Writer returns a writer for one source. Give the bar BarWriter() and the
 // logger LogWriter(); sharing a single writer would lose the distinction this
 // exists to enforce.

@@ -35,6 +35,10 @@ var gate = cli.Gate
 var prof = &cli.Profiler{}
 
 func main() {
+	if args, ok := serviceArgs(); ok {
+		runService(args)
+		return
+	}
 	err := newRootCmd().Execute()
 	prof.Finish()
 	if err != nil {
@@ -89,6 +93,8 @@ lookup by ELI path or accession, laws as of a date, and full-text search.
                       say whether a newer build of this program is published
   lovkilde program download
                       download it; lovkilde runs the newest downloaded build from then on
+  lovkilde service install
+                      Windows: run lovkilde serve as a service, started at boot
 
 The artifact is everything this reads: the catalogue, each document's model and each
 amending act's changes. It is made by lovkilde-update, which collects the documents from
@@ -101,7 +107,8 @@ Data layout:
   <data-dir>/artifact.checked               when the published artifact was last looked for
   <data-dir>/settings.json                  the settings page's choices, the API key's hash and
                                             the acceptance of the terms
-  <data-dir>/program/                       newer builds of lovkilde, downloaded`,
+  <data-dir>/program/                       newer builds of lovkilde, downloaded
+  <data-dir>/lovkilde.log                   the Windows service's log`,
 		SilenceUsage: true,
 		// main prints the error once, through the gate that keeps it off a progress frame.
 		SilenceErrors: true,
@@ -112,7 +119,9 @@ Data layout:
 	pf.StringVar(&logLevel, "log-level", "info", "log level: debug, info, warn, error")
 	prof.Register(root)
 	root.PersistentPreRunE = func(*cobra.Command, []string) error {
-		switchToNewer(cfg.DataDir)
+		if err := switchToNewer(cfg.DataDir); err != nil {
+			return err
+		}
 		sayStartedBy()
 		return prof.Start()
 	}
@@ -137,5 +146,6 @@ Data layout:
 		programCmd(resolve),
 		searchCmd(resolve),
 	)
+	addServiceCmd(root, resolve)
 	return root
 }

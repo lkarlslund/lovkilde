@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,16 +27,31 @@ const (
 	restartedEnv = "LOVKILDE_RESTARTED"
 )
 
+// inService is set in a process the Windows service manager started (runService).
+var inService bool
+
+// errServiceRestart ends a Windows service that has been pointed at a newer build: it exits with an
+// error, which the service manager answers by starting it again, as the newer build.
+var errServiceRestart = errors.New("restarting the service as the newer build")
+
 // switchToNewer runs the newest downloaded build in place of this one when it is newer, and does
 // not return when it does. A build from uncommitted files, or one that does not know its commit,
-// is a developer's and stays itself.
-func switchToNewer(dataDir string) {
+// is a developer's and stays itself. A Windows service is pointed at the newer build instead and
+// gets errServiceRestart, to end with.
+func switchToNewer(dataDir string) error {
 	if os.Getenv(switchedEnv) != "" {
-		return
+		return nil
 	}
 	path, stamp, ok := newerProgram(dataDir)
 	if !ok {
-		return
+		return nil
+	}
+	if inService {
+		if err := switchService(path); err != nil {
+			fmt.Fprintf(gate.LogWriter(), "could not point the service at %s (%v); going on with this version\n", path, err)
+			return nil
+		}
+		return errServiceRestart
 	}
 	current, _ := compiled.CurrentBuild()
 	log := gate.LogWriter()
@@ -46,6 +62,7 @@ func switchToNewer(dataDir string) {
 		fmt.Fprintf(log, "could not start %s (%v); going on with this version\n", path, err)
 		os.Unsetenv(switchedEnv)
 	}
+	return nil
 }
 
 // newerProgram is the newest downloaded build, when it is newer than this one and this one is a
@@ -122,9 +139,16 @@ func answersVersion(ctx context.Context, path string) error {
 }
 
 // restartAs runs the program at path in place of this server, with the same arguments, once the
-// server has stopped listening. It returns only if that could not be done.
+// server has stopped listening. It returns only if that could not be done, or, in a Windows
+// service, with errServiceRestart once the service is pointed at it.
 func restartAs(path string) error {
 	fmt.Fprintf(gate.LogWriter(), "restarting as the newer version in %s\n", path)
+	if inService {
+		if err := switchService(path); err != nil {
+			return err
+		}
+		return errServiceRestart
+	}
 	os.Setenv(switchedEnv, version)
 	os.Setenv(restartedEnv, "1")
 	return replaceWith(path)

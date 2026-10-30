@@ -126,6 +126,9 @@ unreadable stops it.`,
 			select {
 			case path := <-newer:
 				if err := restartAs(path); err != nil {
+					if errors.Is(err, errServiceRestart) {
+						return err
+					}
 					return fmt.Errorf("could not restart as the newer version in %s: %w", path, err)
 				}
 			default:
