@@ -120,9 +120,10 @@ Der er ingen TLS. Sæt en reverse proxy foran, hvis serveren skal kunne nås fra
 - **Data:** Serveren tjekker dagligt for et nyere datasæt og tager det i brug af sig selv. Kun
   de ændrede dele hentes.
 - **Programmet:** Serveren tjekker dagligt, om der er en nyere version. Findes der en, hentes den
-  til `.lovkilde/program`, og det står øverst på alle sider. Næste gang Lovkilde startes, kører
-  den nyeste hentede version, også hvis du starter en ældre kopi, f.eks. den i din
-  download-mappe. Loggen siger, når det sker.
+  til `.lovkilde/program`, og serveren genstarter selv med den. Siderne er væk i de sekunder,
+  det tager. Starter du senere en ældre kopi, f.eks. den i din download-mappe, kører den nyeste
+  hentede version i stedet. Loggen siger, når det sker. Bruger et program som Claude Desktop
+  `lovkilde mcp`, skifter det først, næste gang det startes.
 - **Nyt dataformat:** Kræver nye data en nyere version af programmet, fortsætter serveren med de
   data, den har, og skriver på alle sider, at programmet skal opdateres.
 
@@ -140,7 +141,7 @@ lovkilde index build         byg søgeindekset (serve gør det selv)
 lovkilde artifact download   hent det udgivne datasæt
 lovkilde artifact check      kan denne version læse datasættet på disken?
 lovkilde program check       er der udgivet en nyere version af programmet?
-lovkilde program download    hent den; den bruges fra næste start
+lovkilde program download    hent den; en kørende server genstarter med den
 ```
 
 Vigtige flag til `serve` og `mcp`: `--data-dir`, `--addr` og `--no-browser` (kun `serve`), `--max-chars` (længste

@@ -434,7 +434,7 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 </div></header>
 <main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér lovkilde for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
 {{else}}<b>Ny version af lovkilde{{with .Version}}, {{.}}{{end}}:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
-{{end}}{{if .Downloaded}}Den er hentet og bruges, når Lovkilde startes igen.{{else}}{{with .URL}}<a href="{{.}}">Se den på GitHub</a>. {{end}}Den hentes ved næste tjek, eller med <code>lovkilde program download</code>.{{end}}</p>{{end}}
+{{end}}{{if .Downloaded}}Den er hentet, og serveren genstarter med den om et øjeblik.{{else}}{{with .URL}}<a href="{{.}}">Se den på GitHub</a>. {{end}}Den hentes ved næste tjek, eller med <code>lovkilde program download</code>.{{end}}</p>{{end}}
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar

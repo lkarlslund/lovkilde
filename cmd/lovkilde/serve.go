@@ -98,17 +98,42 @@ unreadable stops it.`,
 			web := webserver.New(srv)
 			web.Checks, web.Software = chk, software
 			web.Key, web.Exposed = apikey.Open(cfg.DataDir), exposedAddr(addr)
-			service, err := startServer(cmd.Context(), addr, web, verbose)
+			ctx, stop := context.WithCancel(cmd.Context())
+			defer stop()
+			service, err := startServer(ctx, addr, web, verbose)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(gate.LogWriter(), "lovkilde %s serving %s at http://%s/ (MCP endpoint at /mcp)\n", version, srv.Status(), service.Addr())
-			if !noBrowser {
+			// A server that restarted as a newer version has its browser tab already.
+			if restarted := os.Getenv(restartedEnv) != ""; !noBrowser && !restarted {
 				if err := openBrowser(browserURL(service.Addr())); err != nil && !errors.Is(err, errNoDisplay) {
 					fmt.Fprintf(gate.LogWriter(), "could not open a browser: %v\n", err)
 				}
 			}
-			return service.Wait()
+			os.Unsetenv(restartedEnv)
+			// A newer build kept in the data directory replaces this server once it has stopped
+			// listening, as a new artifact replaces the old one: the server keeps itself current.
+			newer := make(chan string, 1)
+			if software != nil {
+				go func() {
+					if path := watchProgram(ctx, cfg.DataDir, followInterval); path != "" {
+						newer <- path
+						stop()
+					}
+				}()
+			}
+			if err := service.Wait(); err != nil {
+				return err
+			}
+			select {
+			case path := <-newer:
+				if err := restartAs(path); err != nil {
+					return fmt.Errorf("could not restart as the newer version in %s: %w", path, err)
+				}
+			default:
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&addr, "addr", defaultServeAddr,
@@ -135,8 +160,8 @@ const softwareRepo = "lkarlslund/lovkilde"
 
 // addSoftwareCheck schedules the check for a newer published build, daily unless the settings
 // page says otherwise, and returns what it asks. A newer build is downloaded into the data
-// directory, and the next start runs it (switchToNewer); the running server is not replaced under
-// its users. A binary that does not know the commit it was built from has nothing to compare, and
+// directory, where the running server finds it and restarts as it (watchProgram), and where any
+// later start finds it (switchToNewer). A binary that does not know the commit it was built from has nothing to compare, and
 // gets no check.
 func addSoftwareCheck(chk *checks.Checks, dataDir string) *softwareupdate.Checker {
 	sw, err := publishedChecker()
@@ -160,7 +185,7 @@ func addSoftwareCheck(chk *checks.Checks, dataDir string) *softwareupdate.Checke
 		}
 		softwareupdate.Prune(dir, path)
 		fmt.Fprintf(gate.LogWriter(), "downloaded lovkilde %s to %s; it runs when lovkilde is started again\n", rel.Tag, path)
-		return checks.Outcome{Newer: n, Version: rel.Tag, Downloaded: true, Summary: newer + " Den er hentet og bruges, når Lovkilde startes igen."}
+		return checks.Outcome{Newer: n, Version: rel.Tag, Downloaded: true, Summary: newer + " Den er hentet, og serveren genstarter med den om et øjeblik."}
 	})
 	return sw
 }

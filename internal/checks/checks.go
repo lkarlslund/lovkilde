@@ -89,7 +89,7 @@ type Outcome struct {
 	Newer int `json:"newer,omitempty"`
 	// Version is the newer published version's name.
 	Version string `json:"version,omitempty"`
-	// Downloaded says the newer version is downloaded and is used from the next start.
+	// Downloaded says the newer version is downloaded; a running server restarts as it.
 	Downloaded bool `json:"downloaded,omitempty"`
 	// Upgrade says the check found published data that needs a newer program than this one.
 	Upgrade bool `json:"upgrade,omitempty"`

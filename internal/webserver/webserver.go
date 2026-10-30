@@ -94,7 +94,7 @@ func (h *Handler) softwareUpdate() *softwareNotice {
 type softwareNotice struct {
 	Behind     int
 	Version    string // the newer version's name, rNNNNN
-	Downloaded bool   // the newer program is downloaded and runs from the next start
+	Downloaded bool   // the newer program is downloaded, and the server restarts as it
 	Data       bool   // the published data needs a newer program
 	URL        string
 }

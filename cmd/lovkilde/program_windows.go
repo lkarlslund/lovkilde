@@ -28,3 +28,16 @@ func runInstead(path string) error {
 	os.Exit(0)
 	return nil
 }
+
+// replaceWith starts the program at path with the same arguments and console, and exits. Unlike
+// runInstead it does not wait: this process still holds the old index and catalogue, and waiting
+// would keep both versions' data in memory for as long as the new one runs.
+func replaceWith(path string) error {
+	cmd := exec.Command(path, os.Args[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	os.Exit(0)
+	return nil
+}
