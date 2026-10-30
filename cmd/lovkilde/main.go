@@ -52,10 +52,11 @@ func main() {
 }
 
 // holdWindow keeps the console window open after an error when the program was started with no
-// arguments on Windows, which is what a double-click does: the window would otherwise close
-// before the error could be read.
+// arguments on Windows, which is what a double-click does, or when the tray had hidden the window:
+// the window would otherwise close, or stay hidden, before the error could be read.
 func holdWindow() {
-	if runtime.GOOS != "windows" || len(os.Args) > 1 {
+	hidden := showConsole()
+	if runtime.GOOS != "windows" || len(os.Args) > 1 && !hidden {
 		return
 	}
 	fmt.Fprint(gate.LogWriter(), "Tryk Enter for at lukke.")

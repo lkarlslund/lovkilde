@@ -43,6 +43,9 @@ Hjemmesiden og MCP-serveren giver de samme svar fra de samme data.
 
 3. Hjemmesiden åbner i din browser på <http://127.0.0.1:8787>. Accepter vilkårene.
 
+På Windows lægger Lovkilde sig som et ikon ved uret, når den er startet med dobbeltklik: klik på
+ikonet for at åbne hjemmesiden, og højreklik for "Om Lovkilde" og "Afslut".
+
 Første gang henter Lovkilde datasættet (ca. 1,3 GB) og bygger sit søgeindeks. Siderne virker,
 mens indekset bygges; søgningen slår til, når det er færdigt.
 
@@ -104,16 +107,19 @@ begge og huskes, også når serveren genstartes. Ændres vilkårene, skal de acc
 
 ## Start automatisk
 
-**Windows:** Kør i en kommandoprompt som administrator:
+**Windows:** Læg en genvej til Lovkilde i mappen Start: tryk Win+R, skriv `shell:startup`, og
+lav en genvej dér til `lovkilde.exe` med `serve --no-browser` efter stien. Så starter Lovkilde, når
+du logger ind, og ligger som ikon ved uret.
 
-```
-lovkilde service install
-```
+Andre muligheder på Windows:
 
-Så kører Lovkilde som Windows-tjeneste, starter med computeren og genstarter, hvis den stopper.
-Programmet kopieres til `.lovkilde\program`, så det ikke afhænger af din download-mappe, og loggen
-ligger i `.lovkilde\lovkilde.log`. `--addr` vælger adressen. `lovkilde service uninstall` fjerner
-tjenesten igen; data bliver liggende.
+- **Planlagt opgave:** I Opgavestyring kan du lave en opgave, der kører `lovkilde.exe serve
+  --no-browser`, når du logger ind.
+- **Windows-tjeneste:** Kør `lovkilde service install` i en kommandoprompt som administrator. Så
+  starter Lovkilde med computeren, også før nogen logger ind, og genstarter, hvis den stopper.
+  Programmet kopieres til `.lovkilde\program`, og loggen ligger i `.lovkilde\lovkilde.log`.
+  `--addr` vælger adressen. `lovkilde service uninstall` fjerner tjenesten igen; data bliver
+  liggende. En tjeneste har intet ikon ved uret.
 
 **Linux og macOS:** Brug systemd eller launchd; [vejledningen til AI-assistenter](docs/install-for-ai.md)
 viser hvordan.

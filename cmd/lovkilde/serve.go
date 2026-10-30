@@ -109,6 +109,9 @@ unreadable stops it.`,
 				}
 			}
 			os.Unsetenv(restartedEnv)
+			// Started from Explorer on Windows, Lovkilde sits in the notification area.
+			removeTray := startTray(ctx, browserURL(service.Addr()), cfg.DataDir, stop)
+			defer removeTray()
 			// A newer build kept in the data directory — fetched when the user asked, or by hand —
 			// replaces this server once it has stopped listening.
 			newer := make(chan string, 1)
@@ -125,6 +128,7 @@ unreadable stops it.`,
 			}
 			select {
 			case path := <-newer:
+				removeTray()
 				if err := restartAs(path); err != nil {
 					if errors.Is(err, errServiceRestart) {
 						return err

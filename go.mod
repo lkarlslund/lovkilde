@@ -3,6 +3,7 @@ module github.com/lkarlslund/lovkilde
 go 1.27
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/fxamacker/cbor/v2 v2.9.4
 	github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3
 	github.com/klauspost/compress v1.18.0
@@ -17,6 +18,7 @@ require (
 )
 
 require (
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
