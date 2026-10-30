@@ -19,6 +19,7 @@ import (
 )
 
 // trayIcon is the site's seal, the green circle with a §, at the sizes a notification area uses.
+// The program's own icon is the same file, linked from rsrc_windows_*.syso.
 //
 //go:embed lovkilde.ico
 var trayIcon []byte

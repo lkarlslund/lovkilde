@@ -9,6 +9,9 @@
 // All settings are flags and there is deliberately no config file or environment layer.
 package main
 
+// The Windows program icon, linked from these objects; run again when lovkilde.ico changes.
+//go:generate go run ../../tools/winicon lovkilde.ico .
+
 import (
 	"bufio"
 	"context"
