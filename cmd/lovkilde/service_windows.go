@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
@@ -128,16 +129,17 @@ func switchService(path string) error {
 		return err
 	}
 	defer s.Close()
-	c, err := s.Config()
-	if err != nil {
-		return err
-	}
 	line := syscall.EscapeArg(path)
 	for _, a := range os.Args[1:] {
 		line += " " + syscall.EscapeArg(a)
 	}
-	c.BinaryPathName = line
-	if err := s.UpdateConfig(c); err != nil {
+	// Only the command line changes; everything else is left as installed.
+	cmdline, err := windows.UTF16PtrFromString(line)
+	if err != nil {
+		return err
+	}
+	if err := windows.ChangeServiceConfig(s.Handle, windows.SERVICE_NO_CHANGE, windows.SERVICE_NO_CHANGE, windows.SERVICE_NO_CHANGE,
+		cmdline, nil, nil, nil, nil, nil, nil); err != nil {
 		return err
 	}
 	fmt.Fprintf(gate.LogWriter(), "the service now runs %s, and restarts as it\n", path)
