@@ -51,6 +51,10 @@ du peger med `--data-dir`. Har serveren allerede hentet nyere data, bruges de.
 
 ## Brug med en AI-assistent
 
+**Lad assistenten installere det:** Bed din AI-assistent (f.eks. Claude Code) om at "installere
+Lovkilde efter https://github.com/lkarlslund/lovkilde/blob/main/docs/install-for-ai.md". Den
+vejledning er skrevet til assistenten og dækker hentning, opstart, MCP-opsætning og vilkårene.
+
 Lovkilde er en MCP-server. Når `lovkilde` kører, er den på `http://127.0.0.1:8787/mcp`.
 
 **Claude Code:**
