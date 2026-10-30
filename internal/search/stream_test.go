@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -48,7 +49,7 @@ func TestStreamingBuildIsTheSameIndex(t *testing.T) {
 	if !reflect.DeepEqual(got.Docs, want.Docs) || !reflect.DeepEqual(got.Units, want.Units) {
 		t.Fatal("documents or units differ between the two builds")
 	}
-	if !reflect.DeepEqual(got.Terms, want.Terms) || !reflect.DeepEqual(got.Postings, want.Postings) || got.avgUnitLen != want.avgUnitLen {
+	if !reflect.DeepEqual(got.Terms, want.Terms) || !reflect.DeepEqual(allPostings(got), allPostings(want)) || got.avgUnitLen != want.avgUnitLen {
 		t.Fatal("dictionary or postings differ between the two builds")
 	}
 
@@ -61,7 +62,16 @@ func TestStreamingBuildIsTheSameIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if back.Source != got.Source || !reflect.DeepEqual(back.Postings, got.Postings) {
+	if back.Source != got.Source || !reflect.DeepEqual(allPostings(back), allPostings(got)) {
 		t.Errorf("the file lost the source or the postings: source %q", back.Source)
 	}
+}
+
+// allPostings decodes every term's postings, for comparing two indexes.
+func allPostings(idx *Index) [][]Posting {
+	out := make([][]Posting, len(idx.Terms))
+	for i := range out {
+		out[i] = slices.Collect(idx.Postings(i).All())
+	}
+	return out
 }

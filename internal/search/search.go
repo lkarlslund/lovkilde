@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unsafe"
 )
 
 // Query is one search.
@@ -70,7 +71,7 @@ type Hit struct {
 	// the measurement both need: a hit that cannot be traced back to the text it matched is
 	// a claim, not a result.
 	Unit  int
-	Doc   DocMeta
+	Doc   *DocMeta // the index's own record, shared by every hit in the document
 	Addr  string
 	Score float64
 
@@ -137,7 +138,7 @@ type termMatch struct {
 	weight  float64
 	folded  bool
 	op      operator
-	posting []Posting
+	posting PostingList
 }
 
 // Search ranks units against the query and returns the best q.Limit of them.
@@ -221,9 +222,6 @@ func (idx *Index) Rank(q Query) []Hit {
 		// answer — it would be every unit in the corpus minus some — so it says so.
 		return nil
 	}
-	scored := map[uint32]*Hit{}
-	perUnitTerms := map[uint32]map[string]bool{}
-	sawRaw := map[uint32]bool{}
 	nUnits := float64(len(idx.Units))
 
 	// A word that sits in a large share of all provisions — "af", "og", "med" — says
@@ -235,7 +233,7 @@ func (idx *Index) Rank(q Query) []Hit {
 	df := map[string]int{}
 	for _, w := range words {
 		for _, ch := range byWord[w] {
-			df[w] += len(ch.posting)
+			df[w] += ch.posting.Len()
 		}
 	}
 	common := func(w string) bool { return float64(df[w]) > commonShare*nUnits }
@@ -252,21 +250,40 @@ func (idx *Index) Rank(q Query) []Hit {
 	}
 	sort.SliceStable(order, func(i, j int) bool { return df[order[i]] < df[order[j]] })
 
+	// One row per unit a word reaches, found through row: units are a dense range, so a slice
+	// indexed by unit does what a map would, and which words a unit carries is a bit per word.
+	// A question of only common words reaches most of the corpus — "af og med" four of its six
+	// million provisions — and a map entry, a hit and a set of words per unit took several
+	// gigabytes and twelve seconds to answer it.
+	stride := (len(words) + 63) / 64
+	wordBit := make(map[string]int, len(words))
+	for i, w := range words {
+		wordBit[w] = i
+	}
+	row := make([]int32, len(idx.Units)) // 1 + the unit's row in rows, 0 for none
+	var rows []scoreRow
+	var carries []uint64 // stride words of bits per row
+	has := func(r int, w string) bool {
+		bit := wordBit[w]
+		return carries[r*stride+bit/64]&(1<<(bit%64)) != 0
+	}
+
 	// Exclusions are scored too, because a term that has to be absent still has to be found
 	// before it can be removed; the units it names are then dropped.
 	for _, w := range order {
 		boostOnly := anyRare && common(w)
 		for _, ch := range byWord[w] {
-			df := float64(len(ch.posting))
+			df := float64(ch.posting.Len())
 			idf := math.Log(1 + (nUnits-df+0.5)/(df+0.5))
-			for _, p := range ch.posting {
+			bit := wordBit[ch.query]
+			for p := range ch.posting.All() {
 				if len(not) > 0 && not.has(p.Unit) {
 					continue
 				}
 				if len(must) > 0 && !must.has(p.Unit) {
 					continue
 				}
-				if boostOnly && scored[p.Unit] == nil {
+				if boostOnly && row[p.Unit] == 0 {
 					continue
 				}
 				u := &idx.Units[p.Unit]
@@ -279,29 +296,32 @@ func (idx *Index) Rank(q Query) []Hit {
 					b = rk.B
 				}
 				tfPart := tf * (bm25K1 + 1) / (tf + bm25K1*(1-b+b*float64(u.Len)/idx.avgUnitLen))
-				h := scored[p.Unit]
-				if h == nil {
-					h = &Hit{Unit: int(p.Unit), Doc: idx.Docs[u.Doc], Addr: u.Addr, Gap: -1}
-					scored[p.Unit] = h
-					perUnitTerms[p.Unit] = map[string]bool{}
+				r := int(row[p.Unit]) - 1
+				if r < 0 {
+					rows = append(rows, scoreRow{unit: p.Unit})
+					carries = append(carries, make([]uint64, stride)...)
+					r = len(rows) - 1
+					row[p.Unit] = int32(len(rows))
 				}
-				h.Score += idf * tfPart * ch.weight
-				perUnitTerms[p.Unit][ch.query] = true
+				h := &rows[r]
+				h.score += idf * tfPart * ch.weight
+				carries[r*stride+bit/64] |= 1 << (bit % 64)
 				if !ch.folded {
-					sawRaw[p.Unit] = true
+					h.raw = true
 				}
 			}
 		}
 	}
+	row = nil
 
 	// A required word must still be satisfied after the metadata filters have run, because
 	// those filters take units out of the intersection: "kind=lta AND x" must not answer with
 	// a unit that lost its required word to the kind filter.
 	if len(must) > 0 {
-		for unit := range scored {
+		for r := range rows {
 			for _, w := range words {
-				if opOf[w] == opAnd && !perUnitTerms[unit][w] {
-					delete(scored, unit)
+				if opOf[w] == opAnd && !has(r, w) {
+					rows[r].gone = true
 					break
 				}
 			}
@@ -310,9 +330,11 @@ func (idx *Index) Rank(q Query) []Hit {
 
 	// What the document is, how much of it answers, and whether its title names the subject:
 	// see ranking.go for why words alone rank a law below its own paperwork.
-	perDoc := map[int]int{}
-	for unit := range scored {
-		perDoc[idx.Units[unit].Doc]++
+	perDoc := map[uint32]int{}
+	for _, h := range rows {
+		if !h.gone {
+			perDoc[idx.Units[h.unit].Doc]++
+		}
 	}
 	// The title is judged on the words that say something: "lov om leje" is asking for leje.
 	asked := make([]string, 0, len(words))
@@ -326,7 +348,7 @@ func (idx *Index) Rank(q Query) []Hit {
 	if named {
 		titleW = rk.Named
 	}
-	docFactor := map[int]float64{}
+	docFactor := map[uint32]float64{}
 	for doc, n := range perDoc {
 		d := &idx.Docs[doc]
 		f := rk.prior(d, typed) * rk.about(n)
@@ -338,30 +360,54 @@ func (idx *Index) Rank(q Query) []Hit {
 		docFactor[doc] = f
 	}
 
-	hits := make([]Hit, 0, len(scored))
-	for unit, h := range scored {
-		h.Score *= docFactor[idx.Units[unit].Doc]
+	// Units that carry the same words share one Matched list: there are as many lists as
+	// combinations of words, not as hits.
+	matched := map[string][]string{}
+	hits := make([]Hit, 0, len(rows))
+	for r, h := range rows {
+		if h.gone {
+			continue
+		}
+		u := &idx.Units[h.unit]
+		hit := Hit{Unit: int(h.unit), Doc: &idx.Docs[u.Doc], Addr: u.Addr, Gap: -1, Score: h.score}
+		hit.Score *= docFactor[u.Doc]
+		key := unsafe.String((*byte)(unsafe.Pointer(&carries[r*stride])), stride*8)
+		m, ok := matched[key]
+		if !ok {
+			m = make([]string, 0, len(words))
+			for _, w := range words {
+				if has(r, w) {
+					m = append(m, w)
+				}
+			}
+			matched[strings.Clone(key)] = m
+		}
 		covered := 0
 		for _, w := range words {
-			if opOf[w] == opNot {
-				continue
-			}
-			if perUnitTerms[unit][w] {
+			if opOf[w] != opNot && has(r, w) {
 				covered++
 			}
 		}
-		h.Matched = matchedFor(words, perUnitTerms[unit])
-		h.Covered = covered
-		h.Requested = total
-		h.FoldedOnly = !sawRaw[unit]
+		hit.Matched = m
+		hit.Covered = covered
+		hit.Requested = total
+		hit.FoldedOnly = !h.raw
 		// Coverage multiplies rather than adds: a unit matching all three terms of a
 		// three-term query should beat one matching a single very common term, and adding a
 		// constant would let high-frequency noise win.
-		h.Score *= 0.5 + 0.5*float64(covered)/float64(total)
-		hits = append(hits, *h)
+		hit.Score *= 0.5 + 0.5*float64(covered)/float64(total)
+		hits = append(hits, hit)
 	}
 	sortHits(hits)
 	return hits
+}
+
+// scoreRow is one unit's score while a query is ranked.
+type scoreRow struct {
+	score float64
+	unit  uint32
+	raw   bool // a word matched it in the raw stream, not only the folded one
+	gone  bool // it lacks a required word
 }
 
 // queryWords lists the words of a query that a proximity grade should look for, exclusions
@@ -409,13 +455,13 @@ func sortHits(hits []Hit) {
 func (idx *Index) resolve(word string, op operator, extend bool) []termMatch {
 	var out []termMatch
 	if i := idx.findTerm(word, StreamRaw); i >= 0 {
-		out = append(out, termMatch{display: word, query: word, weight: 1, op: op, posting: idx.Postings[i]})
+		out = append(out, termMatch{display: word, query: word, weight: 1, op: op, posting: idx.Postings(i)})
 		// The word exists, but so may its inflections and compounds; a short word is left
 		// alone, because "lov" extended is half the dictionary.
 		if extend && len([]rune(word)) >= 5 {
 			for _, j := range idx.prefixTerms(word, maxPrefixExpansions) {
 				if j != i {
-					out = append(out, termMatch{display: idx.Terms[j], query: word, weight: prefixW, op: op, posting: idx.Postings[j]})
+					out = append(out, termMatch{display: idx.Terms[j], query: word, weight: prefixW, op: op, posting: idx.Postings(j)})
 				}
 			}
 		}
@@ -423,25 +469,14 @@ func (idx *Index) resolve(word string, op operator, extend bool) []termMatch {
 		// No exact term: extend right. This is what lets "miljøbeskyttelse" reach
 		// "miljøbeskyttelsesloven" without a second index.
 		for _, i := range idx.prefixTerms(word, maxPrefixExpansions) {
-			out = append(out, termMatch{display: idx.Terms[i], query: word, weight: prefixW, op: op, posting: idx.Postings[i]})
+			out = append(out, termMatch{display: idx.Terms[i], query: word, weight: prefixW, op: op, posting: idx.Postings(i)})
 		}
 	}
 	if idx.HasFolded() {
 		if stem := Fold(word); stem != "" {
 			if i := idx.findTerm(stem, StreamFolded); i >= 0 {
-				out = append(out, termMatch{display: stem, query: word, weight: foldWeight, folded: true, op: op, posting: idx.Postings[i]})
+				out = append(out, termMatch{display: stem, query: word, weight: foldWeight, folded: true, op: op, posting: idx.Postings(i)})
 			}
-		}
-	}
-	return out
-}
-
-// matchedFor lists which query terms this unit answered, in query order.
-func matchedFor(terms []string, found map[string]bool) []string {
-	out := make([]string, 0, len(terms))
-	for _, t := range terms {
-		if found[t] {
-			out = append(out, t)
 		}
 	}
 	return out
@@ -534,7 +569,7 @@ func (idx *Index) prefixTerms(prefix string, cap int) []int {
 			break
 		}
 	}
-	sort.Slice(found, func(a, b int) bool { return len(idx.Postings[found[a]]) > len(idx.Postings[found[b]]) })
+	sort.Slice(found, func(a, b int) bool { return idx.postingN[found[a]] > idx.postingN[found[b]] })
 	if len(found) > cap {
 		found = found[:cap]
 	}

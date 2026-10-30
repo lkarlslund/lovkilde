@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
+	"unsafe"
 )
 
 // Save writes the index as one immutable file.
@@ -72,28 +74,25 @@ func (idx *Index) write(buf *bufio.Writer) error {
 		putString(buf, u.Addr)
 	}
 
-	var prev uint32
+	var scratch []byte
 	for i, term := range idx.Terms {
 		putString(buf, term)
 		buf.WriteByte(idx.Stream[i])
-		postings := idx.Postings[i]
-		putUvarint(buf, uint64(len(postings)))
-		prev = 0
-		for _, p := range postings {
-			putUvarint(buf, uint64(p.Unit-prev))
-			buf.WriteByte(p.Tf)
-			prev = p.Unit
-		}
+		postings := idx.Postings(i)
+		putUvarint(buf, uint64(postings.Len()))
+		scratch = appendPostings(scratch[:0], slices.AppendSeq(make([]Posting, 0, postings.Len()), postings.All()))
+		buf.Write(scratch)
 	}
 	return nil
 }
 
 // Load reads an index file back.
 //
-// Terms are copied out of the buffer rather than aliased to it, which costs roughly
-// the size of the dictionary in extra RAM and buys a buffer that can be released.
-// Whether that is the right trade at full-corpus size is a measured question, not an
-// assumption; the number is in the measurement report.
+// The file's bytes are the index: postings are read from them as a query walks them, and every
+// string — terms, addresses, document fields — points into them rather than being copied out.
+// Copying decoded 294 million postings into eight bytes each and allocated eleven million small
+// strings, and a server held 3 GB for an 845 MB file; kept as they are, the index is the file
+// plus its tables of offsets.
 func Load(path string) (*Index, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -142,24 +141,45 @@ func Load(path string) (*Index, error) {
 	}
 	idx.Units = make([]UnitMeta, nunits)
 	for i := range idx.Units {
-		idx.Units[i].Doc = int(r.uvarint())
-		idx.Units[i].Len = int(r.uvarint())
+		idx.Units[i].Doc = uint32(r.uvarint())
+		idx.Units[i].Len = uint32(r.uvarint())
 		idx.Units[i].Addr = r.str()
+	}
+	if err := r.err(); err != nil {
+		return nil, fmt.Errorf("%s: truncated index: %w", path, err)
+	}
+	for i, u := range idx.Units {
+		if int(u.Doc) >= ndocs {
+			return nil, fmt.Errorf("%s: unit %d belongs to document %d of %d", path, i, u.Doc, ndocs)
+		}
 	}
 	idx.Terms = make([]string, nterms)
 	idx.Stream = make([]byte, nterms)
-	idx.Postings = make([][]Posting, nterms)
+	idx.postingData = raw
+	idx.postingAt = make([]uint64, nterms)
+	idx.postingN = make([]uint32, nterms)
 	for i := range idx.Terms {
 		idx.Terms[i] = r.str()
 		idx.Stream[i] = r.byte()
-		n := int(r.uvarint())
-		postings := make([]Posting, n)
-		var prev uint32
-		for j := range postings {
-			prev += uint32(r.uvarint())
-			postings[j] = Posting{Unit: prev, Tf: r.byte()}
+		n := r.uvarint()
+		idx.postingAt[i] = uint64(r.at)
+		idx.postingN[i] = uint32(n)
+		// Walked once here, so a query can decode them without checking: every gap is a whole
+		// uvarint followed by its count, and no unit lies past the table.
+		var unit uint64
+		for range n {
+			unit += r.uvarint()
+			r.byte()
+			if r.bad {
+				break
+			}
 		}
-		idx.Postings[i] = postings
+		if r.bad {
+			break
+		}
+		if n > 0 && unit >= uint64(nunits) || n > math.MaxUint32 {
+			return nil, fmt.Errorf("%s: the postings of %q name a unit past the %d there are", path, idx.Terms[i], nunits)
+		}
 	}
 	if err := r.err(); err != nil {
 		return nil, fmt.Errorf("%s: truncated index: %w", path, err)
@@ -238,7 +258,10 @@ func (r *reader) uint64() uint64 {
 	return v
 }
 
+// str returns the next string without copying it: the buffer is the loaded index's own and is
+// never written to, so a string pointing into it stays as valid as the index.
 func (r *reader) str() string {
 	n := int(r.uvarint())
-	return string(r.bytes(n))
+	b := r.bytes(n)
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }

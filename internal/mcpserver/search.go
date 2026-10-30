@@ -207,7 +207,7 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 	texts := search.NewUnitTexts(s.unitSource())
 	if !req.NoNear {
 		hits = s.idx().GradeNear(hits, req.Query, func(h *search.Hit) string {
-			return texts.Unit(h.Doc, h.Addr)
+			return texts.Unit(*h.Doc, h.Addr)
 		})
 	}
 	hits = distinctCitations(hits)
@@ -236,7 +236,7 @@ func (s *Server) Search(req SearchRequest) (*SearchResult, error) {
 		if entry, ok := s.lib().Find(h.Doc.Accession); ok {
 			label = citation(entry)
 		}
-		unitText := texts.Unit(h.Doc, h.Addr)
+		unitText := texts.Unit(*h.Doc, h.Addr)
 		snippet := search.SnippetFromWithout(unitText, h.Matched, forbidden, 0)
 		if snippet == "" && unitText != "" {
 			// The passage that would be shown contains a word the query forbids, so this hit is

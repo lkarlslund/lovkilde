@@ -3,7 +3,9 @@ package search
 import (
 	"cmp"
 	"context"
+	"encoding/binary"
 	"errors"
+	"iter"
 	"runtime"
 	"slices"
 	"sort"
@@ -38,10 +40,18 @@ type Index struct {
 	titleOnce sync.Once
 	titleDF   map[string]int
 
-	// Terms is sorted, and Postings[i] belongs to Terms[i]. Both are derived from
-	// the file on load; the sorted order is what makes prefix queries a range scan.
-	Terms    []string
-	Postings [][]Posting
+	// Terms is sorted, and Postings(i) belongs to Terms[i]. The sorted order is what makes
+	// prefix queries a range scan.
+	Terms []string
+
+	// postingData holds the postings as the file writes them — per posting the gap from the
+	// previous unit as a uvarint, then the count — and term i's begin at postingAt[i] and number
+	// postingN[i]. A loaded index points into the file's own bytes. Decoded, a posting is eight
+	// bytes, and the corpus' 294 million of them were 2.4 GB of a server's 3 GB index; encoded,
+	// they are about two bytes each, and a query decodes only the terms it asks for.
+	postingData []byte
+	postingAt   []uint64
+	postingN    []uint32
 
 	// Stream records which token stream each term came from, so a folded-only match
 	// can rank below a raw one instead of being trusted identically.
@@ -72,11 +82,12 @@ type Index struct {
 	avgUnitLen float64
 }
 
-// UnitMeta is one indexable span, with just enough to render a hit.
+// UnitMeta is one indexable span, with just enough to render a hit. The corpus has six million
+// of them, so the numbers are 32 bits: a unit costs 24 bytes rather than 32.
 type UnitMeta struct {
-	Doc  int
 	Addr string
-	Len  int // runes, for length-normalised ranking
+	Doc  uint32
+	Len  uint32 // runes, for length-normalised ranking
 }
 
 // Posting is one term's appearance in one unit. Tf saturates at 255: a section that
@@ -85,6 +96,49 @@ type UnitMeta struct {
 type Posting struct {
 	Unit uint32
 	Tf   byte
+}
+
+// Postings returns term i's postings.
+func (idx *Index) Postings(i int) PostingList {
+	return PostingList{data: idx.postingData[idx.postingAt[i]:], n: int(idx.postingN[i])}
+}
+
+// PostingList is one term's postings, decoded as they are walked.
+type PostingList struct {
+	data []byte
+	n    int
+}
+
+// Len is how many units carry the term.
+func (l PostingList) Len() int { return l.n }
+
+// All yields the postings in unit order. The encoding was checked when the index was loaded or
+// built, so the walk cannot run past its term.
+func (l PostingList) All() iter.Seq[Posting] {
+	return func(yield func(Posting) bool) {
+		var unit uint32
+		at := 0
+		for range l.n {
+			gap, k := binary.Uvarint(l.data[at:])
+			unit += uint32(gap)
+			p := Posting{Unit: unit, Tf: l.data[at+k]}
+			at += k + 1
+			if !yield(p) {
+				return
+			}
+		}
+	}
+}
+
+// appendPostings encodes postings, sorted by unit, the way the file and postingData hold them.
+func appendPostings(buf []byte, postings []Posting) []byte {
+	var prev uint32
+	for _, p := range postings {
+		buf = binary.AppendUvarint(buf, uint64(p.Unit-prev))
+		buf = append(buf, p.Tf)
+		prev = p.Unit
+	}
+	return buf
 }
 
 // Options controls which streams a build writes.
@@ -231,7 +285,7 @@ func Build(ctx context.Context, docs []DocMeta, units []Unit, opts Options) (*In
 	parallel.For(ctx, len(units), func(i int) {
 		u := &units[i]
 		l := utf8.RuneCountInString(u.Text)
-		b.units[i] = UnitMeta{Doc: u.Doc, Addr: u.Addr, Len: l}
+		b.units[i] = UnitMeta{Doc: uint32(u.Doc), Addr: u.Addr, Len: uint32(l)}
 		totalLen.Add(uint64(l))
 		b.addUnit(uint32(i), u.Text, opts.Folded)
 	})
@@ -259,11 +313,12 @@ func addPosting(into map[string]*postList, term string, unit uint32, count int) 
 	pl.tf = append(pl.tf, byte(count))
 }
 
-// dictEntry is one (term, stream) row before the tables are assembled.
+// dictEntry is one (term, stream) row before the tables are assembled, its postings encoded.
 type dictEntry struct {
 	term     string
 	stream   byte
-	postings []Posting
+	n        int
+	postings []byte
 }
 
 // flatten turns one shard into its sorted rows: every term in it shares a first byte,
@@ -278,7 +333,7 @@ func (b *builder) flatten(id byte, folded bool) []dictEntry {
 				postings[i] = Posting{Unit: u, Tf: pl.tf[i]}
 			}
 			slices.SortFunc(postings, func(a, b Posting) int { return cmp.Compare(a.Unit, b.Unit) })
-			out = append(out, dictEntry{term: term, stream: stream, postings: postings})
+			out = append(out, dictEntry{term: term, stream: stream, n: len(postings), postings: appendPostings(nil, postings)})
 			delete(m, term)
 		}
 	}
@@ -342,18 +397,26 @@ func (idx *Index) collect(b *builder, opts Options) {
 	}
 	wg.Wait()
 
-	total := 0
+	total, encoded := 0, 0
 	for _, r := range rows {
 		total += len(r)
+		for _, e := range r {
+			encoded += len(e.postings)
+		}
 	}
 	idx.Terms = make([]string, 0, total)
 	idx.Stream = make([]byte, 0, total)
-	idx.Postings = make([][]Posting, 0, total)
+	idx.postingData = make([]byte, 0, encoded)
+	idx.postingAt = make([]uint64, 0, total)
+	idx.postingN = make([]uint32, 0, total)
 	for id := range rows { // shard order, which is term order
 		for _, e := range rows[id] {
 			idx.Terms = append(idx.Terms, e.term)
 			idx.Stream = append(idx.Stream, e.stream)
-			idx.Postings = append(idx.Postings, e.postings)
+			idx.postingAt = append(idx.postingAt, uint64(len(idx.postingData)))
+			idx.postingN = append(idx.postingN, uint32(e.n))
+			idx.postingData = append(idx.postingData, e.postings...)
 		}
+		rows[id] = nil
 	}
 }

@@ -197,7 +197,7 @@ func judge(idx *Index, set []judgment, filtered, verbose bool) (mrr, hit10 float
 		hits := distinctPlaces(idx.Rank(q))
 		rank := 0
 		for i := 0; i < 10 && i < len(hits); i++ {
-			if relevantFor(j, hits[i].Doc, re) {
+			if relevantFor(j, *hits[i].Doc, re) {
 				rank = i + 1
 				break
 			}

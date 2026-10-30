@@ -167,7 +167,7 @@ func (s *unitSet) addMany(us ...uint32) {
 func sortedUnitSet(terms []termMatch) unitSet {
 	var s unitSet
 	for _, t := range terms {
-		for _, p := range t.posting {
+		for p := range t.posting.All() {
 			s = append(s, p.Unit)
 		}
 	}

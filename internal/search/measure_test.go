@@ -741,8 +741,8 @@ func containsPhrase(text, query string) bool {
 
 func countPostings(idx *Index) int {
 	n := 0
-	for _, p := range idx.Postings {
-		n += len(p)
+	for i := range idx.Terms {
+		n += idx.Postings(i).Len()
 	}
 	return n
 }

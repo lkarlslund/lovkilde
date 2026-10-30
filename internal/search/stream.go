@@ -114,7 +114,7 @@ func BuildStream(ctx context.Context, n int, load func(i int) (DocMeta, []Unit, 
 			b.docs = append(b.docs, d.meta)
 			base[k] = len(b.units)
 			for _, u := range d.units {
-				b.units = append(b.units, UnitMeta{Doc: docID, Addr: u.addr, Len: u.runes})
+				b.units = append(b.units, UnitMeta{Doc: uint32(docID), Addr: u.addr, Len: uint32(u.runes)})
 				totalLen += uint64(u.runes)
 			}
 		}

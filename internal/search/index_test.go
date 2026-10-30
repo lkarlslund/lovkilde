@@ -239,8 +239,8 @@ func TestSaveLoadRoundTripsEveryPosting(t *testing.T) {
 		if back.Terms[i] != idx.Terms[i] || back.Stream[i] != idx.Stream[i] {
 			t.Fatalf("term %d differs: %q/%d vs %q/%d", i, back.Terms[i], back.Stream[i], idx.Terms[i], idx.Stream[i])
 		}
-		if !slices.Equal(back.Postings[i], idx.Postings[i]) {
-			t.Fatalf("postings for %q differ: %v vs %v", idx.Terms[i], back.Postings[i], idx.Postings[i])
+		if b, w := slices.Collect(back.Postings(i).All()), slices.Collect(idx.Postings(i).All()); !slices.Equal(b, w) {
+			t.Fatalf("postings for %q differ: %v vs %v", idx.Terms[i], b, w)
 		}
 	}
 	if idx.Built <= 0 {
@@ -336,6 +336,17 @@ func TestLoadRejectsForeignAndTruncatedFiles(t *testing.T) {
 	if _, err := Load(short); err == nil {
 		t.Error("Load accepted a truncated index; a half-read index silently under-reports")
 	}
+
+	// Postings are decoded unchecked as a query walks them, so Load checks them all: a file cut
+	// anywhere in them is refused rather than answering until a query runs off the end.
+	for cut := len(raw) - 1; cut > len(raw)-200 && cut > 0; cut-- {
+		if err := os.WriteFile(short, raw[:cut], 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(short); err == nil {
+			t.Fatalf("Load accepted the index cut to %d of its %d bytes", cut, len(raw))
+		}
+	}
 }
 
 func TestSearchIgnoresEmptyQueryAndUnknownTerms(t *testing.T) {
@@ -414,7 +425,7 @@ func TestTermFrequencySaturatesRatherThanWraps(t *testing.T) {
 	if i < 0 {
 		t.Fatal("the repeated term is not indexed")
 	}
-	postings := idx.Postings[i]
+	postings := slices.Collect(idx.Postings(i).All())
 	if len(postings) != 1 {
 		t.Fatalf("postings = %d, want one unit", len(postings))
 	}

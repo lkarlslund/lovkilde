@@ -227,7 +227,7 @@ func searchCmd(resolve configFunc) *cobra.Command {
 			texts := search.NewUnitTexts(artifactDocuments{a})
 			if !noNear {
 				hits = idx.GradeNear(hits, query, func(h *search.Hit) string {
-					return texts.Unit(h.Doc, h.Addr)
+					return texts.Unit(*h.Doc, h.Addr)
 				})
 			}
 			if len(hits) > limit {
@@ -253,7 +253,7 @@ func searchCmd(resolve configFunc) *cobra.Command {
 				// The snippet re-reads the document, sharing one parse per document with the
 				// proximity grade above. A hit whose snippet cannot be rendered still prints
 				// its address rather than disappearing.
-				unitText := texts.Unit(h.Doc, h.Addr)
+				unitText := texts.Unit(*h.Doc, h.Addr)
 				snippet := search.SnippetFromWithout(unitText, h.Matched, forbidden, 0)
 				switch {
 				case snippet != "":

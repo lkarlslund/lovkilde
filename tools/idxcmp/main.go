@@ -49,8 +49,8 @@ func fingerprint(idx *search.Index) string {
 	for i, t := range idx.Terms {
 		put(fmt.Sprintf("%d|%d|%s", i, idx.Stream[i], t))
 	}
-	for _, p := range idx.Postings {
-		for _, one := range p {
+	for i := range idx.Terms {
+		for one := range idx.Postings(i).All() {
 			binary.BigEndian.PutUint64(buf[:], uint64(one.Unit))
 			h.Write(buf[:8])
 			h.Write([]byte{one.Tf})

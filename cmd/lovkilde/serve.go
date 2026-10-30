@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -73,6 +75,13 @@ installed every --auto-update; without one the server does not start, and one th
 unreadable stops it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Most of a server's heap is the index and the catalogue, which live as long as it does,
+			// so the default of collecting when the heap has doubled lets a search of common words
+			// leave the process a gigabyte larger. Collecting at half again costs no measurable
+			// search time. GOGC set by whoever runs the server wins.
+			if os.Getenv("GOGC") == "" {
+				debug.SetGCPercent(50)
+			}
 			srv, chk, err := openServingServer(cmd.Context(), resolve, o)
 			if err != nil {
 				return err
