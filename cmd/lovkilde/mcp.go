@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -23,6 +22,7 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/mcpserver"
 	"github.com/lkarlslund/lovkilde/internal/release"
 	"github.com/lkarlslund/lovkilde/internal/search"
+	"github.com/lkarlslund/lovkilde/internal/updates"
 )
 
 // serveOptions are the settings a serving process takes. One struct because every serving
@@ -32,18 +32,20 @@ type serveOptions struct {
 	Index           string
 	Artifact        string
 	ArtifactCacheMB int
-	// Release names where a missing artifact is downloaded from, and a newer one looked for
-	// every AutoUpdate (0: never). Both apply only when following the current artifact.
+	// Release names where a missing artifact is downloaded from, and where newer ones are looked
+	// for every CheckEvery (0: never). Both apply only when following the current artifact.
 	Release    string
-	AutoUpdate time.Duration
+	CheckEvery time.Duration
+	// Restarts says the process restarts as a newer build once one is downloaded (serve).
+	Restarts bool
 }
 
 // addFetchFlags registers the download settings serve and mcp share.
 func addFetchFlags(cmd *cobra.Command, o *serveOptions) {
 	cmd.Flags().StringVar(&o.Release, "release", release.DefaultSource,
 		"release repository the artifact is downloaded from when there is none, and updated from: a directory, or hf://owner/name[@revision]")
-	cmd.Flags().DurationVar(&o.AutoUpdate, "auto-update", release.DefaultEvery,
-		"check --release for a newer artifact this often, and install it; 0 turns it off. Rounded to daily, weekly or monthly; the website's settings page overrides it")
+	cmd.Flags().DurationVar(&o.CheckEvery, "check-every", release.DefaultEvery,
+		"check this often whether newer law texts or a newer program are published; nothing is downloaded until asked. 0 turns it off. Rounded to daily, weekly or monthly; the website's settings page overrides it")
 }
 
 // openServingServer loads what a serving process reads, which is an artifact and nothing else: it
@@ -58,7 +60,7 @@ func addFetchFlags(cmd *cobra.Command, o *serveOptions) {
 //
 // The checks it returns, nil when it serves one pinned artifact, hold the scheduled check for a
 // newer dataset; the caller adds any others and runs them.
-func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) (*mcpserver.Server, *checks.Checks, error) {
+func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) (*mcpserver.Server, *updates.Updates, error) {
 	cfg, err := resolve()
 	if err != nil {
 		return nil, nil, err
@@ -113,21 +115,22 @@ func openServingServer(ctx context.Context, resolve configFunc, o serveOptions) 
 			}
 		}()
 	}
-	if !follow {
-		return srv, nil, nil
-	}
-	go followCurrent(ctx, srv, cfg.DataDir, artifact, o, followInterval)
-	chk := checks.Open(cfg.DataDir)
-	if repo, err := release.Open(o.Release); err == nil {
-		var lastAt time.Time
-		if info, err := os.Stat(filepath.Join(cfg.DataDir, release.CheckedFile)); err == nil {
-			lastAt = info.ModTime()
+	// The checks only ask: a newer program or newer texts are downloaded when the user asks for
+	// them, on the settings page or through the tool update. A server serving one artifact named
+	// on the command line follows no release.
+	upd := updates.Config{DataDir: cfg.DataDir, Checks: checks.Open(cfg.DataDir), Restarts: o.Restarts, Every: checks.IntervalFor(o.CheckEvery)}
+	if follow {
+		go followCurrent(ctx, srv, cfg.DataDir, artifact, o, followInterval)
+		if repo, err := release.Open(o.Release); err == nil {
+			upd.Repo = repo
 		}
-		chk.Add(checks.Dataset, checks.IntervalFor(o.AutoUpdate), lastAt, func(ctx context.Context) checks.Outcome {
-			return checkDataset(ctx, cfg.DataDir, repo)
-		})
 	}
-	return srv, chk, nil
+	if sw, err := publishedChecker(); err == nil {
+		upd.Software = sw
+	}
+	u := updates.New(upd)
+	srv.Updates = u
+	return srv, u, nil
 }
 
 // downloadMissing installs the published artifact into a data directory that has none.
@@ -145,64 +148,9 @@ func downloadMissing(ctx context.Context, dataDir, spec string) (string, error) 
 		return "", fmt.Errorf("no compiled artifact in %s, and downloading it from %s failed: %w", artifactdir.Dir(dataDir), repo, err)
 	}
 	_ = release.MarkChecked(dataDir)
-	logTransfer(res.Transfer)
+	updates.LogTransfer(res.Transfer)
 	slog.Info("downloaded the published artifact", "path", res.Path, "downloaded", res.Downloaded, "reused", res.Reused)
 	return res.Path, nil
-}
-
-// logTransfer warns when Xet storage could not be used and an artifact was downloaded whole.
-func logTransfer(t release.Transfer) {
-	if t.XetErr != nil {
-		slog.Warn("downloaded the artifact whole: Xet storage failed", "err", t.XetErr)
-	}
-}
-
-// checkDataset installs a newer published artifact if there is one. It only installs:
-// followCurrent moves the server to it as to any other new current artifact, and prunes.
-func checkDataset(ctx context.Context, dataDir string, from release.Repo) checks.Outcome {
-	res, err := release.FetchArtifact(ctx, from, dataDir)
-	_ = release.MarkChecked(dataDir)
-	// Data in a newer document model needs a newer program first. The server keeps the artifact
-	// it has — the last one of its own model — and says so; it never installs what it cannot read.
-	const needsUpgrade = "Der er udgivet nye lovtekster i et nyere format, som kræver en nyere version af programmet. Serveren bruger fortsat sine nuværende tekster, indtil programmet er opdateret."
-	switch {
-	case errors.Is(err, release.ErrProgramTooOld):
-		slog.Warn("the published artifact needs a newer version of lovkilde", "model", res.Newer, "reads", compiled.ModelVersion)
-		return checks.Outcome{Summary: needsUpgrade, Upgrade: true}
-	case err == nil && res.Newer > 0:
-		if res.Installed {
-			logTransfer(res.Transfer)
-		}
-		slog.Warn("the published artifact needs a newer version of lovkilde; keeping the last one of this version's model", "model", res.Newer, "reads", compiled.ModelVersion, "path", res.Path)
-		return checks.Outcome{Summary: needsUpgrade, Upgrade: true}
-	case errors.Is(err, release.ErrDataTooOld):
-		slog.Info("no published artifact of this version's document model yet", "reads", compiled.ModelVersion)
-		return checks.Outcome{Summary: "Denne version af programmet læser et nyere format af lovteksterne, end der er udgivet endnu. Serveren bruger fortsat sine nuværende tekster, indtil udgivelsen kommer."}
-	case err != nil:
-		slog.Warn("checking for a newer published artifact failed", "release", from.String(), "err", err)
-		return checks.Outcome{Err: err.Error()}
-	case res.Installed:
-		logTransfer(res.Transfer)
-		slog.Info("installed a newer published artifact", "path", res.Path, "downloaded", res.Downloaded, "reused", res.Reused)
-		return checks.Outcome{Summary: fmt.Sprintf("Installerede en nyere udgivelse, %s (hentede %s, genbrugte %s fra disken).",
-			filepath.Base(res.Path), byteSize(res.Downloaded), byteSize(res.Reused))}
-	}
-	slog.Info("the published artifact is the current one", "file", res.Manifest.File)
-	return checks.Outcome{Summary: "Den udgivne udgave er den, der bruges."}
-}
-
-// byteSize writes a byte count the Danish way, in the largest unit under 1,000.
-func byteSize(n int64) string {
-	const units = "kMGT"
-	f, u := float64(n), -1
-	for f >= 1000 && u < len(units)-1 {
-		f /= 1000
-		u++
-	}
-	if u < 0 {
-		return fmt.Sprintf("%d B", n)
-	}
-	return strings.Replace(fmt.Sprintf("%.1f %cB", f, units[u]), ".", ",", 1)
 }
 
 // newServingServer is a server with the settings every serving process shares.
@@ -353,7 +301,8 @@ documents, which is worth reading and not worth quoting without saying so.
 Everything is read from the compiled artifact ("lovkilde-update artifact build"): the catalogue,
 each document's model, and the amending acts' changes that as_of applies. Without one it
 downloads the published artifact from --release, and refuses to start when it cannot. While it
-runs it checks --release for a newer artifact every --auto-update and moves to it. An artifact of another document model is refused too, with a message
+runs it checks --release for a newer artifact every --check-every and says so in its answers; the
+tool update downloads it when the user asks, and the server moves to it. An artifact of another document model is refused too, with a message
 naming which side is stale: the artifact holds the model as JSON, so a file from another
 revision decodes into this server's types with another revision's meaning.
 
@@ -361,13 +310,11 @@ Stdout is reserved for the protocol; logs go to stderr either way.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			o.MaxChars, o.Index, o.Artifact, o.ArtifactCacheMB = maxChars, index, artifact, artifactCacheMB
-			srv, chk, err := openServingServer(cmd.Context(), resolve, o)
+			srv, upd, err := openServingServer(cmd.Context(), resolve, o)
 			if err != nil {
 				return err
 			}
-			if chk != nil {
-				go chk.Run(cmd.Context())
-			}
+			go upd.Run(cmd.Context())
 			// One line of orientation on stderr: what a client is about to be served,
 			// and from where. A server that answers silently cannot be debugged.
 			fmt.Fprintf(gate.LogWriter(), "serving %s over stdio\n", srv.Status())

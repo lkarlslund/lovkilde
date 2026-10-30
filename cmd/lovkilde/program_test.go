@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lkarlslund/lovkilde/internal/compiled"
+	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
 )
 
 // A server restarts as a newer build kept in its data directory, once that build has shown it
@@ -24,7 +25,7 @@ func TestServerWatchesForANewerProgram(t *testing.T) {
 	}
 	keep := func(t *testing.T, dataDir string, at time.Time, script string) string {
 		t.Helper()
-		dir := programDir(dataDir)
+		dir := softwareupdate.Dir(dataDir)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}

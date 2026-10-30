@@ -12,11 +12,32 @@ import (
 
 	"github.com/lkarlslund/lovkilde/internal/checks"
 	"github.com/lkarlslund/lovkilde/internal/disclaimer"
-	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
+	"github.com/lkarlslund/lovkilde/internal/updates"
 )
 
-// The settings page sets how often each check runs and runs one at once; while the software
-// check has found a newer build, every page says so.
+// fakeUpdates answers from the checks it is given, and records the updates started.
+type fakeUpdates struct {
+	chk     *checks.Checks
+	started atomic.Value
+}
+
+func (f *fakeUpdates) Can(string) bool { return true }
+func (f *fakeUpdates) State(what string) updates.State {
+	name := checks.Dataset
+	if what == updates.App {
+		name = checks.Software
+	}
+	st, _ := f.chk.State(name)
+	return updates.State{Check: st}
+}
+func (f *fakeUpdates) Start(_ context.Context, what string) (string, error) {
+	f.started.Store(what)
+	return "", nil
+}
+func (f *fakeUpdates) SoftwareURL() string { return "https://github.com/o/n/releases/latest" }
+
+// The settings page sets how often each check runs and runs one at once; while a check has found
+// a newer version, every page says so, and the settings page offers to fetch it.
 func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 	srv := newTestServer(t, false)
 	chk := checks.Open(t.TempDir())
@@ -25,12 +46,15 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 		ran.Add(1)
 		return checks.Outcome{Summary: "Den udgivne udgave er den, der bruges."}
 	})
-	chk.Add(checks.Software, checks.Daily, time.Time{}, func(context.Context) checks.Outcome { return checks.Outcome{Newer: 4} })
+	chk.Add(checks.Software, checks.Daily, time.Time{}, func(context.Context) checks.Outcome {
+		return checks.Outcome{Available: true, Newer: 4, Version: "r00042"}
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go chk.Run(ctx)
 	h := New(srv)
-	h.Checks, h.Software = chk, &softwareupdate.Checker{Repo: "o/n"}
+	fake := &fakeUpdates{chk: chk}
+	h.Checks, h.Updates = chk, fake
 	site := httptest.NewServer(h)
 	defer site.Close()
 
@@ -72,6 +96,13 @@ func TestSettingsSetIntervalsAndCheckNow(t *testing.T) {
 	if !strings.Contains(body, "4 ændringer nyere") || !strings.Contains(body, "https://github.com/o/n/releases/latest") {
 		t.Errorf("the page does not say a newer build is out:\n%s", body)
 	}
+	if !strings.Contains(body, `name="update" value="app"`) || strings.Contains(body, `name="update" value="dataset"`) {
+		t.Errorf("the page offers the wrong updates:\n%s", body)
+	}
+	post(url.Values{"update": {updates.App}})
+	if got, _ := fake.started.Load().(string); got != updates.App {
+		t.Errorf("the button started %q, want the program update", got)
+	}
 }
 
 // Published data the program cannot read puts the upgrade notice on every page, whatever the
@@ -92,7 +123,7 @@ func TestDataNeedingANewerProgramIsNoticedOnEveryPage(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	h := New(newTestServer(t, false))
-	h.Checks = chk
+	h.Checks, h.Updates = chk, &fakeUpdates{chk: chk}
 	site := httptest.NewServer(h)
 	defer site.Close()
 	if body, _ := get(t, site, "/browse"); !strings.Contains(body, "Opdatér lovkilde for at få nye lovtekster") {

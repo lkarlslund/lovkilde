@@ -62,21 +62,33 @@ func (t *Transfer) add(u Transfer) {
 	}
 }
 
-// FetchArtifact installs the published artifact into dataDir and makes it current, unless the
-// current artifact already is it. A running server follows the new pointer by itself.
-func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, error) {
+// Available is the published artifact this program reads, as CheckArtifact found it.
+type Available struct {
+	Manifest Manifest
+	Ref      FileRef // the artifact this program reads
+	// Current is the artifact in use when it is the published one, "" when a newer one is
+	// published.
+	Current string
+	// Newer is the document model of published data this program cannot read, 0 when there is
+	// none.
+	Newer int
+}
+
+// CheckArtifact reads the release manifest and says whether the published artifact this program
+// reads is the current one in dataDir. It downloads nothing but the manifest.
+func CheckArtifact(ctx context.Context, r Repo, dataDir string) (Available, error) {
 	m, err := Latest(ctx, r)
 	if err != nil {
-		return Installed{}, err
+		return Available{}, err
 	}
-	out := Installed{Manifest: m}
+	out := Available{Manifest: m}
 	if m.File == "" {
 		return out, fmt.Errorf("the release in %s holds no artifact", r)
 	}
 	// The artifact this program reads: the latest one, or the last one of its own model when the
 	// latest needs a newer program. The model is checked before anything is downloaded.
 	ref, ok, newer := m.For(compiled.ModelVersion)
-	out.Newer = newer
+	out.Ref, out.Newer = ref, newer
 	switch {
 	case !ok && newer > 0:
 		return out, fmt.Errorf("the published artifact %s holds document model %d and this version of lovkilde reads model %d: upgrade lovkilde: %w", m.File, m.Model, compiled.ModelVersion, ErrProgramTooOld)
@@ -86,7 +98,22 @@ func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, erro
 		return out, fmt.Errorf("the release in %s names %q, which is not an artifact file name", r, ref.Path)
 	}
 	if cur, err := artifactdir.Current(dataDir); err == nil && filepath.Base(cur) == ref.Path {
-		out.Path = cur
+		out.Current = cur
+	}
+	return out, nil
+}
+
+// FetchArtifact installs the published artifact into dataDir and makes it current, unless the
+// current artifact already is it. A running server follows the new pointer by itself.
+func FetchArtifact(ctx context.Context, r Repo, dataDir string) (Installed, error) {
+	av, err := CheckArtifact(ctx, r, dataDir)
+	out := Installed{Manifest: av.Manifest, Newer: av.Newer}
+	if err != nil {
+		return out, err
+	}
+	ref := av.Ref
+	if av.Current != "" {
+		out.Path = av.Current
 		return out, nil
 	}
 	if err := os.MkdirAll(artifactdir.Dir(dataDir), 0o755); err != nil {
@@ -236,6 +263,15 @@ func Due(dataDir string, every time.Duration, now time.Time) bool {
 // MarkChecked records that a check finished now, whatever it found.
 func MarkChecked(dataDir string) error {
 	return os.WriteFile(filepath.Join(dataDir, CheckedFile), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644)
+}
+
+// LastChecked is when MarkChecked last ran for dataDir; zero when it never did.
+func LastChecked(dataDir string) time.Time {
+	info, err := os.Stat(filepath.Join(dataDir, CheckedFile))
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
 }
 
 func fileExists(path string) bool {

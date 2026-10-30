@@ -1,5 +1,5 @@
 // Package checks runs the server's scheduled checks — for a newer published dataset and for a
-// newer published build of the software — at the interval the operator chose on the settings
+// newer published build of the software, which they report and do not install — at the interval the operator chose on the settings
 // page, and runs one at once when asked. The intervals and each check's last outcome are kept in
 // the settings file (internal/settings), so a restart neither forgets the choice nor repeats a
 // check.
@@ -17,8 +17,8 @@ import (
 
 // The checks a server runs.
 const (
-	Dataset  = "dataset"  // a newer published artifact, installed when found
-	Software = "software" // a newer published build, only reported
+	Dataset  = "dataset"  // a newer published artifact
+	Software = "software" // a newer published build
 )
 
 // section is where the intervals and outcomes are kept in the settings file.
@@ -84,10 +84,12 @@ type Outcome struct {
 	At      time.Time `json:"at"`
 	Summary string    `json:"summary,omitempty"`
 	Err     string    `json:"error,omitempty"`
-	// Newer is how many changes a newer published version holds that this one does not, for a
-	// check that does not put it to use by itself.
+	// Available says a newer version is published and not in use here.
+	Available bool `json:"available,omitempty"`
+	// Newer is how many changes a newer published build holds that this one does not.
 	Newer int `json:"newer,omitempty"`
-	// Version is the newer published version's name.
+	// Version is the newer published version's name: rNNNNN for a build, the date it was
+	// published for a dataset.
 	Version string `json:"version,omitempty"`
 	// Downloaded says the newer version is downloaded; a running server restarts as it.
 	Downloaded bool `json:"downloaded,omitempty"`
@@ -192,6 +194,24 @@ func (c *Checks) Set(name string, every Interval) error {
 	c.mu.Unlock()
 	c.kickOne(j) // re-evaluate: a shorter interval can make it due now
 	return c.save()
+}
+
+// Do runs the named check at once and returns what it found, whatever its interval and whether
+// or not it is running on its schedule: a check only asks, so two at once cost a request each.
+func (c *Checks) Do(ctx context.Context, name string) (Outcome, bool) {
+	c.mu.Lock()
+	j := c.jobs[name]
+	c.mu.Unlock()
+	if j == nil {
+		return Outcome{}, false
+	}
+	out := j.do(ctx)
+	out.At = time.Now()
+	c.mu.Lock()
+	j.last = out
+	c.mu.Unlock()
+	_ = c.save()
+	return out, true
 }
 
 // Now runs the named check at once, whatever its interval, unless it is running already.

@@ -80,6 +80,7 @@ Værktøjerne:
 | `eula` | Henter vilkårene for brug. Assistenten skal vise dem til dig, og først når du har accepteret, kalder den igen med `accept: true`. Indtil da svarer de andre værktøjer ikke. |
 | `lookup` | Henter et dokument eller en bestemmelse. `document` er en ELI-sti (`eli/lta/2019/1399`) eller et accessionsnummer (`B20190139905`); `address` er en bestemmelse; `as_of` (ÅÅÅÅ-MM-DD) giver loven som gældende på datoen. |
 | `search` | Søger. Bøjningsformer og sammensatte ord findes. `a AND b` kræver begge, `-ord` udelukker, `'to ord'` kræver begge i samme bestemmelse. Kan afgrænses på type, år, tekstkilde og status. |
+| `update` | Opdateringer. `action: check` tjekker, om der er nyt; `app` henter en nyere version af programmet, `dataset` nyere lovtekster. Assistenten henter kun, når du beder om det. |
 
 Vilkårene accepteres én gang pr. server, enten på hjemmesiden eller gennem `eula`, og det gælder for
 begge og huskes, også når serveren genstartes. Ændres vilkårene, skal de accepteres igen.
@@ -93,7 +94,7 @@ begge og huskes, også når serveren genstartes. Ændres vilkårene, skal de acc
 | `/browse` | Alle dokumenter efter type, år og forbogstav |
 | `/doc?ref=…` | Et dokument; `&addr=§ 5, stk. 2` viser én bestemmelse |
 | `/status` | Hvad serveren indeholder, hvor nyt det er, og den fulde ansvarsfraskrivelse |
-| `/settings` | Hvor ofte der tjekkes for nye data og ny version, og API-nøgle |
+| `/settings` | Hvor ofte der tjekkes for nye data og ny version, opdatering, og API-nøgle |
 | `/eula` | Vilkårene for brug |
 | `/mcp` | MCP-serveren |
 
@@ -117,18 +118,21 @@ Der er ingen TLS. Sæt en reverse proxy foran, hvis serveren skal kunne nås fra
 
 ## Opdateringer
 
-- **Data:** Serveren tjekker dagligt for et nyere datasæt og tager det i brug af sig selv. Kun
-  de ændrede dele hentes.
-- **Programmet:** Serveren tjekker dagligt, om der er en nyere version. Findes der en, hentes den
-  til `.lovkilde/program`, og serveren genstarter selv med den. Siderne er væk i de sekunder,
-  det tager. Starter du senere en ældre kopi, f.eks. den i din download-mappe, kører den nyeste
-  hentede version i stedet. Loggen siger, når det sker. Bruger et program som Claude Desktop
-  `lovkilde mcp`, skifter det først, næste gang det startes.
-- **Nyt dataformat:** Kræver nye data en nyere version af programmet, fortsætter serveren med de
-  data, den har, og skriver på alle sider, at programmet skal opdateres.
+Serveren tjekker dagligt, om der er udgivet nyere lovtekster eller en nyere version af programmet.
+Den henter intet selv. Er der noget nyt, står det øverst på alle sider, og assistenten får besked i
+sine svar. Du starter opdateringen på `/settings`, eller ved at bede assistenten om det (værktøjet
+`update`).
 
-Begge tjek kan sættes til dagligt, ugentligt, månedligt eller fra på `/settings`, hvor de
-også kan køres med det samme.
+- **Lovtekster:** Kun de ændrede dele hentes, og serveren tager dem i brug af sig selv.
+- **Programmet:** Den nye version hentes til `.lovkilde/program`, og serveren genstarter med den.
+  Siderne er væk i de sekunder, det tager. Starter du senere en ældre kopi, f.eks. den i din
+  download-mappe, kører den nyeste hentede version i stedet. Bruger et program som Claude
+  Desktop `lovkilde mcp`, skifter det først, næste gang det startes.
+- **Nyt dataformat:** Kræver nye lovtekster en nyere version af programmet, fortsætter serveren med
+  de tekster, den har, og skriver på alle sider, at programmet skal opdateres.
+
+Tjekkene kan sættes til dagligt, ugentligt, månedligt eller fra på `/settings`, hvor de også kan
+køres med det samme.
 
 ## Kommandoer
 
@@ -145,7 +149,7 @@ lovkilde program download    hent den; en kørende server genstarter med den
 ```
 
 Vigtige flag til `serve` og `mcp`: `--data-dir`, `--addr` og `--no-browser` (kun `serve`), `--max-chars` (længste
-MCP-svar, standard 20.000 tegn) og `--auto-update` (hvor ofte der tjekkes for nye data; `0` slår
+MCP-svar, standard 20.000 tegn) og `--check-every` (hvor ofte der tjekkes for opdateringer; `0` slår
 det fra). `lovkilde --help` viser resten.
 
 ## Begrænsninger

@@ -22,9 +22,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lkarlslund/lovkilde/internal/apikey"
-	"github.com/lkarlslund/lovkilde/internal/checks"
 	"github.com/lkarlslund/lovkilde/internal/mcpserver"
-	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
+	"github.com/lkarlslund/lovkilde/internal/updates"
 	"github.com/lkarlslund/lovkilde/internal/webserver"
 )
 
@@ -71,7 +70,8 @@ as a script. There is no JavaScript, no build step, and no asset pipeline.
 is missing, unreadable or built from another artifact, the server rebuilds it from the artifact
 in the background (about a minute) and saves it; lookups and browsing answer meanwhile, and the
 site says search is on its way. A missing artifact is downloaded from --release, and a newer one
-installed every --auto-update; without one the server does not start, and one that is present but
+offered every --check-every, and installed when the user asks on the settings page or through the
+tool update; without one the server does not start, and one that is present but
 unreadable stops it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -82,7 +82,8 @@ unreadable stops it.`,
 			if os.Getenv("GOGC") == "" {
 				debug.SetGCPercent(50)
 			}
-			srv, chk, err := openServingServer(cmd.Context(), resolve, o)
+			o.Restarts = true
+			srv, upd, err := openServingServer(cmd.Context(), resolve, o)
 			if err != nil {
 				return err
 			}
@@ -90,13 +91,9 @@ unreadable stops it.`,
 			if err != nil {
 				return err
 			}
-			if chk == nil {
-				chk = checks.Open(cfg.DataDir)
-			}
-			software := addSoftwareCheck(chk, cfg.DataDir)
-			go chk.Run(cmd.Context())
+			go upd.Run(cmd.Context())
 			web := webserver.New(srv)
-			web.Checks, web.Software = chk, software
+			web.Checks, web.Updates = upd.Checks(), upd
 			web.Key, web.Exposed = apikey.Open(cfg.DataDir), exposedAddr(addr)
 			ctx, stop := context.WithCancel(cmd.Context())
 			defer stop()
@@ -112,10 +109,10 @@ unreadable stops it.`,
 				}
 			}
 			os.Unsetenv(restartedEnv)
-			// A newer build kept in the data directory replaces this server once it has stopped
-			// listening, as a new artifact replaces the old one: the server keeps itself current.
+			// A newer build kept in the data directory — fetched when the user asked, or by hand —
+			// replaces this server once it has stopped listening.
 			newer := make(chan string, 1)
-			if software != nil {
+			if web.Updates.Can(updates.App) {
 				go func() {
 					if path := watchProgram(ctx, cfg.DataDir, followInterval); path != "" {
 						newer <- path
@@ -157,38 +154,6 @@ unreadable stops it.`,
 
 // softwareRepo is where the published builds of this program are: its releases, rNNNNN.
 const softwareRepo = "lkarlslund/lovkilde"
-
-// addSoftwareCheck schedules the check for a newer published build, daily unless the settings
-// page says otherwise, and returns what it asks. A newer build is downloaded into the data
-// directory, where the running server finds it and restarts as it (watchProgram), and where any
-// later start finds it (switchToNewer). A binary that does not know the commit it was built from has nothing to compare, and
-// gets no check.
-func addSoftwareCheck(chk *checks.Checks, dataDir string) *softwareupdate.Checker {
-	sw, err := publishedChecker()
-	if err != nil {
-		return nil
-	}
-	chk.Add(checks.Software, checks.Daily, time.Time{}, func(ctx context.Context) checks.Outcome {
-		rel, err := sw.Latest(ctx)
-		switch {
-		case err != nil:
-			return checks.Outcome{Err: err.Error()}
-		case rel.Behind == 0:
-			return checks.Outcome{Summary: fmt.Sprintf("Denne version, %s, er den nyeste udgivne.", version)}
-		}
-		n := rel.Behind
-		newer := fmt.Sprintf("Version %s er udgivet, %d %s nyere end denne (%s).", rel.Tag, n, map[bool]string{true: "ændring", false: "ændringer"}[n == 1], version)
-		dir := programDir(dataDir)
-		path, _, err := sw.Download(ctx, dir, rel.Tag)
-		if err != nil {
-			return checks.Outcome{Newer: n, Version: rel.Tag, Summary: newer + " Den kunne ikke hentes: " + err.Error()}
-		}
-		softwareupdate.Prune(dir, path)
-		fmt.Fprintf(gate.LogWriter(), "downloaded lovkilde %s to %s; it runs when lovkilde is started again\n", rel.Tag, path)
-		return checks.Outcome{Newer: n, Version: rel.Tag, Downloaded: true, Summary: newer + " Den er hentet, og serveren genstarter med den om et øjeblik."}
-	})
-	return sw
-}
 
 // exposedAddr says whether a listen address reaches beyond this machine: anything but a loopback
 // address does, including every interface (":8787", "0.0.0.0:8787") and a name that does not

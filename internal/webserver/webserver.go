@@ -26,6 +26,7 @@
 package webserver
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -38,7 +39,7 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/checks"
 	"github.com/lkarlslund/lovkilde/internal/disclaimer"
 	"github.com/lkarlslund/lovkilde/internal/mcpserver"
-	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
+	"github.com/lkarlslund/lovkilde/internal/updates"
 )
 
 // pageSize is how many browse rows one load carries; scrolling to the end brings the next as
@@ -52,10 +53,11 @@ type Handler struct {
 	tmpl map[string]*template.Template
 
 	// Checks are the server's scheduled checks, shown and set on the settings page; nil serves
-	// no settings. Software names where a newer build is published: while the software check
-	// has found one, every page says so. It only tells: upgrading is the operator's decision.
-	Checks   *checks.Checks
-	Software *softwareupdate.Checker
+	// no settings. Updates is what they found, and the updates started from the settings page:
+	// while a newer program or newer law texts are published, every page says so. Nothing is
+	// downloaded until someone asks.
+	Checks  *checks.Checks
+	Updates Updater
 
 	// Key is the optional API key, set on the settings page; while one is set, nothing but the
 	// key page answers without it. Exposed says the server listens beyond this machine, which
@@ -71,32 +73,53 @@ func New(srv *mcpserver.Server) *Handler {
 	return h
 }
 
-// softwareUpdate is the notice every page shows while a newer build is published, or while the
-// published data needs one, or nil. The second is shown whatever the software check is set to:
-// the server is no longer receiving new texts until it is upgraded.
+// softwareUpdate is the notice every page shows while a newer program or newer law texts are
+// published, or while the published texts need a newer program, or nil.
 func (h *Handler) softwareUpdate() *softwareNotice {
+	if h.Updates == nil {
+		return nil
+	}
 	n := &softwareNotice{}
-	if h.Software != nil {
-		n.URL = h.Software.URL()
+	if h.Updates.Can(updates.App) {
+		st := h.Updates.State(updates.App)
+		n.URL = h.Updates.SoftwareURL()
+		if st.Check.Last.Available {
+			n.Behind, n.Version, n.Downloaded, n.Fetching = st.Check.Last.Newer, st.Check.Last.Version, st.Check.Last.Downloaded, st.Running
+		}
 	}
-	if st, ok := h.Checks.State(checks.Dataset); ok && st.Last.Upgrade {
-		n.Data = true
+	if h.Updates.Can(updates.Dataset) {
+		st := h.Updates.State(updates.Dataset)
+		n.Data = st.Check.Last.Upgrade
+		if st.Check.Last.Available {
+			n.Texts, n.TextsFetching = st.Check.Last.Version, st.Running
+			n.TextsNew = true
+		}
 	}
-	if st, ok := h.Checks.State(checks.Software); ok && h.Software != nil {
-		n.Behind, n.Version, n.Downloaded = st.Last.Newer, st.Last.Version, st.Last.Downloaded
-	}
-	if !n.Data && n.Behind == 0 {
+	if !n.Data && n.Behind == 0 && !n.TextsNew {
 		return nil
 	}
 	return n
 }
 
+// Updater is what the pages ask of the server's updates (internal/updates).
+type Updater interface {
+	Can(what string) bool
+	State(what string) updates.State
+	Start(ctx context.Context, what string) (string, error)
+	SoftwareURL() string
+}
+
 type softwareNotice struct {
 	Behind     int
-	Version    string // the newer version's name, rNNNNN
-	Downloaded bool   // the newer program is downloaded, and the server restarts as it
-	Data       bool   // the published data needs a newer program
+	Version    string // the newer program's name, rNNNNN
+	Downloaded bool   // the newer program is downloaded
+	Fetching   bool   // the newer program is being downloaded
+	Data       bool   // the published texts need a newer program
 	URL        string
+
+	TextsNew      bool   // newer law texts are published
+	Texts         string // when they were published
+	TextsFetching bool   // they are being downloaded
 }
 
 // ServeHTTP routes the paths documented on the package.

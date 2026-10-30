@@ -12,6 +12,7 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/artifactdir"
 	"github.com/lkarlslund/lovkilde/internal/compiled"
 	"github.com/lkarlslund/lovkilde/internal/release"
+	"github.com/lkarlslund/lovkilde/internal/updates"
 )
 
 func artifactCmd(resolve configFunc) *cobra.Command {
@@ -70,7 +71,7 @@ question in milliseconds instead of a failed start.`,
 }
 
 // artifactDownloadCmd installs the published artifact now, the thing serve does by itself when
-// there is none and every --auto-update after that.
+// there is none, and the tool update when the user asks.
 func artifactDownloadCmd(resolve configFunc) *cobra.Command {
 	var from string
 	cmd := &cobra.Command{
@@ -104,7 +105,7 @@ that is a newer lovkilde.`,
 			if removed, err := artifactdir.Prune(cfg.DataDir); err == nil && len(removed) > 0 {
 				slog.Info("pruned artifacts no longer kept", "removed", removed)
 			}
-			logTransfer(res.Transfer)
+			updates.LogTransfer(res.Transfer)
 			fmt.Fprintf(cmd.OutOrStdout(), "installed %s: downloaded %d bytes, reused %d from the artifacts on disk\n", res.Path, res.Downloaded, res.Reused)
 			return nil
 		},

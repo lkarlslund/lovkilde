@@ -25,7 +25,8 @@
 #
 # With no artifact the server downloads the published one from a release repository
 # (--release: a directory, or hf://owner/name; by default the published dataset), and checks
-# for a newer one daily (--auto-update).
+# daily for newer ones and a newer program (--check-every), which it fetches when asked on the
+# settings page or through the MCP tool update.
 #
 # RestartSec is deliberately slow. Without a readable artifact the unit fails at startup;
 # a 30 second gap means the journal keeps one readable reason per attempt instead of a

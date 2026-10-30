@@ -61,6 +61,10 @@ type Server struct {
 	// EULA is whether the terms are accepted on this server, through the website or the MCP
 	// tool; nil keeps acceptance to each MCP session.
 	EULA *eula.Store
+
+	// Updates checks for and starts updates of the program and the law texts, through the tool
+	// update; every answer notes an update the user can start. Nil offers neither.
+	Updates Updater
 }
 
 // clock is the server's idea of now: time.Now, unless a test pinned it.
@@ -418,6 +422,15 @@ func (s *Server) mcpServer() *mcp.Server {
 			"text\", each with its act and wording, and marks the provisions they concern; " +
 			"a provision so marked may not read as the law does on that date.",
 	}, s.lookupTool)
+	if s.Updates != nil {
+		mcp.AddTool(srv, &mcp.Tool{
+			Name: updateTool,
+			Description: "Updates of the lovkilde program and of its law texts. action \"check\" asks whether " +
+				"newer versions are published; the server also checks daily, and answers end with a note when " +
+				"one is. action \"app\" downloads the newer program and \"dataset\" the newer law texts: " +
+				"start those only when the user has asked for that update, never on your own.",
+		}, s.updateTool)
+	}
 	// Offered while the index is being built too: the tool list is fixed when a client connects,
 	// and a server that started a minute ago will have search a minute from now.
 	if s.idx() != nil || s.indexBuilding.Load() {
@@ -508,9 +521,9 @@ func (s *Server) searchTool(_ context.Context, req *mcp.CallToolRequest, in sear
 			Content: []mcp.Content{&mcp.TextContent{Text: "lovkilde: " + err.Error()}},
 		}, nil, nil
 	}
-	return &mcp.CallToolResult{
+	return s.withNote(&mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: res.String()}},
-	}, nil, nil
+	}), nil, nil
 }
 
 func (s *Server) lookupTool(_ context.Context, req *mcp.CallToolRequest, in lookupInput) (*mcp.CallToolResult, any, error) {
@@ -535,7 +548,7 @@ func (s *Server) lookupTool(_ context.Context, req *mcp.CallToolRequest, in look
 			Content: []mcp.Content{&mcp.TextContent{Text: "lovkilde: " + err.Error()}},
 		}, nil, nil
 	}
-	return &mcp.CallToolResult{
+	return s.withNote(&mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: res.String()}},
-	}, nil, nil
+	}), nil, nil
 }

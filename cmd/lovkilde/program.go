@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,9 +18,6 @@ import (
 	"github.com/lkarlslund/lovkilde/internal/config"
 	"github.com/lkarlslund/lovkilde/internal/softwareupdate"
 )
-
-// programDir is where downloaded builds are kept.
-func programDir(dataDir string) string { return filepath.Join(dataDir, "program") }
 
 // switchedEnv is set for a program started by switchToNewer or restartAs, which then does not
 // look again; restartedEnv only by restartAs, for a server that should not open the browser again.
@@ -59,7 +55,7 @@ func newerProgram(dataDir string) (string, softwareupdate.Stamp, bool) {
 	if !ok || current.Modified {
 		return "", softwareupdate.Stamp{}, false
 	}
-	path, stamp, ok := softwareupdate.Newest(programDir(dataDir))
+	path, stamp, ok := softwareupdate.Newest(softwareupdate.Dir(dataDir))
 	if !ok || !stamp.Time.After(current.Time) {
 		return "", softwareupdate.Stamp{}, false
 	}
@@ -174,7 +170,7 @@ func programCheckCmd(resolve configFunc) *cobra.Command {
 			current, _ := compiled.CurrentBuild()
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "this is lovkilde %s (%s)\n", version, current)
-			if path, stamp, ok := softwareupdate.Newest(programDir(cfg.DataDir)); ok {
+			if path, stamp, ok := softwareupdate.Newest(softwareupdate.Dir(cfg.DataDir)); ok {
 				fmt.Fprintf(out, "downloaded: %s, from %s\n", path, stamp.Time.Format("2006-01-02"))
 			}
 			sw, err := publishedChecker()
@@ -221,7 +217,7 @@ is newer than itself.`,
 				fmt.Fprintf(cmd.OutOrStdout(), "the published release, %s, is not newer than this one\n", rel.Tag)
 				return nil
 			}
-			dir := programDir(cfg.DataDir)
+			dir := softwareupdate.Dir(cfg.DataDir)
 			path, _, err := sw.Download(cmd.Context(), dir, rel.Tag)
 			if err != nil {
 				return err

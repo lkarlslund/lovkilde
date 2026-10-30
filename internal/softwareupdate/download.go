@@ -205,6 +205,9 @@ func extract(asset string, archive []byte) ([]byte, error) {
 // stampLayout is how a kept program's name carries its commit time; it sorts as it orders.
 const stampLayout = "20060102T150405Z"
 
+// Dir is where downloaded builds are kept in a data directory.
+func Dir(dataDir string) string { return filepath.Join(dataDir, "program") }
+
 // programName is a kept program's file name: lovkilde-<commit time>-<revision>.
 func programName(s Stamp) string {
 	name := "lovkilde-" + s.Time.UTC().Format(stampLayout) + "-" + s.short()

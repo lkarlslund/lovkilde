@@ -433,8 +433,11 @@ dl.facts dd { margin: 0; overflow-wrap: anywhere; }
 <nav class="site"><a href="/search">Søg</a><a href="/browse">Gennemse</a><a href="/status">Status</a><a href="/settings">Indstillinger{{if exposedWithoutKey}}<span class="warnsign" role="img" aria-label="advarsel" title="Serveren kan nås fra netværket, og der er ikke sat en API-nøgle">⚠</span>{{end}}</a><a href="https://github.com/lkarlslund/lovkilde" title="Lovkilde på GitHub">GitHub</a></nav>
 </div></header>
 <main class="wrap">{{with softwareUpdate}}<p class="update{{if .Data}} needed{{end}}" role="status">{{if .Data}}<b>Opdatér lovkilde for at få nye lovtekster:</b> der er udgivet lovtekster i et nyere format, som denne version ikke kan læse. Serveren viser fortsat sine nuværende tekster, men får ingen nye, før programmet er opdateret.
-{{else}}<b>Ny version af lovkilde{{with .Version}}, {{.}}{{end}}:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
-{{end}}{{if .Downloaded}}Den er hentet, og serveren genstarter med den om et øjeblik.{{else}}{{with .URL}}<a href="{{.}}">Se den på GitHub</a>. {{end}}Den hentes ved næste tjek, eller med <code>lovkilde program download</code>.{{end}}</p>{{end}}
+{{if not .Behind}}<a href="/settings">Opdatér under Indstillinger</a>.{{end}}
+{{end}}{{if .Behind}}<b>Ny version af lovkilde{{with .Version}}, {{.}}{{end}}:</b> den udgivne version er {{.Behind}} {{if eq .Behind 1}}ændring{{else}}ændringer{{end}} nyere end den, der kører her.
+{{if .Fetching}}Den hentes nu.{{else if .Downloaded}}Den er hentet, og serveren genstarter med den om et øjeblik.{{else}}{{with .URL}}<a href="{{.}}">Se den på GitHub</a>, eller <a href="/settings">hent den under Indstillinger</a>.{{else}}<a href="/settings">Hent den under Indstillinger</a>.{{end}}{{end}}
+{{end}}{{if .TextsNew}}<b>Nye lovtekster:</b> der er udgivet en nyere udgave af lovteksterne{{with .Texts}} ({{.}}){{end}}.
+{{if .TextsFetching}}Den hentes nu.{{else}}<a href="/settings">Hent den under Indstillinger</a>.{{end}}{{end}}</p>{{end}}
 {{template "content" .}}</main>
 <footer><div class="wrap">Uofficiel kopi af Retsinformation, uden tilknytning til Civilstyrelsen. Teksten er læst fra
 retsinformation.dk; kilder og usikkerhed står ved hvert svar. Leveres som den er, uden garanti og uden ansvar
@@ -646,13 +649,14 @@ const statusBody = `{{define "content"}}
 
 const settingsBody = `{{define "extrahead"}}{{if .Running}}<meta http-equiv="refresh" content="3">{{end}}{{end}}{{define "content"}}
 <h1>Indstillinger</h1>
-<p>Hvor ofte serveren selv tjekker, om der er noget nyt. Valget gemmes på serveren og gælder for alle, der bruger den.</p>
+<p>Hvor ofte serveren selv tjekker, om der er noget nyt. Den henter intet, før du beder om det. Valget gemmes på serveren og gælder for alle, der bruger den.</p>
 <form method="post" action="/settings">
 {{range .Checks}}<section class="panel check"><h2>{{.Title}}</h2>
 <p>{{.Explains}}</p>
 <div class="choices" role="radiogroup" aria-label="{{.Title}}">{{$cur := .Every}}{{$name := .Name}}{{range .Intervals}}<label><input type="radio" name="{{$name}}" value="{{.}}"{{if eq . $cur}} checked{{end}}> {{.Label}}</label>{{end}}</div>
 <p class="outcome">{{if .Running}}<b>Tjekker nu …</b>{{else}}Sidst tjekket {{when .Last.At}}{{if .Last.Err}}: <span class="bad">fejlede: {{.Last.Err}}</span>{{else if .Last.Summary}}: {{.Last.Summary}}{{end}}{{end}}</p>
-<button type="submit" name="check" value="{{.Name}}"{{if .Running}} disabled{{end}}>↻ Tjek nu</button>
+{{if .Fetching}}<p class="outcome"><b>Henter …</b></p>{{else}}{{with .Result}}<p class="outcome">{{.}}</p>{{end}}{{end}}
+<button type="submit" name="check" value="{{.Name}}"{{if .Running}} disabled{{end}}>↻ Tjek nu</button>{{if .Offer}} <button type="submit" name="update" value="{{.Update}}">{{.Button}}</button>{{end}}
 </section>{{else}}<p class="note">Denne server følger ikke en udgivelse og har ingen automatiske tjek.</p>{{end}}
 {{if not .Software}}<p class="note">Denne version af programmet ved ikke, hvilken kode den er bygget fra, og kan derfor ikke tjekke for nyere versioner.</p>{{end}}
 {{if .Checks}}<div class="actions"><button type="submit">Gem</button></div>{{end}}

@@ -5,31 +5,47 @@ import (
 
 	"github.com/lkarlslund/lovkilde/internal/apikey"
 	"github.com/lkarlslund/lovkilde/internal/checks"
+	"github.com/lkarlslund/lovkilde/internal/updates"
 )
 
 const settingsPath = "/settings"
 
-// checkView is one scheduled check as the settings and status pages show it.
+// checkView is one scheduled check as the settings and status pages show it, with the update it
+// offers.
 type checkView struct {
 	checks.State
 	Title, Explains string
 	Intervals       []checks.Interval
+	Update, Button  string // what the button starts, and what it says
+	Offer           bool   // a newer version is published and can be fetched
+	Fetching        bool   // it is being downloaded
+	Result          string // how the last update ended
 }
 
 // checkTexts says what each check is for, in the order the pages list them.
-var checkTexts = []struct{ Name, Title, Explains string }{
-	{checks.Dataset, "Nye udgaver af lovteksterne",
-		"Serveren spørger, om der er udgivet en nyere udgave af datasættet. Findes der en, hentes den og tages i brug automatisk; kun de dele, der er ændret, hentes."},
-	{checks.Software, "Nye versioner af programmet",
-		"Serveren spørger GitHub, om der er udgivet en nyere version af lovkilde. Findes der en, hentes den til datamappen, og den bruges, næste gang Lovkilde startes. Indtil da står det øverst på alle sider."},
+var checkTexts = []struct{ Name, Update, Title, Explains, Button string }{
+	{checks.Dataset, updates.Dataset, "Nye udgaver af lovteksterne",
+		"Serveren spørger, om der er udgivet en nyere udgave af lovteksterne. Den hentes først, når du beder om det; kun de dele, der er ændret, hentes, og serveren tager den i brug af sig selv.",
+		"Hent de nye lovtekster"},
+	{checks.Software, updates.App, "Nye versioner af programmet",
+		"Serveren spørger GitHub, om der er udgivet en nyere version af lovkilde. Den hentes først, når du beder om det, og serveren genstarter så med den.",
+		"Hent og brug den nye version"},
 }
 
 func (h *Handler) checkViews() []checkView {
 	var out []checkView
 	for _, t := range checkTexts {
-		if st, ok := h.Checks.State(t.Name); ok {
-			out = append(out, checkView{State: st, Title: t.Title, Explains: t.Explains, Intervals: checks.Intervals})
+		st, ok := h.Checks.State(t.Name)
+		if !ok {
+			continue
 		}
+		v := checkView{State: st, Title: t.Title, Explains: t.Explains, Intervals: checks.Intervals, Update: t.Update, Button: t.Button}
+		if h.Updates != nil {
+			u := h.Updates.State(t.Update)
+			v.Fetching, v.Result = u.Running, u.Result
+			v.Offer = st.Last.Available && !st.Last.Downloaded && !u.Running
+		}
+		out = append(out, v)
 	}
 	return out
 }
@@ -44,7 +60,12 @@ func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if r.Method == http.MethodPost && h.Checks != nil {
-		if name := r.PostFormValue("check"); name != "" {
+		if what := r.PostFormValue("update"); what != "" && h.Updates != nil {
+			if _, err := h.Updates.Start(r.Context(), what); err != nil {
+				http.Error(w, "Opdateringen kunne ikke startes: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+		} else if name := r.PostFormValue("check"); name != "" {
 			h.Checks.Now(name)
 		} else {
 			for _, t := range checkTexts {
@@ -62,7 +83,7 @@ func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 	views := h.checkViews()
 	running := false
 	for _, v := range views {
-		running = running || v.Running
+		running = running || v.Running || v.Fetching
 	}
 	h.render(w, "settings", map[string]any{
 		"PageTitle": "Indstillinger",
